@@ -1,0 +1,65 @@
+name: test
+
+# The live suite (pytest + pytest-django) against Postgres 18, on every push to main and on every
+# pull request. The repo is public and the job needs no secret: pull_request, never
+# pull_request_target. No paths filter: "test" is a required check on main, and a pull request
+# without its run could not be merged.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# One run per ref: a new push to a pull request cancels its previous run; runs on main finish.
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: hub
+          POSTGRES_PASSWORD: hub
+          POSTGRES_DB: hub
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hub -d hub"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    env:
+      # The defaults of tests/settings.py, spelled out; pytest-django creates test_hub.
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_NAME: hub
+      DB_USER: hub
+      DB_PASSWORD: hub
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Lint the workflows (actionlint)
+        env:
+          ACTIONLINT_VERSION: 1.7.12
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          curl --fail --silent --show-error --location --output "$RUNNER_TEMP/actionlint.tar.gz" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "$ACTIONLINT_SHA256  $RUNNER_TEMP/actionlint.tar.gz" | sha256sum --check --strict -
+          tar -xzf "$RUNNER_TEMP/actionlint.tar.gz" -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint" -color
+
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      # --locked: uv.lock must match pyproject.toml (no separate `uv lock --check`).
+      - run: uv sync --locked
+      - run: uv run --locked pytest -q
