@@ -7,7 +7,6 @@ dist/
 
 # uv / virtualenvs
 .venv/
-.python-version
 
 # pytest / coverage
 .pytest_cache/
@@ -15,8 +14,16 @@ dist/
 .coverage.*
 htmlcov/
 
-# Local environment
+# Local environment and secrets
 .env
+.env.*
+*.pem
+*.p12
+*.key
+*.sqlite3
+
+# Node
+node_modules/
 
 # OS / editors
 .DS_Store

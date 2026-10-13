@@ -8,6 +8,7 @@ dependencies = [
     "django>=6.1",
     "django-ninja>=1.7.1",
     "psycopg[binary,pool]>=3.3",
+    "daphne>=4.2",  # live's runserver command is daphne's
 ]
 
 [build-system]

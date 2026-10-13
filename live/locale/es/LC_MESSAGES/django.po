@@ -1,0 +1,207 @@
+# Spanish catalog of erplora-live's server strings (domain django). English is the source.
+msgid ""
+msgstr ""
+"Project-Id-Version: erplora-live\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: slugs.py
+msgid "This name is reserved."
+msgstr "Este nombre está reservado."
+
+#: slugs.py
+msgid ""
+"Use only lowercase letters, digits and hyphens, without a hyphen at the "
+"start or the end."
+msgstr ""
+"Usa solo minúsculas, números y guiones, sin guion al principio ni al final."
+
+#: slugs.py
+#, python-format
+msgid "Use at least %(min)d characters."
+msgstr "Usa al menos %(min)d caracteres."
+
+#: slugs.py
+#, python-format
+msgid "Use at most %(max)d characters."
+msgstr "Usa como máximo %(max)d caracteres."
+
+#: slugs.py
+msgid "The name cannot start with “xn--”."
+msgstr "El nombre no puede empezar por «xn--»."
+
+#: meta.py
+msgid "Sales, payments and tax"
+msgstr "Venta, cobro y fiscalidad"
+
+#: meta.py
+msgid "Catalog and stock"
+msgstr "Catálogo y existencias"
+
+#: meta.py
+msgid "Customers, schedule and team"
+msgstr "Clientes, agenda y equipo"
+
+#: meta.py
+msgid "Restaurant"
+msgstr "Restaurante"
+
+#: meta.py
+msgid "Organization and communication"
+msgstr "Organización y comunicación"
+
+#: ninja.py api_errors.py
+msgid "Not found"
+msgstr "No encontrado."
+
+#: api_errors.py
+msgid "Method not allowed"
+msgstr "Método no permitido."
+
+#: operations.py
+#, python-format
+msgid "Permission “%(permission)s” is required."
+msgstr "Se necesita el permiso «%(permission)s»."
+
+#: ninja.py
+msgid "Invalid payload"
+msgstr "Los datos enviados no son válidos."
+
+#: ninja.py
+msgid "Internal error"
+msgstr "Error interno."
+
+#: ninja.py
+msgid "Enter a valid value."
+msgstr "Introduce un valor válido."
+
+#: ninja.py
+msgid "Enter a number."
+msgstr "Introduce un número."
+
+#: ninja.py
+msgid "Enter a whole number."
+msgstr "Introduce un número entero."
+
+#: ninja.py
+msgid "Select a valid choice."
+msgstr "Selecciona una opción válida."
+
+#: ninja.py
+msgid "Enter a valid boolean."
+msgstr "Introduce un valor booleano válido."
+
+#: ninja.py
+msgid "Enter a valid UUID."
+msgstr "Introduce un UUID válido."
+
+#: ninja.py
+msgid "Enter a valid date."
+msgstr "Introduce una fecha válida."
+
+#: ninja.py
+msgid "Enter a valid date/time."
+msgstr "Introduce una fecha y hora válidas."
+
+#: ninja.py
+msgid "Enter a valid time."
+msgstr "Introduce una hora válida."
+
+#: ninja.py
+msgid "This field is required."
+msgstr "Este campo es obligatorio."
+
+#: ninja.py
+msgid "This field is not allowed."
+msgstr "Este campo no está permitido."
+
+#: ninja.py
+msgid "Enter a valid text."
+msgstr "Introduce un texto válido."
+
+#: ninja.py
+#, python-format
+msgid "Ensure this value has at least %(min_length)d character."
+msgid_plural "Ensure this value has at least %(min_length)d characters."
+msgstr[0] "Debe tener al menos %(min_length)d carácter."
+msgstr[1] "Debe tener al menos %(min_length)d caracteres."
+
+#: ninja.py
+#, python-format
+msgid "Ensure this value has at most %(max_length)d character."
+msgid_plural "Ensure this value has at most %(max_length)d characters."
+msgstr[0] "Debe tener como máximo %(max_length)d carácter."
+msgstr[1] "Debe tener como máximo %(max_length)d caracteres."
+
+#: ninja.py
+#, python-format
+msgid "Ensure this value has at least %(min_length)d item."
+msgid_plural "Ensure this value has at least %(min_length)d items."
+msgstr[0] "Debe tener al menos %(min_length)d elemento."
+msgstr[1] "Debe tener al menos %(min_length)d elementos."
+
+#: ninja.py
+#, python-format
+msgid "Ensure this value has at most %(max_length)d item."
+msgid_plural "Ensure this value has at most %(max_length)d items."
+msgstr[0] "Debe tener como máximo %(max_length)d elemento."
+msgstr[1] "Debe tener como máximo %(max_length)d elementos."
+
+#: ninja.py
+#, python-format
+msgid "Ensure this value is greater than %(gt)s."
+msgstr "Debe ser mayor que %(gt)s."
+
+#: ninja.py
+#, python-format
+msgid "Ensure this value is greater than or equal to %(ge)s."
+msgstr "Debe ser mayor o igual que %(ge)s."
+
+#: ninja.py
+#, python-format
+msgid "Ensure this value is less than %(lt)s."
+msgstr "Debe ser menor que %(lt)s."
+
+#: ninja.py
+#, python-format
+msgid "Ensure this value is less than or equal to %(le)s."
+msgstr "Debe ser menor o igual que %(le)s."
+
+#: ninja.py
+#, python-format
+msgid "Ensure this value is a multiple of %(multiple_of)s."
+msgstr "Debe ser múltiplo de %(multiple_of)s."
+
+#: ninja.py
+#, python-format
+msgid "Ensure that there are no more than %(max_digits)d digit in total."
+msgid_plural "Ensure that there are no more than %(max_digits)d digits in total."
+msgstr[0] "No puede tener más de %(max_digits)d dígito en total."
+msgstr[1] "No puede tener más de %(max_digits)d dígitos en total."
+
+#: ninja.py
+#, python-format
+msgid "Ensure that there are no more than %(decimal_places)d decimal place."
+msgid_plural ""
+"Ensure that there are no more than %(decimal_places)d decimal places."
+msgstr[0] "No puede tener más de %(decimal_places)d decimal."
+msgstr[1] "No puede tener más de %(decimal_places)d decimales."
+
+#: ninja.py
+#, python-format
+msgid ""
+"Ensure that there are no more than %(whole_digits)d digit before the decimal "
+"point."
+msgid_plural ""
+"Ensure that there are no more than %(whole_digits)d digits before the "
+"decimal point."
+msgstr[0] "No puede tener más de %(whole_digits)d dígito antes de la coma decimal."
+msgstr[1] ""
+"No puede tener más de %(whole_digits)d dígitos antes de la coma decimal."
+
+#: ninja.py
+msgid "Enter a valid JSON."
+msgstr "Introduce un JSON válido."
