@@ -6,7 +6,8 @@ from ``{STATIC_URL}spa/`` (Vite's ``base``) or, with DEBUG, the dev server's HMR
 every ``<script>`` and ``modulepreload`` carries the response's CSP nonce, as 'strict-dynamic'
 requires. No django-vite: one implementation for both projects.
 
-Settings, under ``LIVE["spa"]``: ``entry`` (manifest key, e.g. ``frontend/main.ts``), ``manifest``
+Settings, under ``LIVE["spa"]``: ``entry`` (manifest key, e.g. ``frontend/main.ts``; a page that
+is not the SPA asks :func:`spa_assets` for another entry of the same build), ``manifest``
 (path of ``.vite/manifest.json``), ``dev_server`` (e.g. ``http://localhost:5173``; used only with
 DEBUG), ``palettes`` and ``palette_default`` (the ``data-ep-palette`` palettes of the UI's theme),
 ``title`` (optional).
@@ -123,19 +124,24 @@ def _base_url() -> str:
     return f"{settings.STATIC_URL}spa/"
 
 
-def spa_assets(request: HttpRequest) -> dict[str, list[str]]:
-    """URLs of the scripts, stylesheets and modulepreloads of the SPA's entry."""
+def spa_assets(request: HttpRequest, *, entry: str | None = None) -> dict[str, list[str]]:
+    """URLs of the scripts, stylesheets and modulepreloads of an entry of the Vite build.
+
+    ``entry`` is a manifest key (e.g. ``frontend/public.ts``, the public web of saas-next, round
+    16); by default, the SPA's, ``LIVE["spa"]["entry"]``. With DEBUG, the dev server serves it.
+    """
     config = _spa_settings()
+    entry = entry or config["entry"]
     base = _base_url()
     dev_server = config.get("dev_server")
     if settings.DEBUG and dev_server:
         origin = dev_server.rstrip("/")
         return {
-            "scripts": [f"{origin}{base}@vite/client", f"{origin}{base}{config['entry']}"],
+            "scripts": [f"{origin}{base}@vite/client", f"{origin}{base}{entry}"],
             "css": [],
             "preload": [],
         }
-    assets = ViteManifest.load(config["manifest"]).entry(config["entry"])
+    assets = ViteManifest.load(config["manifest"]).entry(entry)
     return {
         "scripts": [f"{base}{assets.js}"],
         "css": [f"{base}{href}" for href in assets.css],

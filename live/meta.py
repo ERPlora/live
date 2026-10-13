@@ -9,6 +9,10 @@ permissions (``<app>.<action>``) and the permissions each role gets (``"demo.*"`
   of the Hub's apps page, which shows icon and name (``verbose_name``) only (``icon``,
   ``category``, ``premium``), its ``requires`` (an acyclic graph of module labels) and its menu
   entries. ``live.checks`` enforces it.
+
+Round 16 (PLAN §21) adds the public store's metadata of a module (``summary``, ``description``,
+``verticals``, ``listed``), which ``register_apps`` writes to ``shared.app``; the Hub's apps page
+still shows icon and name only.
 """
 
 from collections.abc import Iterable
@@ -42,11 +46,16 @@ class Nav:
 
 class LiveAppConfig(AppConfig):
     kind: ClassVar[Literal["platform", "app"]] = "platform"
-    # Module metadata: an Iconify name with its set prefix, the apps page group, and whether
-    # turning it on needs a right from the SaaS.
+    # Module metadata, round 15: the Hub's apps page (icon and name) and the right from the SaaS.
+    # icon is an Iconify name with its set prefix; premium = turning it on needs a right.
     icon: ClassVar[str] = ""
     category: ClassVar[Category | None] = None
     premium: ClassVar[bool] = False
+    # Module metadata, round 16: the public store, registered in shared.app by register_apps.
+    summary: ClassVar[str] = ""  # one line, at most 120 characters, gettext_lazy
+    description: ClassVar[str] = ""  # one paragraph, gettext_lazy
+    verticals: ClassVar[list[str]] = []  # vertical ids; also derives HUB_TEMPLATE_APPS
+    listed: ClassVar[bool] = True  # False keeps the module out of the public store
     requires: ClassVar[list[str]] = []
     navigation: ClassVar[list[Nav]] = []
     permissions: ClassVar[list[str]] = []

@@ -9,6 +9,8 @@ dependencies = [
     "django-ninja>=1.7.1",
     "psycopg[binary,pool]>=3.3",
     "daphne>=4.2",  # live's runserver command is daphne's
+    "markdown>=3.8",  # live.markdown (round 16)
+    "nh3>=0.3",  # sanitises live.markdown's HTML
 ]
 
 [build-system]

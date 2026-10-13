@@ -187,6 +187,52 @@ class TestAssets:
         ]
 
 
+#: A second entry of the same build: the public web's script (round 16, saas-next's frontend/public.ts).
+PUBLIC_ENTRY = {
+    "frontend/public.ts": {
+        "file": "assets/public-9d8e7f6a.js",
+        "src": "frontend/public.ts",
+        "isEntry": True,
+        "imports": ["_ionic-1a2b3c4d.js"],
+        "css": ["assets/public-5a4b3c2d.css"],
+    },
+}
+
+
+class TestSecondEntry:
+    """A page that is not the SPA (the public web) loads another entry of the same Vite build."""
+
+    def test_production_links_the_other_entry_from_the_manifest(self, rf, tmp_path, settings):
+        path = write_manifest(tmp_path / "dist" / ".vite" / "manifest.json", {**MANIFEST, **PUBLIC_ENTRY})
+        settings.LIVE = {**settings.LIVE, "spa": {**settings.LIVE["spa"], "manifest": path}}
+
+        assert spa.spa_assets(rf.get("/"), entry="frontend/public.ts") == {
+            "scripts": ["/static/spa/assets/public-9d8e7f6a.js"],
+            "css": ["/static/spa/assets/public-5a4b3c2d.css"],
+            "preload": ["/static/spa/assets/ionic-1a2b3c4d.js"],
+        }
+
+    def test_debug_points_the_other_entry_to_the_dev_server(self, rf, settings):
+        settings.DEBUG = True
+
+        assert spa.spa_assets(rf.get("/"), entry="frontend/public.ts") == {
+            "scripts": [
+                "http://localhost:5173/static/spa/@vite/client",
+                "http://localhost:5173/static/spa/frontend/public.ts",
+            ],
+            "css": [],
+            "preload": [],
+        }
+
+    def test_without_an_entry_it_is_the_one_of_the_settings(self, rf, manifest_path):
+        assert spa.spa_assets(rf.get("/"), entry=None) == spa.spa_assets(rf.get("/"))
+        assert spa.spa_assets(rf.get("/"))["scripts"] == ["/static/spa/assets/main-4f2a9c1b.js"]
+
+    def test_an_entry_missing_from_the_manifest_is_a_configuration_error(self, rf, manifest_path):
+        with pytest.raises(ImproperlyConfigured, match="frontend/public.ts"):
+            spa.spa_assets(rf.get("/"), entry="frontend/public.ts")
+
+
 class TestPaletteAndConfig:
     def test_the_default_palette_without_a_cookie(self, rf):
         assert spa.palette(rf.get("/")) == "default"

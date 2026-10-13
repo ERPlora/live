@@ -2,6 +2,8 @@
 
 Round 15 (PLAN §20): every app of ours extends ``LiveAppConfig``; ``kind = "app"`` marks a module
 of ``apps/`` (turned on and off per hub), ``kind = "platform"`` an always-on app such as ``base``.
+Round 16 (PLAN §21) adds the public store's metadata of a module: ``summary`` and ``description``
+(E007), ``verticals`` (E008) and ``listed``, which a platform app leaves at their defaults (E006).
 The checks run on ``manage.py check`` and when the server starts.
 """
 
@@ -10,6 +12,7 @@ from types import SimpleNamespace
 import pytest
 from django.core import checks
 from django.core.checks.registry import registry
+from django.utils.translation import gettext_lazy
 from live.checks import check_app_metadata
 from live.meta import Category, LiveAppConfig, Nav
 
@@ -19,9 +22,14 @@ def module(label, **overrides):
     fields = {
         "label": label,
         "kind": "app",
+        "verbose_name": label.capitalize(),
         "icon": "ion:cube-outline",
         "category": Category.ORGANIZATION,
         "premium": False,
+        "summary": "Products, categories, stock and movements.",
+        "description": "Keep your products and their stock in one place.",
+        "verticals": ["hair_salon", "restaurant"],
+        "listed": True,
         "requires": [],
         "navigation": [],
     }
@@ -33,9 +41,14 @@ def platform(label="base", **overrides):
     fields = {
         "label": label,
         "kind": "platform",
+        "verbose_name": label.capitalize(),
         "icon": "",
         "category": None,
         "premium": False,
+        "summary": "",
+        "description": "",
+        "verticals": [],
+        "listed": True,
         "requires": [],
         "navigation": [],
     }
@@ -102,26 +115,29 @@ def test_module_without_icon_is_e002(run):
     assert "stock" in message.msg
 
 
-def test_a_module_needs_no_description(run):
-    """Ioan, 2026-10-13: the apps page shows icon and name only; there is no description field."""
-    assert run(module("stock")) == []
-
-
-def test_module_with_only_the_defaults_misses_icon_and_category(run):
+def test_module_with_only_the_defaults_misses_icon_category_summary_and_description(run):
+    """Round 16 replaces the round 15 test that a module needed no description: the Hub's apps page
+    still shows icon and name only, but the public store shows the summary and the description."""
     defaults = {
         field: getattr(LiveAppConfig, field)
         for field in (
             "icon",
             "category",
             "premium",
+            "summary",
+            "description",
+            "verticals",
+            "listed",
             "requires",
             "navigation",
         )
     }
 
-    assert sorted(ids(run(SimpleNamespace(label="bare", kind="app", **defaults)))) == [
+    assert sorted(ids(run(SimpleNamespace(label="bare", kind="app", verbose_name="Bare", **defaults)))) == [
         "live.E002",
         "live.E003",
+        "live.E007",
+        "live.E007",
     ]
 
 
@@ -231,6 +247,163 @@ def test_e006_names_every_module_field_in_one_error(run):
     assert message.id == "live.E006"
     assert "requires" in message.msg
     assert "premium" in message.msg
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("summary", "Products, categories, stock and movements."),
+        ("description", "Keep your products and their stock in one place."),
+        ("verticals", ["restaurant"]),
+        ("listed", False),
+    ],
+)
+def test_platform_app_declaring_a_store_field_is_e006(run, field, value):
+    messages = run(platform(**{field: value}), module("stock"))
+
+    assert ids(messages) == ["live.E006"]
+    assert "base" in messages[0].msg
+    assert field in messages[0].msg
+
+
+def test_a_platform_app_may_say_listed_true(run):
+    """listed defaults to True: E006 compares with the default, not with truthiness."""
+    assert run(platform(listed=True)) == []
+
+
+def test_a_platform_app_may_leave_a_lazy_empty_summary(run):
+    assert run(platform(summary=gettext_lazy(""), description=gettext_lazy(""))) == []
+
+
+def test_e006_names_store_and_module_fields_in_one_error(run):
+    [message] = run(platform(premium=True, listed=False, verticals=["restaurant"]))
+
+    assert message.id == "live.E006"
+    for field in ("premium", "listed", "verticals"):
+        assert field in message.msg
+
+
+# --- E007: summary, description and name of the public store (round 16) -----------------------------
+
+
+@pytest.mark.parametrize("summary", ["", "   "])
+def test_module_without_summary_is_e007(run, summary):
+    [message] = run(module("stock", summary=summary))
+
+    assert message.id == "live.E007"
+    assert "stock" in message.msg
+    assert "summary" in message.msg
+
+
+def test_module_with_a_summary_of_121_characters_is_e007(run):
+    [message] = run(module("stock", summary="x" * 121))
+
+    assert message.id == "live.E007"
+    assert "summary" in message.msg
+    assert "120" in message.msg
+
+
+def test_a_summary_of_120_characters_is_accepted(run):
+    assert run(module("stock", summary="x" * 120)) == []
+
+
+@pytest.mark.parametrize("summary", ["First line.\nSecond line.", "First line.\r\nSecond line."])
+def test_module_with_a_summary_of_two_lines_is_e007(run, summary):
+    [message] = run(module("stock", summary=summary))
+
+    assert message.id == "live.E007"
+    assert "one line" in message.msg
+
+
+@pytest.mark.parametrize("description", ["", "  \n "])
+def test_module_without_description_is_e007(run, description):
+    [message] = run(module("stock", description=description))
+
+    assert message.id == "live.E007"
+    assert "stock" in message.msg
+    assert "description" in message.msg
+
+
+def test_module_with_a_name_of_81_characters_is_e007(run):
+    [message] = run(module("stock", verbose_name="N" * 81))
+
+    assert message.id == "live.E007"
+    assert "verbose_name" in message.msg
+    assert "80" in message.msg
+
+
+def test_a_name_of_80_characters_is_accepted(run):
+    assert run(module("stock", verbose_name="N" * 80)) == []
+
+
+def test_lazy_translations_are_measured_by_their_english_text(run):
+    assert run(
+        module(
+            "stock",
+            verbose_name=gettext_lazy("Stock"),
+            summary=gettext_lazy("x" * 120),
+            description=gettext_lazy("A paragraph."),
+        )
+    ) == []
+    [message] = run(module("stock", summary=gettext_lazy("x" * 121)))
+
+    assert message.id == "live.E007"
+
+
+def test_each_store_problem_of_a_module_is_its_own_e007(run):
+    messages = run(module("stock", summary="", description="", verbose_name="N" * 81))
+
+    assert ids(messages) == ["live.E007", "live.E007", "live.E007"]
+
+
+# --- E008: verticals (round 16; PLAN §15.2) ---------------------------------------------------------
+
+
+@pytest.mark.parametrize("verticals", [[], ["restaurant"], ["hair_salon", "retail2", "a"], ["x" * 50]])
+def test_well_formed_verticals_are_accepted(run, verticals):
+    assert run(module("stock", verticals=verticals)) == []
+
+
+@pytest.mark.parametrize(
+    "vertical",
+    ["Hair", "hair-salon", "hair__salon", "_hair", "hair_", "2hair", "", "hair salon", "x" * 51, None, 3, ["hair"]],
+)
+def test_a_malformed_vertical_is_e008(run, vertical):
+    [message] = run(module("stock", verticals=["restaurant", vertical]))
+
+    assert message.id == "live.E008"
+    assert "stock" in message.msg
+    assert repr(vertical) in message.msg
+
+
+def test_the_test_vertical_is_reserved(run):
+    """hub_template_test is the template of the test suites (PLAN §15.2)."""
+    [message] = run(module("stock", verticals=["test"]))
+
+    assert message.id == "live.E008"
+    assert "'test'" in message.msg
+    assert "reserved" in message.msg
+
+
+def test_a_repeated_vertical_is_e008_once(run):
+    [message] = run(module("stock", verticals=["restaurant", "retail", "restaurant", "restaurant"]))
+
+    assert message.id == "live.E008"
+    assert "'restaurant'" in message.msg
+    assert "more than once" in message.msg
+
+
+@pytest.mark.parametrize("verticals", [["test", "test"], ["Hair", "Hair"], [["hair"], ["hair"]]])
+def test_a_wrong_vertical_listed_twice_is_reported_once(run, verticals):
+    assert ids(run(module("stock", verticals=verticals))) == ["live.E008"]
+
+
+@pytest.mark.parametrize("verticals", ["restaurant", None, {"restaurant": True}])
+def test_verticals_that_are_not_a_list_is_e008(run, verticals):
+    [message] = run(module("stock", verticals=verticals))
+
+    assert message.id == "live.E008"
+    assert "list" in message.msg
 
 
 # --- Registration and the installed apps ------------------------------------------------------------

@@ -36,7 +36,9 @@ fase 2: `use_hub`) y `saas-next` el suyo (el usuario); el resto (`live.spa`, `li
   releídos y envío solo si cambia el hash; red de seguridad cada 300 s y `resync` al reconectar el
   `LISTEN` (uno por proceso, fuera de PgBouncer). Sin Redis ni Channels.
 - **SPA y CSP**: `live.spa` lee el manifiesto de Vite (sin django-vite) y emite `<script type=module>` y
-  `modulepreload` con nonce; en DEBUG apunta al servidor de Vite. `live.csp`: nonce + `strict-dynamic` +
+  `modulepreload` con nonce; en DEBUG apunta al servidor de Vite. `spa_assets(request, entry=…)` da
+  otra entrada del mismo build (p. ej. `frontend/public.ts`, la web pública de `saas-next`, ronda 16);
+  sin `entry`, la de `LIVE["spa"]["entry"]`. `live.csp`: nonce + `strict-dynamic` +
   Trusted Types + `connect-src 'self' ipc: http://ipc.localhost`; DEBUG añade el origen de Vite solo a
   connect/style/font/img. `manage.py runserver` (hereda del de daphne) lanza Vite con HMR (`--novite`
   lo omite); `export_spa_catalog` exporta los `.po` (`djangojs`) a JSON.
@@ -44,7 +46,7 @@ fase 2: `use_hub`) y `saas-next` el suyo (el usuario); el resto (`live.spa`, `li
   copia en `scope["root_path"]` la cabecera `Daphne-Root-Path` del cliente y Django la toma como prefijo de
   script; el envoltorio la vacía en `http` y `websocket` (`lifespan` pasa tal cual). ERPlora/hub#2, saas#2.
 
-## Apps y metadatos (ronda 15, PLAN §20)
+## Apps y metadatos (rondas 15 y 16, PLAN §20 y §21)
 
 Toda app nuestra, de `hub-next` y de `saas-next`, hereda `live.meta.LiveAppConfig` y declara ahí sus
 metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
@@ -61,7 +63,11 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
   etiqueta `en` + `es`; agrupa la página de apps del Hub), `premium` (`False` por defecto; `True` =
   necesita su derecho en la foto del SaaS), `requires` (etiquetas de otros módulos, grafo acíclico)
   y `navigation` (`Nav(id, label, icon, path)`, las entradas del menú). El nombre es el
-  `verbose_name`; sin descripción ni versión.
+  `verbose_name`; sin versión. La página de apps del Hub pinta solo icono y nombre.
+- **Solo un módulo, para la tienda pública** (ronda 16; `register_apps` los escribe en `shared.app`):
+  `summary` (una línea, ≤ 120 caracteres, `gettext_lazy`), `description` (un párrafo),
+  `verticals` (ids de vertical; de ellos se derivan las plantillas por vertical) y `listed` (`True`
+  por defecto; `False` lo saca de la tienda, como `apps/demo`).
 - **Lectura**: `all_live_app_configs()` devuelve todas las apps nuestras instaladas (permisos,
   routers); `module_configs()`, solo las de `kind = "app"` (menú, página de apps, foto del SaaS).
 - **Checks** (`live.checks`, etiqueta `live`, registrados al arrancar la app `live`; corren con
@@ -72,14 +78,35 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
   - `live.E004`: `requires` nombra algo que no es un módulo (una app de plataforma como `base`, o una
     etiqueta que no existe);
   - `live.E005`: un ciclo en `requires` (un error por ciclo);
-  - `live.E006`: una app de plataforma declara `requires`, `category`, `premium` o `navigation`.
+  - `live.E006`: una app de plataforma no deja en su valor por defecto `requires`, `category`,
+    `premium`, `navigation`, `summary`, `description`, `verticals` o `listed` (se compara con el
+    valor por defecto, no con «verdadero»: `listed` vale `True`);
+  - `live.E007`: un módulo sin `summary`, con un `summary` de más de una línea o de más de 120
+    caracteres, sin `description` o con un `verbose_name` de más de 80 (medidos en inglés; el `es`
+    lo valida `register_apps`);
+  - `live.E008`: un id de `verticals` que no casa `^[a-z][a-z0-9]*(_[a-z0-9]+)*$`, pasa de 50
+    caracteres (`hub_template_<vertical>` cabe en 63), es `test` (reservado) o se repite; o
+    `verticals` no es una lista.
 
-  La app de pruebas (`tests/testapp`) es un módulo (`kind = "app"`) con `icon` y `category`, para
-  pasarlos.
+  La app de pruebas (`tests/testapp`) es un módulo (`kind = "app"`) con `icon`, `category`,
+  `summary`, `description` y `verticals`, para pasarlos.
 - **Routers**: `live.ninja.mount_app_routers(api)` monta en la raíz de la API el `router` del `api.py`
   de toda app nuestra (de plataforma o módulo), en el orden de `INSTALLED_APPS`, y devuelve sus
   etiquetas; la que no tiene `api.py` se salta y un `api.py` sin un `Router` de ninja en `router` lanza
   `LiveMisuse`. Lo usa `hub-next/config/api.py`; `saas-next` lo adopta en su carril (PLAN §20.7).
+
+## Catálogo compartido y markdown (ronda 16, PLAN §21)
+
+- **`live.shared_catalog`**: el contrato del esquema `shared` de la BD `saas`. Modelos abstractos
+  `AbstractApp` (`shared.app`) y `AbstractAppDoc` (`shared.app_doc`, clave UUIDv7, FK relativa a
+  `App`) y las tablas citadas `APP_TABLE` y `APP_DOC_TABLE`. El SaaS los concreta como dueño
+  (`saas-next/apps`, con la restricción `shared_app_doc_app_lang_unique` y sus migraciones) y el Hub
+  como espejo `managed = False` (`hub-next/shared`). Cambiar una columna es expand/contract entre los
+  dos repos; `tests/test_shared_catalog.py` fija las columnas.
+- **`live.markdown.render_markdown(text, *, image_base="")`**: markdown a HTML limpio (`markdown` +
+  `nh3`, la lista blanca del SaaS viejo), ```` ```mermaid ```` como `<pre class="mermaid">`, `id` en
+  los títulos (`toc` con `slugify_unicode`) e imágenes solo de `docs/img/` de la app, reescritas a
+  `image_base`; cualquier otro origen quita la `<img>` y sin `image_base` no queda ninguna.
 
 ## Slugs reservados
 

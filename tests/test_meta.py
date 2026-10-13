@@ -102,9 +102,16 @@ def test_testapp_is_a_module_with_its_metadata():
     )
 
 
-def test_live_app_config_has_no_description():
-    """Ioan, 2026-10-13: the Hub's apps page shows icon and name (``verbose_name``) only."""
-    assert not hasattr(LiveAppConfig, "description")
+def test_live_app_config_has_empty_store_metadata_by_default():
+    """Round 16 (PLAN §21): the public store's fields, empty for a platform app.
+
+    It replaces the round 15 test that the class had no ``description``: round 16 brings the
+    description back for the public store; the Hub's apps page still shows icon and name only.
+    """
+    assert LiveAppConfig.summary == ""
+    assert LiveAppConfig.description == ""
+    assert LiveAppConfig.verticals == []
+    assert LiveAppConfig.listed is True
 
 
 def test_module_configs_keeps_only_the_apps_of_kind_app(monkeypatch):
