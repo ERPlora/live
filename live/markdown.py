@@ -5,12 +5,14 @@ Ported from the old SaaS (``apps/public/modules/services/rendering.py``): ``fenc
 blocks as ``<pre class="mermaid">`` for mermaid.js. Round 16 adds:
 
 - **images** only from the app's own ``docs/img/``: a relative ``docs/img/<path>`` becomes
-  ``image_base + <path>``; any other source (another host, ``data:``, an absolute path, ``..``)
-  removes the ``<img>``, and without ``image_base`` none survives;
+  ``image_base + <path>``; any other source (another host, ``data:``, an absolute path, a ``.``,
+  ``..`` or empty segment, a space or control character, another extension than
+  ``IMAGE_EXTENSIONS``) removes the ``<img>``, and without ``image_base`` none survives;
 - **ids on the headings** (``toc`` with ``slugify_unicode``), the slug the WORKBOOK's anchors use.
 """
 
 import re
+from pathlib import PurePosixPath
 from urllib.parse import unquote
 
 import markdown as md
@@ -74,18 +76,30 @@ _MERMAID_RE = re.compile(
 
 #: The only image sources that survive: the app's own docs/img/ folder, relative.
 IMAGE_PREFIX = "docs/img/"
+#: The image formats an app's docs may use (spec §4.4): ``svg`` can carry script.
+IMAGE_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".webp", ".gif"})
+_IMAGE_PATH_RE = re.compile(r"[A-Za-z0-9._/-]+")
 # nh3 serialises every attribute as name="value", with '"' escaped, so a quoted value never ends
 # early: an <img> left without src (dropped by the attribute filter) is matched as a whole.
 _IMG_TAG_RE = re.compile(r'<img(?:\s+[a-z-]+="[^"]*")*\s*/?>')
 
 
 def _image_src(src: str, image_base: str) -> str | None:
-    """The rewritten source of an image, or ``None`` to remove it."""
+    """The rewritten source of an image, or ``None`` to remove it.
+
+    Checked once percent-decoded (a browser resolves ``%2e%2e`` as ``..``): only letters, digits,
+    ``.``, ``_``, ``-`` and ``/`` (a browser strips TAB, LF and CR from a URL, so ``.\\t.`` would
+    resolve as ``..``; no space, ``%``, ``?``, ``#``, ``\\`` or ``:`` either), no empty, ``.`` or
+    ``..`` segment and one of ``IMAGE_EXTENSIONS``. The decoded path is what is emitted.
+    """
     if not image_base or not src.startswith(IMAGE_PREFIX):
         return None
-    path = src[len(IMAGE_PREFIX) :]
-    # Percent-decoded too: a browser resolves %2e%2e as "..".
-    if not path or ".." in unquote(path) or "\\" in path:
+    path = unquote(src[len(IMAGE_PREFIX) :])
+    if (
+        not _IMAGE_PATH_RE.fullmatch(path)
+        or any(segment in ("", ".", "..") for segment in path.split("/"))
+        or PurePosixPath(path).suffix.lower() not in IMAGE_EXTENSIONS
+    ):
         return None
     return image_base + path
 

@@ -76,7 +76,9 @@ def test_tables():
 
 
 def test_sane_lists_keep_an_ordered_and_an_unordered_list_apart():
-    html = render_markdown("1. one\n\n* two")  # without sane_lists: one <ol> of two items
+    html = render_markdown(
+        "1. one\n\n* two"
+    )  # without sane_lists: one <ol> of two items
 
     assert html == "<ol>\n<li>one</li>\n</ol>\n<ul>\n<li>two</li>\n</ul>"
 
@@ -164,6 +166,85 @@ def test_any_other_source_removes_the_image(src):
     assert images(html) == []
     assert "Alt text" not in html
     assert "Before" in html and "after" in html
+
+
+# A browser strips TAB, LF and CR from a URL before resolving it, so ".\t." would become "..";
+# the path is percent-decoded first (a browser resolves %2e%2e as ".." too).
+_SMUGGLED_PATHS = [
+    "docs/img/.&#9;./secret.png",
+    "docs/img/.&#10;./secret.png",
+    "docs/img/.&#13;./secret.png",
+    "docs/img/.%09./secret.png",
+    "docs/img/a&#9;b.png",
+    "docs/img/a b.png",
+    "docs/img/a%20b.png",
+    "docs/img/./x.png",
+    "docs/img/steps/./x.png",
+    "docs/img/steps//x.png",
+    "docs/img//x.png",
+    "docs/img/steps/",
+    "docs/img/steps/.",
+    "docs/img/x.svg",
+    "docs/img/x.png.html",
+    "docs/img/x",
+    "docs/img/x.png?y=1",
+    "docs/img/x.png#y",
+]
+
+
+@pytest.mark.parametrize("src", _SMUGGLED_PATHS)
+def test_a_raw_html_image_with_a_control_character_dot_segment_or_other_extension_is_removed(
+    src,
+):
+    html = render_markdown(
+        f'Before <img src="{src}" alt="Alt text"> after', image_base=BASE
+    )
+
+    assert images(html) == []
+    assert "secret" not in html
+    assert "Before" in html and "after" in html
+
+
+@pytest.mark.parametrize(
+    "src",
+    [
+        "docs/img/.%09./secret.png",
+        "docs/img/a%20b.png",
+        "docs/img/./x.png",
+        "docs/img/steps/./x.png",
+        "docs/img/steps//x.png",
+        "docs/img//x.png",
+        "docs/img/steps/",
+        "docs/img/x.svg",
+        "docs/img/x.png.html",
+        "docs/img/x",
+        "docs/img/x.png?y=1",
+    ],
+)
+def test_a_markdown_image_with_a_dot_segment_or_other_extension_is_removed(src):
+    html = render_markdown(f"Before ![Alt text]({src}) after", image_base=BASE)
+
+    assert images(html) == []
+    assert "Alt text" not in html
+
+
+@pytest.mark.parametrize("char", ["&#9;", "&#10;", "&#13;", "&#x09;", "&#x0A;"])
+def test_a_markdown_image_with_an_encoded_control_character_is_removed(char):
+    html = render_markdown(
+        f"Before ![Alt text](docs/img/.{char}./secret.png) after", image_base=BASE
+    )
+
+    assert images(html) == []
+    assert "secret" not in html
+
+
+@pytest.mark.parametrize(
+    "path", ["a.png", "a.PNG", "b.jpg", "c.jpeg", "d.webp", "e.gif", "sub/f-1_2.png"]
+)
+def test_the_spec_image_extensions_survive(path):
+    [image] = images(render_markdown(f"![x](docs/img/{path})", image_base=BASE))
+
+    assert f'src="{BASE}{path}"' in image
 
 
 def test_without_a_base_no_image_survives():
