@@ -160,8 +160,3 @@ class TestValidator:
                 hub_slug_validator(slug)
             # Lazy messages: read them while Spanish is active.
             assert caught.value.messages == [message]
-
-
-def test_ci_must_fail_on_purpose():
-    # Deliberately red: proves the CI check catches a failing test (reverted in the next commit).
-    assert 1 == 2
