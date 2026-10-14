@@ -10,7 +10,8 @@ Settings, under ``LIVE["spa"]``: ``entry`` (manifest key, e.g. ``frontend/main.t
 is not the SPA asks :func:`spa_assets` for another entry of the same build), ``manifest``
 (path of ``.vite/manifest.json``), ``dev_server`` (e.g. ``http://localhost:5173``; used only with
 DEBUG), ``palettes`` and ``palette_default`` (the ``data-ep-palette`` palettes of the UI's theme),
-``title`` (optional).
+``title`` (optional), ``user_scalable`` (optional, default ``False``: the page does not zoom, as a
+point of sale wants; ``True`` lets it zoom, as a web panel must for WCAG 1.4.4).
 """
 
 from __future__ import annotations
@@ -42,6 +43,14 @@ PALETTE_COOKIE = "ep_palette"
 SPA_CONFIG_ID = "spa-config"
 
 _JSON_SCRIPT_ESCAPES = {ord(">"): "\\u003E", ord("<"): "\\u003C", ord("&"): "\\u0026"}
+
+#: The ``viewport`` meta: fixed scale (a point of sale; ``LIVE["spa"]["user_scalable"]`` False, the
+#: default) or zoomable (a web panel; WCAG 1.4.4 forbids ``maximum-scale`` and ``user-scalable=no``).
+VIEWPORT_FIXED = (
+    "viewport-fit=cover, width=device-width, initial-scale=1.0, "
+    "minimum-scale=1.0, maximum-scale=1.0, user-scalable=no"
+)
+VIEWPORT_ZOOMABLE = "width=device-width, initial-scale=1, viewport-fit=cover"
 
 
 @dataclass(frozen=True)
@@ -199,11 +208,13 @@ def render_spa(
     if clashes:
         raise ValueError(f"extra_config may not replace the SDK's keys: {', '.join(clashes)}.")
     config.update(extra_config or {})
+    user_scalable = _spa_settings().get("user_scalable", False)
     context = {
         "csp_nonce": nonce,
         "lang": config["lang"],
         "palette": config["palette"],
         "title": _spa_settings().get("title", "ERPlora"),
+        "viewport": VIEWPORT_ZOOMABLE if user_scalable else VIEWPORT_FIXED,
         "assets": spa_assets(request),
         "json_blocks": [
             {"id": SPA_CONFIG_ID, "json": _json_for_script(config)},

@@ -396,6 +396,7 @@ class TestRenderedShell:
             client.get("/spa/config-clash/")
 
     def test_the_viewport_and_color_scheme_metas(self, client, manifest_path):
+        """By default the page does not zoom (the Hub's point of sale, as today)."""
         html = client.get("/spa/").content.decode()
 
         assert (
@@ -403,6 +404,24 @@ class TestRenderedShell:
             'minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">'
         ) in html
         assert '<meta name="color-scheme" content="light dark">' in html
+
+    def test_user_scalable_false_keeps_the_page_from_zooming(self, client, manifest_path, settings):
+        settings.LIVE = {**settings.LIVE, "spa": {**settings.LIVE["spa"], "user_scalable": False}}
+
+        html = client.get("/spa/").content.decode()
+
+        assert "maximum-scale=1.0, user-scalable=no" in html
+
+    def test_user_scalable_lets_the_page_zoom(self, client, manifest_path, settings):
+        """WCAG 1.4.4 (audit R-02): a web panel must zoom, so no maximum-scale nor user-scalable."""
+        settings.LIVE = {**settings.LIVE, "spa": {**settings.LIVE["spa"], "user_scalable": True}}
+
+        html = client.get("/spa/").content.decode()
+
+        assert '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">' in html
+        assert html.count('<meta name="viewport"') == 1
+        assert "user-scalable" not in html
+        assert "maximum-scale" not in html
 
     def test_the_shell_is_never_cached(self, client, manifest_path):
         """A cached copy would replay a nonce."""
