@@ -115,9 +115,10 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
 
 - **Regla**: `HUB_SLUG_RE` (`^[a-z0-9]([a-z0-9-]{1,61}[a-z0-9])?$`): minúsculas, cifras y guiones, sin
   guion al principio ni al final; 3–63 caracteres; nunca empieza por `xn--` (punycode).
-- **Reservados** (`RESERVED_HUB_SLUGS`): palabras de sistema. El nuestro es `hubs` (host de
-  plataforma: el admin del Hub para el staff, ronda 13, PLAN §18); `hub` sigue reservado y el resto
-  son nombres bloqueados para que ningún cliente los tome. Para añadir uno se edita esta lista, no se
+- **Reservados** (`RESERVED_HUB_SLUGS`): palabras de sistema. Los nuestros son `hubs` (host de
+  plataforma: el admin del Hub para el staff, ronda 13, PLAN §18) y `pre` (entorno de preproducción
+  del equipo: `pre.erplora.com` y sus hubs en `*.pre.erplora.com`, 2026-10-14); `hub` sigue reservado
+  y el resto son nombres bloqueados para que ningún cliente los tome. Para añadir uno se edita esta lista, no se
   copia en otro sitio.
 - **API**: `validate_hub_slug(slug)` devuelve el slug o lanza `ValueError` con el código (`reserved`,
   `invalid_format`, `too_short`, `too_long`, `punycode`); `is_reserved_hub_slug(slug)` (sin distinguir

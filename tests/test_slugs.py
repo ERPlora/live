@@ -16,10 +16,11 @@ from live.slugs import (
 )
 
 # Ioan's list, as he gave it, plus `hubs`: that is ERPlora's own platform host (round 13, PLAN §18);
+# plus `pre`: the team's pre-production environment (`pre.erplora.com`, 2026-10-14);
 # `hub` stays reserved and the rest are blocked names.
 IOAN_LIST = (
     "hub, hubs, erplora, saas, platform, system, sys, internal, www, mail, webmail, smtp, imap, pop, mx, ns1, "
-    "ns2, ftp, cdn, static, assets, api, ws, dev, test, staging, demo, localhost, admin, administrator, "
+    "ns2, ftp, cdn, static, assets, api, ws, dev, test, staging, pre, demo, localhost, admin, administrator, "
     "root, superuser, staff, support, help, status, security, abuse, postmaster, hostmaster, webmaster, "
     "noreply, no-reply, app, apps, login, auth, account, accounts, billing, pay, payments, invoice, shop, "
     "store, docs, blog"
@@ -48,6 +49,15 @@ def test_other_names_are_not_reserved(slug):
 # Round 13 (PLAN §18): `hubs.erplora.com` is the platform host, the Hub's admin for the staff.
 @pytest.mark.parametrize("slug", ["hubs", "HUBS", "Hubs"])
 def test_hubs_is_reserved_because_it_is_the_platform_host(slug):
+    assert is_reserved_hub_slug(slug)
+    with pytest.raises(ValueError, match="^reserved$"):
+        validate_hub_slug(slug)
+
+
+# `pre.erplora.com` is the pre-production environment's SaaS and `<slug>.pre.erplora.com` its hubs: a hub
+# named `pre` would be hidden behind it (docs/plans/2026-10-14-entorno-pre.md, §0.6).
+@pytest.mark.parametrize("slug", ["pre", "PRE", "Pre"])
+def test_pre_is_reserved_for_the_pre_environment(slug):
     assert is_reserved_hub_slug(slug)
     with pytest.raises(ValueError, match="^reserved$"):
         validate_hub_slug(slug)
