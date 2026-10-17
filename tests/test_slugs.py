@@ -10,6 +10,7 @@ from live.slugs import (
     HUB_SLUG_RE,
     RESERVED_HUB_SLUGS,
     hub_slug_min_length,
+    is_demo_slug,
     hub_slug_validator,
     is_reserved_hub_slug,
     validate_hub_slug,
@@ -95,6 +96,44 @@ def test_valid_slugs_are_returned_as_they_are(slug):
 def test_invalid_slugs_raise_a_code(slug, code):
     with pytest.raises(ValueError, match=f"^{code}$"):
         validate_hub_slug(slug)
+
+
+# Demo hubs (docs/plans/2026-10-17-demo-hubs-fase-1.md, §1.9): `demo-<hex>` is the Hub's own namespace. A
+# customer never takes a `demo-` slug; only the Hub's registry accepts it, with `allow_demo=True`.
+class TestDemoPrefix:
+    @pytest.mark.parametrize("slug", ["demo-abcd1234", "DEMO-abcd1234", "demo-x"])
+    def test_a_demo_slug_is_recognised_in_any_case(self, slug):
+        assert is_demo_slug(slug)
+
+    @pytest.mark.parametrize("slug", ["demo", "demostore", "my-demo-bar", "demo_x", "ademo-x"])
+    def test_other_slugs_are_not_demo_slugs(self, slug):
+        assert not is_demo_slug(slug)
+
+    def test_a_demo_slug_is_reserved_by_default(self):
+        with pytest.raises(ValueError, match="^reserved$"):
+            validate_hub_slug("demo-abcd1234")
+
+    def test_the_hub_registry_may_take_a_demo_slug(self):
+        assert validate_hub_slug("demo-abcd1234", allow_demo=True) == "demo-abcd1234"
+
+    def test_allow_demo_still_checks_the_format(self):
+        with pytest.raises(ValueError, match="^invalid_format$"):
+            validate_hub_slug("demo-ABCD", allow_demo=True)
+
+    def test_demo_stays_reserved_even_for_the_registry(self):
+        with pytest.raises(ValueError, match="^reserved$"):
+            validate_hub_slug("demo", allow_demo=True)
+
+    def test_a_name_that_only_starts_with_demo_is_valid(self):
+        assert validate_hub_slug("demostore") == "demostore"
+
+    def test_the_exact_reserved_check_does_not_change(self):
+        assert not is_reserved_hub_slug("demo-abcd1234")
+
+    def test_the_field_validator_rejects_a_demo_slug(self):
+        with pytest.raises(ValidationError) as caught:
+            hub_slug_validator("demo-x")
+        assert caught.value.code == "reserved"
 
 
 def test_the_regex_is_one_dns_label():
