@@ -8,6 +8,11 @@ admin for the staff; round 13, PLAN §18), ``pre`` is the team's pre-production 
 are blocked so no customer takes them.
 Hubs are served under the wildcard certificate ``*.erplora.com``: there is no limit to their number.
 
+``demo-`` (``DEMO_SLUG_PREFIX``) is the Hub's own namespace for its demo hubs (``demo-<8 hex>``,
+docs/plans/2026-10-17-demo-hubs-fase-1.md): ``validate_hub_slug`` rejects it as ``reserved`` unless the
+caller is the Hub's registry (``allow_demo=True``), so no customer takes one; ``hub_slug_validator`` (the
+customers' forms) never allows it. ``is_reserved_hub_slug`` stays the exact-name check.
+
 ``settings.LIVE["hub_slug_min_length"]`` (default 3) only lowers the minimum in local development,
 where the demo hubs are ``a`` and ``b``. ``HUB_SLUG_RE`` admits one character or 3–63, never two,
 and its ``$`` admits a trailing newline: check with ``validate_hub_slug`` or ``hub_slug_validator``,
@@ -26,6 +31,7 @@ HUB_SLUG_MIN_LENGTH = 3
 HUB_SLUG_MAX_LENGTH = 63
 HUB_SLUG_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{1,61}[a-z0-9])?$")
 PUNYCODE_PREFIX = "xn--"
+DEMO_SLUG_PREFIX = "demo-"
 
 RESERVED_HUB_SLUGS: frozenset[str] = frozenset(
     {
@@ -77,12 +83,23 @@ def is_reserved_hub_slug(slug: str) -> bool:
     return slug.lower() in RESERVED_HUB_SLUGS
 
 
-def validate_hub_slug(slug: str) -> str:
-    """Return ``slug`` if it may name a hub; else raise ``ValueError`` whose message is the code."""
+def is_demo_slug(slug: str) -> bool:
+    """Whether ``slug`` is in the demo hubs' namespace (``demo-…``), in any case."""
+    return slug.lower().startswith(DEMO_SLUG_PREFIX)
+
+
+def validate_hub_slug(slug: str, *, allow_demo: bool = False) -> str:
+    """Return ``slug`` if it may name a hub; else raise ``ValueError`` whose message is the code.
+
+    ``allow_demo=True`` is for the Hub's registry only: it accepts a ``demo-…`` slug, which is
+    ``reserved`` for everyone else. ``demo`` alone stays reserved either way.
+    """
     if not isinstance(slug, str):
         # One exception for every bad slug, so a caller handles a single case.
         raise ValueError(INVALID_FORMAT)  # noqa: TRY004
     if is_reserved_hub_slug(slug):
+        raise ValueError(RESERVED)
+    if is_demo_slug(slug) and not allow_demo:
         raise ValueError(RESERVED)
     if len(slug) > HUB_SLUG_MAX_LENGTH:
         raise ValueError(TOO_LONG)
