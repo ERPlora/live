@@ -205,3 +205,7 @@ msgstr[1] ""
 #: ninja.py
 msgid "Enter a valid JSON."
 msgstr "Introduce un JSON válido."
+
+#: recaptcha.py
+msgid "We could not check that you are a person. Try again."
+msgstr "No hemos podido comprobar que eres una persona. Vuelve a intentarlo."
