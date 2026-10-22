@@ -70,6 +70,13 @@ class OperationContext:
 
 
 class ContextBuilder(Protocol):
+    """Builds the context from a request and refreshes it before every live re-execution.
+
+    Optionally, ``enter(ctx)`` returns the context manager a live re-execution runs in (its refresh included), in
+    the executor's own thread: hub-next phase 2 enters the stream's hub there (``use_hub``). Without it, nothing is
+    entered.
+    """
+
     def from_request(self, request: Any) -> OperationContext: ...
 
     def refresh(self, ctx: OperationContext) -> OperationContext: ...

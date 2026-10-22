@@ -25,6 +25,9 @@ DATABASES = {
         "PORT": os.environ.get("DB_PORT", "5432"),
     }
 }
+# A second alias of the same database, for the operations that run on a project's own alias
+# (LIVE["operation_database"], tests/test_operation_alias.py): its own connection, the same test database.
+DATABASES["other"] = dict(DATABASES["default"])
 
 # --- SPA, CSP and Vite (P6a: live.spa, live.csp, runserver, export_spa_catalog) -----------------
 from pathlib import Path  # noqa: E402

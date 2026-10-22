@@ -10,7 +10,9 @@ synchronous; at most one run per scope at a time, different scopes in parallel. 
 ends with ``close_old_connections()``, so threads never keep a database connection past its age.
 A worker thread inherits no active language, so each run activates the stream's
 (``ctx.language``): the operation's texts and the messages of its error frames reach the client
-in it.
+in it. Nor does it inherit the request's context vars: a builder with ``enter(ctx)`` gets each run
+(its refresh included) inside the context manager it returns (hub-next: ``use_hub`` of the stream's
+hub); one that cannot be entered (``Unauthorized``) ends the stream with ``bye``.
 """
 
 import asyncio
@@ -20,6 +22,7 @@ import time
 import uuid
 from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, field
 from hashlib import blake2b
 from typing import Any
@@ -221,8 +224,10 @@ class Executor:
 
     def _run_in_language(self, stream: Stream, sub: Subscription) -> bytes | None:
         try:
-            ctx = get_builder().refresh(stream.ctx)
-            data = sub.op(ctx, sub.params).model_dump(mode="json")
+            builder = get_builder()
+            with _entered(builder, stream.ctx):
+                ctx = builder.refresh(stream.ctx)
+                data = sub.op(ctx, sub.params).model_dump(mode="json")
         except Unauthorized:
             return BYE_FRAME
         except (PermissionDenied, AppInactive) as exc:
@@ -274,6 +279,15 @@ class Executor:
         if self._pool is None:
             self._pool = ThreadPoolExecutor(max_workers=self.max_workers, thread_name_prefix="live-query")
         return self._pool
+
+
+def _entered(builder, ctx: OperationContext) -> AbstractContextManager:
+    """The context the project's builder enters for a run of ``ctx`` (``ContextBuilder.enter``), if it has one.
+
+    The worker thread starts without the request's context vars, so a project whose operations need one (hub-next:
+    ``use_hub`` of the stream's hub, phase 2) enters it here, before the refresh and the run."""
+    enter = getattr(builder, "enter", None)
+    return nullcontext() if enter is None else enter(ctx)
 
 
 executor = Executor()
