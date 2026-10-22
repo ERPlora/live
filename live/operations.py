@@ -5,17 +5,25 @@ A ``query`` lives in an app's ``queries.py`` and runs in a ``READ ONLY`` transac
 ninja route, the live subscription, the assistant and the API keys all call the same
 ``Operation``, which checks the permission, opens the transaction, validates the output and, for a
 command, hands the names of the events it recorded to ``notify_hook`` after the COMMIT.
+
+The transaction opens on ``default`` unless the project names a hook in ``LIVE["operation_database"]``: a dotted
+path to ``(operation, context) -> context manager`` that yields the alias to use (hub-next phase 2: the hub of
+``use_hub``, ``base.tenancy.context.operation_database``). ``READ ONLY``, ``statement_timeout`` and the
+notification after the COMMIT follow that alias's transaction; the notification still goes to the control database.
 """
 
 import re
 from collections.abc import Callable
+from contextlib import AbstractContextManager, nullcontext
 from contextvars import ContextVar
 from dataclasses import dataclass
-from functools import partial
+from functools import cache, partial
 from typing import Any, Literal, TypeVar
 
 import pydantic
-from django.db import connection, transaction
+from django.conf import settings
+from django.db import DEFAULT_DB_ALIAS, transaction
+from django.utils.module_loading import import_string
 from django.utils.translation import gettext
 from ninja import Schema
 
@@ -40,6 +48,8 @@ notify_hook: Callable[[Scope, list[str]], None] | None = None
 
 current_operation: ContextVar["Operation | None"] = ContextVar("live_current_operation", default=None)
 _pending_events: ContextVar[list[str] | None] = ContextVar("live_pending_events", default=None)
+#: The alias the running operation's transaction is open on (``on_commit``).
+_operation_alias: ContextVar[str | None] = ContextVar("live_operation_alias", default=None)
 
 
 @dataclass(eq=False)
@@ -66,21 +76,25 @@ class Operation:
         operation_token = current_operation.set(self)
         events_token = _pending_events.set([])
         try:
-            with transaction.atomic():
-                if self.kind == "query":
-                    with connection.cursor() as cursor:
-                        cursor.execute("SET TRANSACTION READ ONLY")
-                        cursor.execute(f"SET LOCAL statement_timeout = '{QUERY_STATEMENT_TIMEOUT}'")
-                result = self._validated(self.fn(ctx, data))
-                if self.kind == "query":
-                    # A query never commits. Nested in another transaction it runs in a savepoint:
-                    # Postgres restores READ ONLY when the savepoint ends, but SET LOCAL
-                    # statement_timeout would outlive a released savepoint; rolling it back undoes it.
-                    transaction.set_rollback(True)
-                else:
-                    names = list(_pending_events.get())
-                    if names:
-                        transaction.on_commit(partial(_notify, ctx.scope, names), robust=True)
+            with _database(self, ctx) as alias, transaction.atomic(using=alias):
+                alias_token = _operation_alias.set(alias)
+                try:
+                    if self.kind == "query":
+                        with transaction.get_connection(alias).cursor() as cursor:
+                            cursor.execute("SET TRANSACTION READ ONLY")
+                            cursor.execute(f"SET LOCAL statement_timeout = '{QUERY_STATEMENT_TIMEOUT}'")
+                    result = self._validated(self.fn(ctx, data))
+                    if self.kind == "query":
+                        # A query never commits. Nested in another transaction it runs in a savepoint:
+                        # Postgres restores READ ONLY when the savepoint ends, but SET LOCAL
+                        # statement_timeout would outlive a released savepoint; rolling it back undoes it.
+                        transaction.set_rollback(True, using=alias)
+                    else:
+                        names = list(_pending_events.get())
+                        if names:
+                            transaction.on_commit(partial(_notify, ctx.scope, names), using=alias, robust=True)
+                finally:
+                    _operation_alias.reset(alias_token)
         finally:
             _pending_events.reset(events_token)
             current_operation.reset(operation_token)
@@ -164,6 +178,20 @@ def pending_events() -> list[str]:
     return list(_pending_events.get() or [])
 
 
+def on_commit(fn: Callable[[], Any], *, robust: bool = True) -> None:
+    """Run ``fn`` after the COMMIT of the running operation's transaction, on that transaction's alias.
+
+    What a ``services.py`` calls instead of ``transaction.on_commit``: with ``LIVE["operation_database"]`` the
+    operation's transaction is not on ``default`` (hub-next phase 2: the hub's database), and a callback registered
+    there would run at once, before the COMMIT, and also after a rollback. ``robust``: a callback that raises is
+    logged and the others still run. Outside an operation it is a misuse.
+    """
+    alias = _operation_alias.get()
+    if alias is None:
+        raise LiveMisuse("on_commit runs inside an operation, after the COMMIT of its transaction.")
+    transaction.on_commit(fn, using=alias, robust=robust)
+
+
 def add_pending_event(name: str) -> None:
     """Record an event name to notify after the COMMIT of the running command (deduplicated)."""
     operation = current_operation.get()
@@ -172,6 +200,22 @@ def add_pending_event(name: str) -> None:
         raise LiveMisuse(f"Event {name!r} can only be recorded inside a command operation.")
     if name not in names:
         names.append(name)
+
+
+def _database(op: Operation, ctx: OperationContext) -> AbstractContextManager[str]:
+    """The project's ``LIVE["operation_database"]`` for ``op`` in ``ctx``, or ``default`` without one."""
+    path = getattr(settings, "LIVE", {}).get("operation_database")
+    if not path:
+        return nullcontext(DEFAULT_DB_ALIAS)
+    return _load_database_hook(path)(op, ctx)
+
+
+@cache
+def _load_database_hook(path: str) -> Callable[[Operation, OperationContext], AbstractContextManager[str]]:
+    try:
+        return import_string(path)
+    except ImportError as exc:
+        raise LiveMisuse(f'settings.LIVE["operation_database"] = {path!r} cannot be imported: {exc}') from exc
 
 
 def _notify(scope: Scope, names: list[str]) -> None:

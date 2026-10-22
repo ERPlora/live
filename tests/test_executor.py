@@ -1,6 +1,8 @@
 """Executor of live queries: hash dedup, rev, debounce, one run per scope, errors (plan §4.1)."""
 
 import asyncio
+import contextlib
+import contextvars
 import threading
 import time
 
@@ -9,7 +11,7 @@ import pytest
 from django.utils.translation import gettext, gettext_lazy
 from live import executor as executor_module
 from live.context import OperationContext, Scope
-from live.errors import AppInactive, NotFound, PermissionDenied
+from live.errors import AppInactive, NotFound, PermissionDenied, Unauthorized
 from live.executor import BYE_FRAME, QUEUE_MAX, Executor, Stream, Subscription
 from live.operations import registry
 from live.sse import MAX_RESULT_BYTES
@@ -576,3 +578,74 @@ async def test_threads_do_not_leak_database_connections(make_executor, db_dsn):
     frames = await drain(stream.queue)
     assert [(f.event, f.data["data"]) for f in frames] == [("result", {"rows": []})]
     assert after <= before
+
+
+# A builder that enters a context around each run (hub-next phase 2: use_hub of the stream's hub)
+
+ENTERING_BUILDER = "tests.test_executor.EnteringBuilder"
+_entered_scope: "contextvars.ContextVar[Scope | None]" = contextvars.ContextVar("entered_scope", default=None)
+
+
+class EnteringBuilder(LiveTestContextBuilder):
+    """``enter(ctx)``: the context each run of a stream goes into, in the executor's thread (a thread of its own
+    starts without the request's context vars)."""
+
+    __test__ = False
+    closed: set[str] = set()
+    order: list[str] = []
+
+    def enter(self, ctx):
+        if ctx.scope.key in self.closed:
+            raise Unauthorized("This host stopped serving the app.")
+        return self._entered(ctx.scope)
+
+    @contextlib.contextmanager
+    def _entered(self, scope):
+        token = _entered_scope.set(scope)
+        type(self).order.append("enter")
+        try:
+            yield
+        finally:
+            _entered_scope.reset(token)
+
+    def refresh(self, ctx):
+        type(self).order.append("refresh")
+        return super().refresh(ctx)
+
+
+@pytest.fixture
+def entering_builder(settings):
+    settings.LIVE = {**settings.LIVE, "context_builder": ENTERING_BUILDER}
+    EnteringBuilder.closed = set()
+    EnteringBuilder.order = []
+
+
+@pytest.mark.usefixtures("entering_builder")
+async def test_every_run_goes_into_the_context_the_builder_enters(make_executor):
+    executor = make_executor()
+    seen = []
+    op = FakeOp(body=lambda ctx, params: seen.append(_entered_scope.get()) or ThingListOut(rows=[]))
+    stream = make_stream(SCOPE_B)
+    subscribe(stream, op)
+
+    await executor.run_all(stream)
+
+    assert seen == [SCOPE_B]
+    assert _entered_scope.get() is None
+    # Entered first: the refresh (which re-reads the registry, the user) runs inside it too.
+    assert EnteringBuilder.order == ["enter", "refresh"]
+
+
+@pytest.mark.usefixtures("entering_builder")
+async def test_a_context_that_cannot_be_entered_ends_the_stream(make_executor):
+    executor = make_executor()
+    EnteringBuilder.closed = {"a"}
+    op = FakeOp(rows=[thing(1)])
+    stream = make_stream(SCOPE_A)
+    subscribe(stream, op)
+
+    await executor.run_all(stream)
+
+    assert op.calls == 0
+    assert stream.closed
+    assert await drain(stream.queue) == [parse_frame(BYE_FRAME)]
