@@ -68,8 +68,26 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
   `summary` (una línea, ≤ 120 caracteres, `gettext_lazy`), `description` (un párrafo),
   `verticals` (ids de vertical; de ellos se derivan las plantillas por vertical) y `listed` (`True`
   por defecto; `False` lo saca de la tienda, como `apps/demo`).
+- **Solo un módulo, para el Inicio del Hub** (ronda PLAN-HUB 2026-10-21, los «hooks» del manifiesto
+  viejo sin manifiesto; los agrega `base` con `base.setup.status`, `base.widget.list` y
+  `base.bell.counters`): tres listas de dataclasses congeladas, como `Nav`, vacías por defecto.
+  - `setup: list[SetupStep]`, los pasos de «Termina de configurar tu negocio»: `key`, `operation`
+    (una consulta de su propio `queries.py`), `title` y `route`, obligatorios; `description`, `icon`,
+    `params`, `configured_when` (lista de `SetupCheck(field, truthy=… | equals=…)` sobre la primera
+    fila del resultado; vacía = basta con que haya fila), `permission` (la que hace falta para
+    configurarlo), `countries` (ISO 3166-1 alfa-2; vacío = todos), `order`, `required` (`True` por
+    defecto = funcional; `False` = recomendado; el nivel legal lo da `base`) y `refresh_on`.
+  - `widgets: list[Widget]`, los paneles del tablero: `key` y `title`; `icon`, `category`, `size`
+    (`WIDGET_SIZES`: `sm`, `md` por defecto, `lg`), `permission`, `verticals` (vacío = todas),
+    `default`, `refresh_on` y, o bien `kind` (`WIDGET_KINDS`: `kpi`, `stat`, `sparkline`,
+    `bar-list`, `timeline`, `chart`) con `operation`, `params`, `map` (prop → campo) y `options`, o
+    bien `component` (un componente Vue de `frontend/components/` del módulo, sin `.vue`).
+  - `bell: list[BellCounter]`, los contadores de la campana: `key`, `operation` (su primera fila
+    trae `count`), `route` y `label`; `icon`, `params`, `permission` y `refresh_on`.
 - **Lectura**: `all_live_app_configs()` devuelve todas las apps nuestras instaladas (permisos,
-  routers); `module_configs()`, solo las de `kind = "app"` (menú, página de apps, foto del SaaS).
+  routers); `module_configs()`, solo las de `kind = "app"` (menú, página de apps, foto del SaaS, y
+  sus `setup`, `widgets` y `bell`); `declared_events()`, los eventos que declara la lista `ALL` del
+  `events.py` de cada app nuestra (sin `events.py` o sin `ALL`, ninguno).
 - **Checks** (`live.checks`, etiqueta `live`, registrados al arrancar la app `live`; corren con
   `manage.py check` y `runserver` y miran siempre todas las apps nuestras):
   - `live.E001`: `kind` no es `"platform"` ni `"app"`;
@@ -79,17 +97,34 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
     etiqueta que no existe);
   - `live.E005`: un ciclo en `requires` (un error por ciclo);
   - `live.E006`: una app de plataforma no deja en su valor por defecto `requires`, `category`,
-    `premium`, `navigation`, `summary`, `description`, `verticals` o `listed` (se compara con el
-    valor por defecto, no con «verdadero»: `listed` vale `True`);
+    `premium`, `navigation`, `summary`, `description`, `verticals`, `listed`, `setup`, `widgets` o
+    `bell` (se compara con el valor por defecto, no con «verdadero»: `listed` vale `True`); los pasos
+    de plataforma de `base` los pone `base.setup.status`, no su `LiveAppConfig`;
   - `live.E007`: un módulo sin `summary`, con un `summary` de más de una línea o de más de 120
     caracteres, sin `description` o con un `verbose_name` de más de 80 (medidos en inglés; el `es`
     lo valida `register_apps`);
   - `live.E008`: un id de `verticals` que no casa `^[a-z][a-z0-9]*(_[a-z0-9]+)*$`, pasa de 50
     caracteres (`hub_template_<vertical>` cabe en 63), es `test` (reservado) o se repite; o
-    `verticals` no es una lista.
+    `verticals` no es una lista;
+  - `live.E009`: `setup`, `widgets` o `bell` no es una lista (o tupla) de su dataclass;
+  - `live.E010`: el `operation` de un paso, panel o contador no es una consulta (`kind="query"`)
+    declarada del propio módulo (su prefijo es el `label`); un panel por `component` puede no tenerlo;
+  - `live.E011`: su `permission` no es uno de los `permissions` del módulo (`None` = sin permiso);
+  - `live.E012`: su `refresh_on` no es una lista, o nombra un evento que ningún `events.py` declara
+    en `ALL` (`declared_events()`);
+  - `live.E013`: una `key` que no casa `^[a-z][a-z0-9_]*$` o que se repite en su lista (la misma
+    `key` en dos listas vale);
+  - `live.E014`: un panel con `kind` y `component` a la vez, sin ninguno de los dos, con un `kind`
+    que no está en `WIDGET_KINDS` o con `kind` y sin `operation`;
+  - `live.E015`: un panel con un `size` que no es `sm`, `md` ni `lg`;
+  - `live.E016`: un `configured_when` que no es una lista de `SetupCheck`, o una condición sin
+    `field` o sin exactamente uno de `truthy` y `equals`.
 
-  La app de pruebas (`tests/testapp`) es un módulo (`kind = "app"`) con `icon`, `category`,
-  `summary`, `description` y `verticals`, para pasarlos.
+  Los checks de los hooks necesitan las operaciones y los eventos registrados, cosa que
+  `LiveConfig.ready` hace antes de cualquier check. La app de pruebas (`tests/testapp`) es un módulo
+  (`kind = "app"`) con `icon`, `category`, `summary`, `description` y `verticals`, y un paso, un panel y
+  un contador sobre su consulta `testapp.thing.list` y su evento `testapp.thing.created` (su
+  `events.py`), para pasarlos.
 - **Routers**: `live.ninja.mount_app_routers(api)` monta en la raíz de la API el `router` del `api.py`
   de toda app nuestra (de plataforma o módulo), en el orden de `INSTALLED_APPS`, y devuelve sus
   etiquetas; la que no tiene `api.py` se salta y un `api.py` sin un `Router` de ninja en `router` lanza

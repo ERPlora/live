@@ -4,7 +4,8 @@ Round 15 (PLAN §20): every app of ours extends ``LiveAppConfig``; ``kind = "app
 of ``apps/`` (turned on and off per hub), ``kind = "platform"`` an always-on app such as ``base``.
 Round 16 (PLAN §21) adds the public store's metadata of a module: ``summary`` and ``description``
 (E007), ``verticals`` (E008) and ``listed``, which a platform app leaves at their defaults (E006).
-The checks run on ``manage.py check`` and when the server starts.
+The PLAN-HUB round 2026-10-21 adds the Home's hooks of a module, ``setup``, ``widgets`` and ``bell``
+(E006, E009–E016). The checks run on ``manage.py check`` and when the server starts.
 """
 
 from types import SimpleNamespace
@@ -14,7 +15,10 @@ from django.core import checks
 from django.core.checks.registry import registry
 from django.utils.translation import gettext_lazy
 from live.checks import check_app_metadata
-from live.meta import Category, LiveAppConfig, Nav
+from live.meta import BellCounter, Category, LiveAppConfig, Nav, SetupCheck, SetupStep, Widget
+from live import operations
+from live.operations import Operation
+from ninja import Schema
 
 
 def module(label, **overrides):
@@ -32,6 +36,10 @@ def module(label, **overrides):
         "listed": True,
         "requires": [],
         "navigation": [],
+        "permissions": [f"{label}.view", f"{label}.manage"],
+        "setup": [],
+        "widgets": [],
+        "bell": [],
     }
     return SimpleNamespace(**{**fields, **overrides})
 
@@ -51,12 +59,16 @@ def platform(label="base", **overrides):
         "listed": True,
         "requires": [],
         "navigation": [],
+        "permissions": [],
+        "setup": [],
+        "widgets": [],
+        "bell": [],
     }
     return SimpleNamespace(**{**fields, **overrides})
 
 
 @pytest.fixture
-def run(monkeypatch):
+def run(monkeypatch, known):
     """Run the check over the given stand-ins, as if they were the installed apps."""
 
     def run(*configs):
@@ -130,6 +142,10 @@ def test_module_with_only_the_defaults_misses_icon_category_summary_and_descript
             "listed",
             "requires",
             "navigation",
+            "permissions",
+            "setup",
+            "widgets",
+            "bell",
         )
     }
 
@@ -260,6 +276,17 @@ def test_e006_names_every_module_field_in_one_error(run):
 )
 def test_platform_app_declaring_a_store_field_is_e006(run, field, value):
     messages = run(platform(**{field: value}), module("stock"))
+
+    assert ids(messages) == ["live.E006"]
+    assert "base" in messages[0].msg
+    assert field in messages[0].msg
+
+
+@pytest.mark.parametrize("field", ["setup", "widgets", "bell"])
+def test_platform_app_declaring_a_home_hook_is_e006(run, field):
+    """Only a module declares steps, panels and counters; base's own steps live in base.setup.status."""
+    hook = {"setup": step(), "widgets": widget(), "bell": counter()}[field]
+    messages = run(platform(**{field: [hook]}), module("stock"))
 
     assert ids(messages) == ["live.E006"]
     assert "base" in messages[0].msg
@@ -404,6 +431,327 @@ def test_verticals_that_are_not_a_list_is_e008(run, verticals):
 
     assert message.id == "live.E008"
     assert "list" in message.msg
+
+
+# --- The Home's hooks (PLAN-HUB round 2026-10-21): setup, widgets and bell, E009–E016 -----------------
+
+
+def query(name, kind="query"):
+    return Operation(
+        name=name,
+        kind=kind,
+        permission="x.view",
+        input=Schema,
+        output=Schema,
+        expose_api=False,
+        ai=None,
+        fn=lambda ctx, data: {},
+    )
+
+
+@pytest.fixture
+def known(monkeypatch):
+    """The operations and events the stand-ins name: stock's queries and command, and sale's query."""
+    for op in (
+        query("stock.catalog.status"),
+        query("stock.item.count"),
+        query("stock.item.archive", kind="command"),
+        query("sale.sale.list"),
+    ):
+        monkeypatch.setitem(operations.registry, op.name, op)
+    monkeypatch.setattr(
+        "live.checks.declared_events", lambda: frozenset({"stock.item.created", "sale.sale.completed"})
+    )
+
+
+def step(key="catalog", **overrides):
+    fields = {"key": key, "operation": "stock.catalog.status", "title": "Your catalog", "route": "/stock"}
+    return SetupStep(**{**fields, **overrides})
+
+
+def widget(key="today", **overrides):
+    fields = {"key": key, "title": "Today", "kind": "kpi", "operation": "stock.item.count"}
+    return Widget(**{**fields, **overrides})
+
+
+def counter(key="low", **overrides):
+    fields = {"key": key, "operation": "stock.item.count", "route": "/stock", "label": "Low stock"}
+    return BellCounter(**{**fields, **overrides})
+
+
+#: One builder per hook, for the rules that the three share.
+HOOKS = {"setup": step, "widgets": widget, "bell": counter}
+
+
+def test_a_module_with_well_declared_hooks_passes(run):
+    stock = module(
+        "stock",
+        setup=[
+            step(
+                permission="stock.manage",
+                refresh_on=["stock.item.created", "sale.sale.completed"],
+                configured_when=[
+                    SetupCheck(field="active", truthy=True),
+                    SetupCheck(field="archived", truthy=False),
+                    SetupCheck(field="state", equals="ready"),
+                    SetupCheck(field="missing", equals=0),
+                    SetupCheck(field="locked", equals=False),
+                ],
+            ),
+            step("first_sale", required=False, countries=["ES"], order=20),
+        ],
+        widgets=[
+            widget(size="lg", permission="stock.view", refresh_on=["stock.item.created"], map={"value": "total"}),
+            widget("chart", kind=None, operation=None, component="StockChart", size="sm"),
+            widget("trend", kind=None, component="StockTrend"),
+        ],
+        bell=[counter(permission="stock.view", refresh_on=("sale.sale.completed",))],
+    )
+
+    assert run(platform(), stock) == []
+
+
+@pytest.mark.parametrize("kind", ["kpi", "stat", "sparkline", "bar-list", "timeline", "chart"])
+def test_every_widget_kind_is_accepted(run, kind):
+    assert run(module("stock", widgets=[widget(kind=kind)])) == []
+
+
+@pytest.mark.parametrize("size", ["sm", "md", "lg"])
+def test_every_widget_size_is_accepted(run, size):
+    assert run(module("stock", widgets=[widget(size=size)])) == []
+
+
+def test_the_hooks_may_be_tuples(run):
+    assert run(module("stock", setup=(step(),), widgets=(widget(),), bell=(counter(),))) == []
+
+
+# E009: each hook is a list of its own dataclass.
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("setup", "catalog"),
+        ("setup", None),
+        ("widgets", {"today": "kpi"}),
+        ("setup", [widget()]),
+        ("widgets", [step()]),
+        ("bell", [widget()]),
+        ("bell", [counter(), {"key": "low"}]),
+    ],
+)
+def test_a_hook_that_is_not_a_list_of_its_dataclass_is_e009(run, field, value):
+    [message] = run(module("stock", **{field: value}))
+
+    assert message.id == "live.E009"
+    assert "stock" in message.msg
+    assert field in message.msg
+
+
+def test_a_single_dataclass_instead_of_a_list_is_e009(run):
+    [message] = run(module("stock", setup=step()))
+
+    assert message.id == "live.E009"
+
+
+# E010: operation is a query of the module itself.
+
+
+@pytest.mark.parametrize("field", HOOKS)
+@pytest.mark.parametrize(
+    "operation",
+    [
+        "stock.catalog.ghost",  # no such operation
+        "stock.item.archive",  # a command
+        "sale.sale.list",  # a query of another app
+    ],
+)
+def test_a_hook_whose_operation_is_not_a_query_of_its_app_is_e010(run, field, operation):
+    [message] = run(module("stock", **{field: [HOOKS[field](operation=operation)]}))
+
+    assert message.id == "live.E010"
+    assert "stock" in message.msg
+    assert field in message.msg
+    assert repr(operation) in message.msg
+
+
+@pytest.mark.parametrize("field", ["setup", "bell"])
+@pytest.mark.parametrize("operation", ["", None, 3])
+def test_a_step_or_counter_without_operation_is_e010(run, field, operation):
+    """A widget may go without one when it renders a component; a kind without it is E014."""
+    [message] = run(module("stock", **{field: [HOOKS[field](operation=operation)]}))
+
+    assert message.id == "live.E010"
+    assert repr(operation) in message.msg
+
+
+def test_a_component_widget_with_an_operation_has_it_checked(run):
+    [message] = run(module("stock", widgets=[widget(kind=None, component="StockChart", operation="sale.sale.list")]))
+
+    assert message.id == "live.E010"
+
+
+def test_an_operation_of_another_app_is_e010_even_if_the_prefix_only_starts_alike(run, monkeypatch):
+    monkeypatch.setitem(operations.registry, "stockx.item.count", query("stockx.item.count"))
+
+    [message] = run(module("stock", bell=[counter(operation="stockx.item.count")]))
+
+    assert message.id == "live.E010"
+
+
+def test_each_hook_with_a_wrong_operation_is_its_own_e010(run):
+    messages = run(
+        module(
+            "stock",
+            setup=[step(operation="stock.item.archive")],
+            widgets=[widget(operation="sale.sale.list")],
+            bell=[counter("a", operation="x"), counter("b", operation="stock.catalog.ghost")],
+        )
+    )
+
+    assert ids(messages) == ["live.E010"] * 4
+
+
+# E011: permission is one of the app's permissions.
+
+
+@pytest.mark.parametrize("field", HOOKS)
+@pytest.mark.parametrize("permission", ["stock.delete", "sale.view", "view"])
+def test_a_hook_whose_permission_is_not_one_of_its_app_is_e011(run, field, permission):
+    [message] = run(module("stock", **{field: [HOOKS[field](permission=permission)]}))
+
+    assert message.id == "live.E011"
+    assert "stock" in message.msg
+    assert repr(permission) in message.msg
+
+
+@pytest.mark.parametrize("field", HOOKS)
+def test_a_hook_may_need_no_permission(run, field):
+    assert run(module("stock", **{field: [HOOKS[field](permission=None)]})) == []
+
+
+# E012: refresh_on names declared events only.
+
+
+@pytest.mark.parametrize("field", HOOKS)
+def test_a_hook_refreshed_on_an_undeclared_event_is_e012(run, field):
+    [message] = run(module("stock", **{field: [HOOKS[field](refresh_on=["stock.item.vanished"])]}))
+
+    assert message.id == "live.E012"
+    assert "stock" in message.msg
+    assert "'stock.item.vanished'" in message.msg
+
+
+def test_each_undeclared_event_is_its_own_e012(run):
+    messages = run(module("stock", setup=[step(refresh_on=["a.b.c", "stock.item.created", "d.e.f"])]))
+
+    assert ids(messages) == ["live.E012", "live.E012"]
+    assert ["'a.b.c'" in messages[0].msg, "'d.e.f'" in messages[1].msg] == [True, True]
+
+
+@pytest.mark.parametrize("event", [["stock.item.created"], None, 3])
+def test_an_event_that_is_not_a_name_is_e012(run, event):
+    [message] = run(module("stock", bell=[counter(refresh_on=["stock.item.created", event])]))
+
+    assert message.id == "live.E012"
+    assert repr(event) in message.msg
+
+
+@pytest.mark.parametrize("refresh_on", ["stock.item.created", None, {"stock.item.created": True}])
+def test_refresh_on_that_is_not_a_list_is_one_e012(run, refresh_on):
+    [message] = run(module("stock", widgets=[widget(refresh_on=refresh_on)]))
+
+    assert message.id == "live.E012"
+    assert "list" in message.msg
+
+
+# E013: key, a snake_case name unique per app and hook.
+
+
+@pytest.mark.parametrize("field", HOOKS)
+def test_a_key_repeated_in_one_hook_is_e013_once(run, field):
+    build = HOOKS[field]
+
+    [message] = run(module("stock", **{field: [build("low"), build("high"), build("low"), build("low")]}))
+
+    assert message.id == "live.E013"
+    assert "'low'" in message.msg
+
+
+def test_the_same_key_in_two_hooks_is_fine(run):
+    assert run(module("stock", setup=[step("low")], widgets=[widget("low")], bell=[counter("low")])) == []
+
+
+@pytest.mark.parametrize("key", ["", "Low", "low-stock", "1low", "low stock", "low.stock", None])
+def test_a_malformed_key_is_e013(run, key):
+    [message] = run(module("stock", bell=[counter(key=key)]))
+
+    assert message.id == "live.E013"
+    assert repr(key) in message.msg
+
+
+# E014: a widget renders by kind (with its operation) or by component, never both.
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"kind": "kpi", "component": "StockChart"},  # both
+        {"kind": None, "component": None},  # neither
+        {"kind": None, "component": ""},  # neither
+        {"kind": "pie"},  # unknown kind
+        {"kind": "Kpi"},  # unknown kind
+        {"kind": "bar_list"},  # unknown kind
+        {"kind": "kpi", "operation": None},  # kind without operation
+        {"kind": "kpi", "operation": ""},  # kind without operation
+    ],
+)
+def test_a_widget_that_does_not_render_one_way_is_e014(run, overrides):
+    [message] = run(module("stock", widgets=[widget(**overrides)]))
+
+    assert message.id == "live.E014"
+    assert "'today'" in message.msg
+
+
+# E015: size.
+
+
+@pytest.mark.parametrize("size", ["xl", "", None, "MD", "medium"])
+def test_a_widget_size_other_than_sm_md_lg_is_e015(run, size):
+    [message] = run(module("stock", widgets=[widget(size=size)]))
+
+    assert message.id == "live.E015"
+    assert repr(size) in message.msg
+
+
+# E016: configured_when, a list of SetupCheck with exactly one of truthy and equals.
+
+
+@pytest.mark.parametrize(
+    "configured_when",
+    [
+        [SetupCheck(field="active")],  # neither
+        [SetupCheck(field="active", truthy=True, equals="x")],  # both
+        [SetupCheck(field="", truthy=True)],  # no field
+        [SetupCheck(field=None, truthy=True)],  # no field
+        [{"field": "active", "truthy": True}],  # not a SetupCheck
+        SetupCheck(field="active", truthy=True),  # not a list
+        "active",  # not a list
+    ],
+)
+def test_a_malformed_configured_when_is_e016(run, configured_when):
+    [message] = run(module("stock", setup=[step(configured_when=configured_when)]))
+
+    assert message.id == "live.E016"
+    assert "'catalog'" in message.msg
+
+
+def test_each_malformed_condition_is_its_own_e016(run):
+    messages = run(
+        module("stock", setup=[step(configured_when=[SetupCheck(field="a"), SetupCheck(field="b", truthy=True), SetupCheck(field="c")])])
+    )
+
+    assert ids(messages) == ["live.E016", "live.E016"]
 
 
 # --- Registration and the installed apps ------------------------------------------------------------
