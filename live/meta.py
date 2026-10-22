@@ -13,14 +13,23 @@ permissions (``<app>.<action>``) and the permissions each role gets (``"demo.*"`
 Round 16 (PLAN §21) adds the public store's metadata of a module (``summary``, ``description``,
 ``verticals``, ``listed``), which ``register_apps`` writes to ``shared.app``; the Hub's apps page
 still shows icon and name only.
+
+The PLAN-HUB round 2026-10-21 adds the Home's hooks of a module, the old manifest's ``setup``,
+``widgets`` and ``bell`` without a manifest: its steps of «Finish setting up your business»
+(``SetupStep``), its panels of the dashboard (``Widget``) and its counters of the bell
+(``BellCounter``). Each names a query of the module's own ``queries.py``; the Hub's ``base`` runs them
+as the person of the request and aggregates them (``base.setup.status``, ``base.widget.list``,
+``base.bell.counters``).
 """
 
-from collections.abc import Iterable
-from dataclasses import dataclass
-from typing import ClassVar, Literal
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass, field
+from importlib import import_module
+from typing import Any, ClassVar, Literal, get_args
 
 from django.apps import AppConfig, apps
 from django.db import models
+from django.utils.module_loading import module_has_submodule
 from django.utils.translation import gettext_lazy as _
 
 
@@ -44,6 +53,100 @@ class Nav:
     path: str
 
 
+WidgetSize = Literal["sm", "md", "lg"]
+#: How a panel renders without a component of its own: the old board's kinds.
+WidgetKind = Literal["kpi", "stat", "sparkline", "bar-list", "timeline", "chart"]
+WIDGET_SIZES: tuple[str, ...] = get_args(WidgetSize)
+WIDGET_KINDS: tuple[str, ...] = get_args(WidgetKind)
+
+
+@dataclass(frozen=True)
+class SetupCheck:
+    """One condition of ``SetupStep.configured_when`` on a field of the first row of the step's query.
+
+    Exactly one of ``truthy`` (the field is truthy; ``False`` inverts it) and ``equals`` (the field
+    equals this value); ``live.checks`` rejects neither and both (E016).
+    """
+
+    field: str
+    truthy: bool | None = None
+    equals: Any = None
+
+
+@dataclass(frozen=True)
+class SetupStep:
+    """A step of «Finish setting up your business», answered by a query of the module itself.
+
+    The step is done when every ``configured_when`` passes on the first row of ``operation`` run with
+    ``params`` (no conditions: having a row is enough); no row, not done. ``required`` makes it
+    functional, otherwise recommended (the legal level is base's to give). ``permission`` is the one
+    needed to configure it; ``countries`` (ISO 3166-1 alpha-2, empty = all) limit it to hubs of those
+    countries; ``order`` places it in the list (``None``: after the placed ones); ``refresh_on`` names
+    the events that may change it. ``title`` and ``description`` are usually lazy translations.
+    """
+
+    key: str
+    operation: str
+    title: str
+    route: str
+    description: str = ""
+    icon: str = ""
+    params: Mapping[str, Any] = field(default_factory=dict)
+    configured_when: Sequence[SetupCheck] = ()
+    permission: str | None = None
+    countries: Sequence[str] = ()
+    order: int | None = None
+    required: bool = True
+    refresh_on: Sequence[str] = ()
+
+
+@dataclass(frozen=True)
+class Widget:
+    """A panel of the Home's dashboard, which each person turns on, removes and reorders.
+
+    It renders either by ``kind`` (one of ``WIDGET_KINDS``) with the data of ``operation`` run with
+    ``params`` (``map``: prop → field of the result; ``options``: literal props), or by ``component``,
+    the name of a Vue component of the module's ``frontend/components/`` (without ``.vue``), never
+    both. ``verticals`` limit it to hubs of those verticals (empty = all) and ``default`` turns it on
+    for a hub that has not chosen yet; ``size`` is its width on the board; ``refresh_on`` names the
+    events that re-run its operation.
+    """
+
+    key: str
+    title: str
+    icon: str = ""
+    category: str = ""
+    size: WidgetSize = "md"
+    permission: str | None = None
+    verticals: Sequence[str] = ()
+    default: bool = False
+    refresh_on: Sequence[str] = ()
+    kind: WidgetKind | None = None
+    operation: str | None = None
+    params: Mapping[str, Any] = field(default_factory=dict)
+    map: Mapping[str, str] = field(default_factory=dict)
+    options: Mapping[str, Any] = field(default_factory=dict)
+    component: str | None = None
+
+
+@dataclass(frozen=True)
+class BellCounter:
+    """A counter of the bell: the ``count`` of the first row of ``operation`` run with ``params``.
+
+    Shown with ``label`` and ``icon`` while above zero, to whoever has ``permission``; ``route`` is
+    where it leads and ``refresh_on`` names the events that may change it.
+    """
+
+    key: str
+    operation: str
+    route: str
+    label: str
+    icon: str = ""
+    params: Mapping[str, Any] = field(default_factory=dict)
+    permission: str | None = None
+    refresh_on: Sequence[str] = ()
+
+
 class LiveAppConfig(AppConfig):
     kind: ClassVar[Literal["platform", "app"]] = "platform"
     # Module metadata, round 15: the Hub's apps page (icon and name) and the right from the SaaS.
@@ -60,6 +163,10 @@ class LiveAppConfig(AppConfig):
     navigation: ClassVar[list[Nav]] = []
     permissions: ClassVar[list[str]] = []
     role_permissions: ClassVar[dict[str, list[str]]] = {}
+    # Module metadata, PLAN-HUB round 2026-10-21: the Home's hooks, which base aggregates.
+    setup: ClassVar[list[SetupStep]] = []
+    widgets: ClassVar[list[Widget]] = []
+    bell: ClassVar[list[BellCounter]] = []
 
     # An apps.py that imports LiveAppConfig holds two AppConfig subclasses, and Django then
     # silently falls back to a plain AppConfig. The base opts out of auto-detection and every
@@ -97,3 +204,15 @@ def all_live_app_configs() -> list[LiveAppConfig]:
 def module_configs() -> list[LiveAppConfig]:
     """The installed modules: the apps of ``kind == "app"``, which a hub turns on and off."""
     return [config for config in all_live_app_configs() if config.kind == "app"]
+
+
+def declared_events() -> frozenset[str]:
+    """Every event an app of ours declares: the ``ALL`` list of its ``events.py``.
+
+    An app without ``events.py``, or whose ``events.py`` has no ``ALL``, declares none.
+    """
+    names: set[str] = set()
+    for config in all_live_app_configs():
+        if module_has_submodule(config.module, "events"):
+            names.update(getattr(import_module(f"{config.name}.events"), "ALL", ()))
+    return frozenset(names)
