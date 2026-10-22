@@ -16,7 +16,12 @@ from django.utils import translation
 
 from live import recaptcha
 from live.errors import LiveMisuse, OperationError
-from live.recaptcha import Assessment, RecaptchaFailed, RecaptchaUnavailable
+from live.recaptcha import (
+    Assessment,
+    RecaptchaFailed,
+    RecaptchaMisconfigured,
+    RecaptchaUnavailable,
+)
 
 SITE_KEY = "6Le-test-site-key"
 API_KEY = "AIza-test-api-key-never-logged"
@@ -77,8 +82,10 @@ def google(monkeypatch):
 @pytest.fixture(autouse=True)
 def forget_the_warning():
     recaptcha._reset_disabled_warning()
+    recaptcha._reset_unavailable_counts()
     yield
     recaptcha._reset_disabled_warning()
+    recaptcha._reset_unavailable_counts()
 
 
 def form_post(remote_addr="203.0.113.7", user_agent="Mozilla/5.0 (test)"):
@@ -157,6 +164,15 @@ def test_assess_raises_unavailable_when_google_cannot_be_asked(recaptcha_on, goo
     google(failure)
 
     with pytest.raises(RecaptchaUnavailable):
+        recaptcha.assess("t", action="login")
+
+
+@pytest.mark.parametrize("status", [400, 403, 429])
+def test_assess_calls_a_4xx_of_google_misconfigured(recaptcha_on, google, status):
+    """A bad key, a project without the API, the quota or the billing: Google answers, but not about the token."""
+    google(urllib.error.HTTPError("https://x", status, "Client Error", {}, io.BytesIO(b"{}")))
+
+    with pytest.raises(RecaptchaMisconfigured):
         recaptcha.assess("t", action="login")
 
 
@@ -254,7 +270,7 @@ def test_google_down_fails_closed_and_is_logged_without_the_key(recaptcha_on, go
     google(failure)
 
     with caplog.at_level(logging.WARNING, logger="live.recaptcha"), pytest.raises(RecaptchaFailed):
-        recaptcha.verify_or_raise(form_post(), "t", "login")
+        recaptcha.verify_or_raise(form_post(), "t", "signup")
 
     assert any(record.levelno >= logging.ERROR for record in caplog.records)
     assert API_KEY not in caplog.text
@@ -270,6 +286,117 @@ def test_the_refusal_speaks_english_and_spanish(recaptcha_on, google):
         with translation.override(language), pytest.raises(RecaptchaFailed) as refused:
             recaptcha.verify_or_raise(form_post(), "t", "login")
         assert refused.value.message == expected
+
+
+# --- Google unavailable: the break-glass of the doors of an identified account ---------------------------------
+# The sign-in and its second factors (the mailed code, the authenticator app) are already behind the password or the
+# code and their attempt limits: when Google cannot be asked, they let the request through, loudly (ERROR, CRITICAL
+# for a 4xx: the key, the quota, the billing), so a Google outage never locks everyone out, the staff included. A
+# verdict of Google still refuses there, and every other door stays closed.
+
+UNAVAILABLE = [
+    TimeoutError("timed out"),
+    urllib.error.URLError("unreachable"),
+    urllib.error.HTTPError("https://x", 503, "Service Unavailable", {}, io.BytesIO(b"{}")),
+    b"<html>not an assessment</html>",
+]
+UNAVAILABLE_IDS = ["timeout", "unreachable", "http-503", "unreadable"]
+LET_THROUGH = ["login", "login_code", "mfa_authenticate"]
+KEPT_CLOSED = ["signup", "password_reset", "password_reset_confirm", "verify_email", "verify_email_resend", "contact", "demo_request"]
+
+
+def test_the_doors_that_let_through_by_default_are_the_sign_in_and_its_second_factors():
+    assert frozenset(LET_THROUGH) == recaptcha.DEFAULT_FAIL_OPEN_ON_UNAVAILABLE
+
+
+@pytest.mark.parametrize("failure", UNAVAILABLE, ids=UNAVAILABLE_IDS)
+@pytest.mark.parametrize("action", LET_THROUGH)
+def test_google_unavailable_lets_the_sign_in_through_and_says_so(recaptcha_on, google, caplog, action, failure):
+    google(failure)
+
+    with caplog.at_level(logging.WARNING, logger="live.recaptcha"):
+        assert recaptcha.verify_or_raise(form_post(), "t", action) is None
+
+    [record] = caplog.records
+    assert record.levelno == logging.ERROR
+    assert record.getMessage().startswith(f"recaptcha.unavailable action={action} ")
+    assert "let_through=True" in record.getMessage()
+    assert recaptcha.unavailable_counts() == {(action, "unavailable"): 1}
+
+
+@pytest.mark.parametrize("status", [400, 403])
+def test_a_4xx_lets_the_sign_in_through_and_is_critical(recaptcha_on, google, caplog, status):
+    google(urllib.error.HTTPError("https://x", status, "Client Error", {}, io.BytesIO(b"{}")))
+
+    with caplog.at_level(logging.WARNING, logger="live.recaptcha"):
+        assert recaptcha.verify_or_raise(form_post(), "t", "login") is None
+
+    [record] = caplog.records
+    assert record.levelno == logging.CRITICAL
+    assert record.getMessage().startswith("recaptcha.misconfigured action=login ")
+    assert API_KEY not in caplog.text
+    assert recaptcha.unavailable_counts() == {("login", "misconfigured"): 1}
+
+
+@pytest.mark.parametrize("failure", [*UNAVAILABLE, urllib.error.HTTPError("https://x", 403, "Forbidden", {}, io.BytesIO(b""))], ids=[*UNAVAILABLE_IDS, "http-403"])
+@pytest.mark.parametrize("action", KEPT_CLOSED)
+def test_google_unavailable_keeps_every_other_door_closed(recaptcha_on, google, caplog, action, failure):
+    google(failure)
+
+    with caplog.at_level(logging.WARNING, logger="live.recaptcha"), pytest.raises(RecaptchaFailed):
+        recaptcha.verify_or_raise(form_post(), "t", action)
+
+    assert "let_through=False" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("token", "reply"),
+    [
+        ("t", answer(action="login", score=0.1)),
+        ("t", answer(valid=False, invalid_reason="EXPIRED")),
+        ("t", answer(action="signup")),
+        ("", answer()),
+    ],
+    ids=["low-score", "invalid", "other-action", "no-token"],
+)
+def test_a_verdict_of_google_still_refuses_the_sign_in(recaptcha_on, google, token, reply):
+    google(reply)
+
+    with pytest.raises(RecaptchaFailed):
+        recaptcha.verify_or_raise(form_post(), token, "login")
+
+
+def test_the_doors_that_let_through_come_from_the_settings(recaptcha_on, google):
+    recaptcha_on.LIVE = {
+        **recaptcha_on.LIVE,
+        "recaptcha": {**recaptcha_on.LIVE["recaptcha"], "fail_open_on_unavailable": frozenset({"contact"})},
+    }
+    google(TimeoutError("timed out"))
+
+    assert recaptcha.verify_or_raise(form_post(), "t", "contact") is None
+    with pytest.raises(RecaptchaFailed):
+        recaptcha.verify_or_raise(form_post(), "t", "login")
+
+
+def test_the_counts_add_up_per_door_and_kind(recaptcha_on, google):
+    google(TimeoutError("timed out"))
+    recaptcha.verify_or_raise(form_post(), "t", "login")
+    recaptcha.verify_or_raise(form_post(), "t", "login")
+    with pytest.raises(RecaptchaFailed):
+        recaptcha.verify_or_raise(form_post(), "t", "signup")
+
+    assert recaptcha.unavailable_counts() == {("login", "unavailable"): 2, ("signup", "unavailable"): 1}
+
+
+@pytest.mark.parametrize("value", ["login", [1], {"login": True}], ids=["a-string", "not-names", "a-dict"])
+def test_doors_that_let_through_that_are_not_a_set_of_names_are_a_misuse(recaptcha_on, value):
+    recaptcha_on.LIVE = {
+        **recaptcha_on.LIVE,
+        "recaptcha": {**recaptcha_on.LIVE["recaptcha"], "fail_open_on_unavailable": value},
+    }
+
+    with pytest.raises(LiveMisuse):
+        recaptcha.verify_or_raise(form_post(), "t", "login")
 
 
 # --- switched off and misconfigured -----------------------------------------------------------------------------

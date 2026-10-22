@@ -5,8 +5,13 @@ action (``grecaptcha.enterprise.execute(siteKey, {action})``); the form carries 
 asks Google for an assessment of that token (``assess``) and ``verify_or_raise`` turns it into a verdict: the form
 goes on, or a 400 ``recaptcha_failed`` (``RecaptchaFailed``, an ``OperationError``, so the envelope of the API).
 Nobody sees a checkbox or a puzzle. Refused: no token, a token Google says is invalid (malformed, expired, used
-twice, of another site), a token of another action, a score under ``min_score``, and Google itself unreachable or
-answering something unreadable (fail closed: a public form is never let through unverified; the cause is logged).
+twice, of another site), a token of another action and a score under ``min_score``. Google unreachable or answering
+something unreadable (a timeout, the network, a 5xx, junk; a 4xx too, logged CRITICAL as ``recaptcha.misconfigured``:
+the key, the quota, the billing) refuses every form (fail closed) except the doors of ``fail_open_on_unavailable``:
+by default the sign-in and its second factors (``login``, ``login_code``, ``mfa_authenticate``), which are already
+behind the password or the code and their attempt limits, so a Google outage never locks everyone out, the staff
+included (break-glass). Those let the request through with an ERROR ``recaptcha.unavailable`` and a count per door
+(``unavailable_counts``); a verdict of Google still refuses them.
 
 Settings, ``LIVE["recaptcha"]``:
 
@@ -16,6 +21,8 @@ Settings, ``LIVE["recaptcha"]``:
 - ``site_key``: the public key the page loads ``enterprise.js`` with (``site_key()``, empty when off);
 - ``api_key``: the secret key of the assessments' REST API (never logged);
 - ``min_score``: from 0 to 1, 0.5 by default (Google's own default threshold);
+- ``fail_open_on_unavailable``: the actions let through when Google cannot be asked (a set of names;
+  ``DEFAULT_FAIL_OPEN_ON_UNAVAILABLE`` by default, an empty set closes them all);
 - ``endpoint``: the assessments' URL, Google's for ``project`` by default.
 
 REST API: ``POST https://recaptchaenterprise.googleapis.com/v1/projects/<project>/assessments?key=<api_key>`` with
@@ -32,6 +39,8 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
+from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 from urllib.error import HTTPError
@@ -48,6 +57,9 @@ logger = logging.getLogger(__name__)
 
 #: Google's default threshold: 1.0 is very likely a person, 0.0 very likely a bot.
 DEFAULT_MIN_SCORE = 0.5
+#: The doors let through when Google cannot be asked: the sign-in and its second factors, of an account the password
+#: or the code already identifies, behind their attempt limits. Every other door stays closed.
+DEFAULT_FAIL_OPEN_ON_UNAVAILABLE = frozenset({"login", "login_code", "mfa_authenticate"})
 #: Seconds the assessment may take before the form is refused (fail closed).
 TIMEOUT_SECONDS = 5
 #: Google's assessments of a project.
@@ -79,6 +91,10 @@ class RecaptchaUnavailable(Exception):
     """Google could not be asked (timeout, network, an HTTP error) or answered something unreadable."""
 
 
+class RecaptchaMisconfigured(RecaptchaUnavailable):
+    """Google answered a 4xx: the key, the project's API, the quota or the billing, not the token."""
+
+
 class RecaptchaFailed(OperationError):
     """The form was not sent by a person, as far as reCAPTCHA can tell (or it could not tell)."""
 
@@ -90,12 +106,32 @@ class RecaptchaFailed(OperationError):
 
 
 _warned_disabled = False
+_unavailable: Counter[tuple[str, str]] = Counter()
+_unavailable_lock = threading.Lock()
 
 
 def _reset_disabled_warning() -> None:
     """Forget that the warning of a switched-off reCAPTCHA was logged (tests)."""
     global _warned_disabled
     _warned_disabled = False
+
+
+def _reset_unavailable_counts() -> None:
+    """Forget the counts of ``unavailable_counts`` (tests)."""
+    with _unavailable_lock:
+        _unavailable.clear()
+
+
+def unavailable_counts() -> dict[tuple[str, str], int]:
+    """How many times this process could not ask Google, per ``(action, "unavailable" | "misconfigured")``."""
+    with _unavailable_lock:
+        return dict(_unavailable)
+
+
+def _count_unavailable(action: str, kind: str) -> int:
+    with _unavailable_lock:
+        _unavailable[(action, kind)] += 1
+        return _unavailable[(action, kind)]
 
 
 def _settings() -> dict[str, Any]:
@@ -115,9 +151,15 @@ def _config() -> dict[str, Any]:
     min_score = conf.get("min_score", DEFAULT_MIN_SCORE)
     if isinstance(min_score, bool) or not isinstance(min_score, int | float) or not 0 <= min_score <= 1:
         raise LiveMisuse(f'settings.LIVE["recaptcha"]["min_score"] = {min_score!r} must be a number from 0 to 1.')
+    fail_open = conf.get("fail_open_on_unavailable", DEFAULT_FAIL_OPEN_ON_UNAVAILABLE)
+    if not isinstance(fail_open, set | frozenset | list | tuple) or not all(isinstance(name, str) for name in fail_open):
+        raise LiveMisuse(
+            f'settings.LIVE["recaptcha"]["fail_open_on_unavailable"] = {fail_open!r} must be a set of action names.'
+        )
     return {
         **conf,
         "min_score": float(min_score),
+        "fail_open_on_unavailable": frozenset(fail_open),
         "endpoint": conf.get("endpoint") or GOOGLE_ENDPOINT.format(project=conf["project"]),
     }
 
@@ -148,6 +190,8 @@ def assess(
             body = response.read()
     except HTTPError as error:
         # The URL carries the API key: only the status is told.
+        if 400 <= error.code < 500:
+            raise RecaptchaMisconfigured(f"HTTP {error.code}") from None
         raise RecaptchaUnavailable(f"HTTP {error.code}") from None
     except (TimeoutError, OSError) as error:
         raise RecaptchaUnavailable(type(error).__name__) from None
@@ -174,7 +218,8 @@ def assess(
 def verify_or_raise(request: HttpRequest, token: Any, action: str) -> Assessment | None:
     """The verdict on a form of ``action``: its assessment, or ``RecaptchaFailed`` (400 ``recaptcha_failed``).
 
-    ``None`` when reCAPTCHA is off: the form goes through, and the first time a warning is logged.
+    ``None`` when reCAPTCHA is off (the form goes through, and the first time a warning is logged), and when Google
+    cannot be asked for an action of ``fail_open_on_unavailable`` (logged ERROR, CRITICAL for a 4xx, and counted).
     """
     global _warned_disabled
     if not is_enabled():
@@ -194,7 +239,20 @@ def verify_or_raise(request: HttpRequest, token: Any, action: str) -> Assessment
             user_agent=request.headers.get("User-Agent") or None,
         )
     except RecaptchaUnavailable as error:
-        logger.error("recaptcha.unavailable action=%s cause=%s", action, error)
+        misconfigured = isinstance(error, RecaptchaMisconfigured)
+        kind = "misconfigured" if misconfigured else "unavailable"
+        let_through = action in conf["fail_open_on_unavailable"]
+        logger.log(
+            logging.CRITICAL if misconfigured else logging.ERROR,
+            "recaptcha.%s action=%s cause=%s let_through=%s count=%d",
+            kind,
+            action,
+            error,
+            let_through,
+            _count_unavailable(action, kind),
+        )
+        if let_through:
+            return None
         raise RecaptchaFailed() from None
     if not result.valid or not result.action_matches or result.score < conf["min_score"]:
         logger.info(
