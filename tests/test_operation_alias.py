@@ -166,3 +166,74 @@ def test_the_notification_still_goes_to_the_control_database(monkeypatch):
 
     assert any("pg_notify" in sql for sql in sent["default"])
     assert not any("pg_notify" in sql for sql in sent["other"])
+
+
+# ``live.operations.on_commit``: after the COMMIT of the running operation's own transaction, on its alias.
+
+
+@pytest.mark.usefixtures("hooked")
+def test_on_commit_runs_after_the_commit_of_the_operations_alias():
+    ran = []
+
+    def later(ctx, data):
+        operations.on_commit(lambda: ran.append("after"))
+        assert ran == []  # not now: «other» is still in its transaction
+        return _seen("other")
+
+    op = declare("testapp.probe.later", "command", later)
+
+    with transaction.atomic(using="other"):
+        op(ctx(), Empty())
+        assert ran == []
+    assert ran == ["after"]
+
+
+@pytest.mark.usefixtures("hooked")
+def test_on_commit_never_runs_when_the_operation_fails():
+    ran = []
+
+    def fail(ctx, data):
+        operations.on_commit(lambda: ran.append("after"))
+        raise ZeroDivisionError
+
+    op = declare("testapp.probe.later_fail", "command", fail)
+
+    with pytest.raises(ZeroDivisionError):
+        op(ctx(), Empty())
+    assert ran == []
+
+
+def test_on_commit_without_the_setting_waits_for_defaults_commit():
+    ran = []
+
+    def later(ctx, data):
+        operations.on_commit(lambda: ran.append("after"))
+        return _seen("default")
+
+    op = declare("testapp.probe.later_default", "command", later)
+
+    with transaction.atomic(using="default"):
+        op(ctx(), Empty())
+        assert ran == []
+    assert ran == ["after"]
+
+
+def test_on_commit_outside_an_operation_is_misuse():
+    from live.errors import LiveMisuse
+
+    with pytest.raises(LiveMisuse):
+        operations.on_commit(lambda: None)
+
+
+@pytest.mark.usefixtures("hooked")
+def test_a_failing_callback_does_not_undo_the_commit(caplog):
+    ran = []
+
+    def later(ctx, data):
+        operations.on_commit(lambda: 1 / 0)
+        operations.on_commit(lambda: ran.append("after"))
+        return _seen("other")
+
+    declare("testapp.probe.later_robust", "command", later)(ctx(), Empty())
+
+    assert ran == ["after"]

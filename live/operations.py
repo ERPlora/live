@@ -48,6 +48,8 @@ notify_hook: Callable[[Scope, list[str]], None] | None = None
 
 current_operation: ContextVar["Operation | None"] = ContextVar("live_current_operation", default=None)
 _pending_events: ContextVar[list[str] | None] = ContextVar("live_pending_events", default=None)
+#: The alias the running operation's transaction is open on (``on_commit``).
+_operation_alias: ContextVar[str | None] = ContextVar("live_operation_alias", default=None)
 
 
 @dataclass(eq=False)
@@ -75,20 +77,24 @@ class Operation:
         events_token = _pending_events.set([])
         try:
             with _database(self, ctx) as alias, transaction.atomic(using=alias):
-                if self.kind == "query":
-                    with transaction.get_connection(alias).cursor() as cursor:
-                        cursor.execute("SET TRANSACTION READ ONLY")
-                        cursor.execute(f"SET LOCAL statement_timeout = '{QUERY_STATEMENT_TIMEOUT}'")
-                result = self._validated(self.fn(ctx, data))
-                if self.kind == "query":
-                    # A query never commits. Nested in another transaction it runs in a savepoint:
-                    # Postgres restores READ ONLY when the savepoint ends, but SET LOCAL
-                    # statement_timeout would outlive a released savepoint; rolling it back undoes it.
-                    transaction.set_rollback(True, using=alias)
-                else:
-                    names = list(_pending_events.get())
-                    if names:
-                        transaction.on_commit(partial(_notify, ctx.scope, names), using=alias, robust=True)
+                alias_token = _operation_alias.set(alias)
+                try:
+                    if self.kind == "query":
+                        with transaction.get_connection(alias).cursor() as cursor:
+                            cursor.execute("SET TRANSACTION READ ONLY")
+                            cursor.execute(f"SET LOCAL statement_timeout = '{QUERY_STATEMENT_TIMEOUT}'")
+                    result = self._validated(self.fn(ctx, data))
+                    if self.kind == "query":
+                        # A query never commits. Nested in another transaction it runs in a savepoint:
+                        # Postgres restores READ ONLY when the savepoint ends, but SET LOCAL
+                        # statement_timeout would outlive a released savepoint; rolling it back undoes it.
+                        transaction.set_rollback(True, using=alias)
+                    else:
+                        names = list(_pending_events.get())
+                        if names:
+                            transaction.on_commit(partial(_notify, ctx.scope, names), using=alias, robust=True)
+                finally:
+                    _operation_alias.reset(alias_token)
         finally:
             _pending_events.reset(events_token)
             current_operation.reset(operation_token)
@@ -170,6 +176,20 @@ def clear_registry() -> None:
 def pending_events() -> list[str]:
     """Event names recorded so far by the running operation (a copy; empty outside one)."""
     return list(_pending_events.get() or [])
+
+
+def on_commit(fn: Callable[[], Any], *, robust: bool = True) -> None:
+    """Run ``fn`` after the COMMIT of the running operation's transaction, on that transaction's alias.
+
+    What a ``services.py`` calls instead of ``transaction.on_commit``: with ``LIVE["operation_database"]`` the
+    operation's transaction is not on ``default`` (hub-next phase 2: the hub's database), and a callback registered
+    there would run at once, before the COMMIT, and also after a rollback. ``robust``: a callback that raises is
+    logged and the others still run. Outside an operation it is a misuse.
+    """
+    alias = _operation_alias.get()
+    if alias is None:
+        raise LiveMisuse("on_commit runs inside an operation, after the COMMIT of its transaction.")
+    transaction.on_commit(fn, using=alias, robust=robust)
 
 
 def add_pending_event(name: str) -> None:
