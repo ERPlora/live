@@ -183,6 +183,33 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
   admite 1 carácter o 3–63, nunca 2.
 - TLS: certificado comodín `*.erplora.com`; no hay límite de hubs.
 
+## reCAPTCHA Enterprise (formularios públicos)
+
+`live.recaptcha` comprueba que quien envía un formulario público es una persona, con reCAPTCHA Enterprise por
+puntuación: invisible, sin casilla ni puzle (Ioan, 2026-10-22). Hoy lo usa el SaaS.
+
+- **Ajustes** (`LIVE["recaptcha"]`): `enabled` (apagado por defecto), `project` (`erplora`), `site_key` (pública,
+  la que carga `enterprise.js`), `api_key` (secreta, la de la API REST de las evaluaciones; nunca va al registro),
+  `min_score` (0–1, por defecto 0.5), `fail_open_on_unavailable` (las acciones que dejan pasar cuando no se puede
+  preguntar a Google; por defecto `login`, `login_code` y `mfa_authenticate`) y `endpoint` (opcional; por defecto
+  el de Google para `project`). Encendido sin `project`, `site_key` o `api_key`, con `min_score` fuera de 0–1 o con
+  `fail_open_on_unavailable` que no sea un conjunto de nombres, es `LiveMisuse`.
+- **`verify_or_raise(request, token, action)`**: pide a Google la evaluación del token (`assess`, `urllib`, 5 s
+  como mucho, con la dirección y el navegador del visitante) y devuelve la `Assessment(score, valid,
+  action_matches, reasons)` o lanza `RecaptchaFailed` (400 `recaptcha_failed`, mensaje en `en` + `es`, el sobre
+  de la API). Rechaza sin token (sin llamar a Google), token no válido, token de otra acción y puntuación por debajo
+  de `min_score`. Si no se puede preguntar a Google (tiempo agotado, red, 5xx, respuesta ilegible; un 4xx también,
+  con CRITICAL `recaptcha.misconfigured`: clave, cuota o facturación), falla cerrado salvo en las acciones de
+  `fail_open_on_unavailable`: la entrada y sus segundos factores, que ya protegen la contraseña o el código y sus
+  límites, pasan con un ERROR `recaptcha.unavailable` y una cuenta por acción (`unavailable_counts()`), para que una
+  caída de Google no deje fuera a nadie, tampoco al personal. Un veredicto de Google sigue rechazando ahí. Apagado,
+  deja pasar todo y lo avisa una vez por proceso.
+- **`site_key()`**: la clave pública para la página, vacía si está apagado (sin script ni token).
+- **`with_recaptcha(policy)`**: una copia de la CSP con lo que piden los scripts de Google (`script-src`
+  `www.google.com/recaptcha/` y `www.gstatic.com/recaptcha/`, `frame-src` `www.google.com/recaptcha/` y
+  `recaptcha.google.com/recaptcha/`, `connect-src` `www.google.com/recaptcha/`) y, si la política tiene Trusted
+  Types, la política `goog#html` que crea su script.
+
 ## Cómo se prueba
 
 Los tests van con pytest + pytest-django contra Postgres 17 (nunca SQLite). Se corren **desde la
