@@ -40,7 +40,10 @@ fase 2: `use_hub`) y `saas-next` el suyo (el usuario); el resto (`live.spa`, `li
 - **SPA y CSP**: `live.spa` lee el manifiesto de Vite (sin django-vite) y emite `<script type=module>` y
   `modulepreload` con nonce; en DEBUG apunta al servidor de Vite. `spa_assets(request, entry=…)` da
   otra entrada del mismo build (p. ej. `frontend/public.ts`, la web pública de `saas-next`, ronda 16);
-  sin `entry`, la de `LIVE["spa"]["entry"]`. `live.csp`: nonce + `strict-dynamic` +
+  sin `entry`, la de `LIVE["spa"]["entry"]`. `LIVE["spa"]["icons"]` (opcional) declara los iconos de la
+  pestaña y de la pantalla de inicio (`{"rel": "icon" | "apple-touch-icon", "path": <estático>, "sizes"?}`),
+  enlazados por el almacén de estáticos del proyecto y nunca por URL; sin él, ningún `<link>` (sin icono, el
+  navegador pide `/favicon.ico`). `live.csp`: nonce + `strict-dynamic` +
   Trusted Types + `connect-src 'self' ipc: http://ipc.localhost`; DEBUG añade el origen de Vite solo a
   connect/style/font/img. `manage.py runserver` (hereda del de daphne) lanza Vite con HMR (`--novite`
   lo omite); `export_spa_catalog` exporta los `.po` (`djangojs`) a JSON.
