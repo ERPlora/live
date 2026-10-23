@@ -14,3 +14,7 @@ msgstr "Cosa"
 
 msgid "Thing not found."
 msgstr "Cosa no encontrada."
+
+#: tests/test_checks.py (E018 reads a notice's templates in English: this translation names another field)
+msgid "New item · {name}"
+msgstr "Artículo nuevo · {nombre}"

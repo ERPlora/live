@@ -863,8 +863,12 @@ def test_a_notice_whose_texts_do_not_fit_its_rows_is_e018(run, overrides, proble
 
 
 def test_the_texts_are_read_in_english_whatever_the_language(run):
-    """A lazy translation is measured by its source: the fields a translator writes are the .po's business."""
+    """A lazy translation is measured by its source: the fields a translator writes are the .po's business.
+
+    The test app's ``es`` catalog translates the default title naming another field (``{nombre}``).
+    """
     with translation.override("es"):
+        assert str(notice().title[0]) == "Artículo nuevo · {nombre}"
         assert run(module("stock", notices=[notice()])) == []
 
 
