@@ -452,6 +452,62 @@ class TestRenderedShell:
             client.get("/spa/")
 
 
+def with_icons(settings, icons):
+    settings.LIVE = {**settings.LIVE, "spa": {**settings.LIVE["spa"], "icons": icons}}
+
+
+class TestIcons:
+    """``LIVE["spa"]["icons"]``: the project's tab and home-screen icons, static files of its own origin.
+
+    Without them the browser asks for ``/favicon.ico``, which is no page of the SPA. Optional: a project without
+    icons gets no ``<link>``, as before.
+    """
+
+    def test_without_icons_the_shell_links_none(self, client, manifest_path):
+        html = client.get("/spa/").content.decode()
+
+        assert "apple-touch-icon" not in html
+        assert 'rel="icon"' not in html
+
+    def test_each_icon_is_linked_from_the_static_files(self, client, manifest_path, settings):
+        with_icons(
+            settings,
+            [
+                {"rel": "icon", "path": "base/icons/favicon.ico", "sizes": "any"},
+                {"rel": "apple-touch-icon", "path": "base/icons/apple-touch-icon.png"},
+            ],
+        )
+
+        html = client.get("/spa/").content.decode()
+
+        assert '<link rel="icon" href="/static/base/icons/favicon.ico" sizes="any">' in html
+        assert '<link rel="apple-touch-icon" href="/static/base/icons/apple-touch-icon.png">' in html
+        assert html.index('rel="icon"') < html.index("</head>")
+
+    def test_an_icon_follows_static_url(self, client, manifest_path, settings):
+        settings.STATIC_URL = "/assets/"
+        with_icons(settings, [{"rel": "icon", "path": "base/icons/favicon.ico"}])
+
+        html = client.get("/spa/").content.decode()
+
+        assert '<link rel="icon" href="/assets/base/icons/favicon.ico">' in html
+
+    @pytest.mark.parametrize(
+        "path", ["https://cdn.example.com/favicon.ico", "//cdn.example.com/favicon.ico", "/favicon.ico", ""]
+    )
+    def test_an_icon_is_a_static_file_never_a_url(self, client, manifest_path, settings, path):
+        with_icons(settings, [{"rel": "icon", "path": path}])
+
+        with pytest.raises(ImproperlyConfigured, match="static file"):
+            client.get("/spa/")
+
+    def test_an_unknown_relation_is_a_configuration_error(self, client, manifest_path, settings):
+        with_icons(settings, [{"rel": "stylesheet", "path": "base/icons/favicon.ico"}])
+
+        with pytest.raises(ImproperlyConfigured, match="apple-touch-icon"):
+            client.get("/spa/")
+
+
 def _view(request):
     raise AssertionError("never called")
 

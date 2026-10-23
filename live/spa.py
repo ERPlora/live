@@ -11,7 +11,8 @@ is not the SPA asks :func:`spa_assets` for another entry of the same build), ``m
 (path of ``.vite/manifest.json``), ``dev_server`` (e.g. ``http://localhost:5173``; used only with
 DEBUG), ``palettes`` and ``palette_default`` (the ``data-ep-palette`` palettes of the UI's theme),
 ``title`` (optional), ``user_scalable`` (optional, default ``False``: the page does not zoom, as a
-point of sale wants; ``True`` lets it zoom, as a web panel must for WCAG 1.4.4).
+point of sale wants; ``True`` lets it zoom, as a web panel must for WCAG 1.4.4), ``icons`` (optional: the
+tab's and the home screen's icons, static files of the project, :func:`spa_icons`).
 """
 
 from __future__ import annotations
@@ -28,6 +29,7 @@ from django.core.serializers.json import DjangoJSONEncoder
 from django.http import HttpRequest, HttpResponse
 from django.middleware.csp import get_nonce
 from django.shortcuts import render
+from django.templatetags.static import static
 from django.utils.safestring import mark_safe
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -41,6 +43,8 @@ BASE_NON_SPA_PREFIXES = ("api", "internal", "admin", "static", "healthz", "ready
 PALETTE_COOKIE = "ep_palette"
 #: Element id of the SDK's config JSON; ``extra_json`` may not reuse it.
 SPA_CONFIG_ID = "spa-config"
+#: The relations an icon of ``LIVE["spa"]["icons"]`` may have: the tab's and the home screen's (iOS).
+ICON_RELS = ("icon", "apple-touch-icon")
 
 _JSON_SCRIPT_ESCAPES = {ord(">"): "\\u003E", ord("<"): "\\u003C", ord("&"): "\\u0026"}
 
@@ -165,6 +169,27 @@ def palette(request: HttpRequest) -> str:
     return chosen if chosen in config["palettes"] else config["palette_default"]
 
 
+def spa_icons() -> list[dict[str, str]]:
+    """The ``<link>`` of each icon of ``LIVE["spa"]["icons"]`` (optional: none by default).
+
+    Each icon is ``{"rel", "path", "sizes"?}``: ``rel`` one of :data:`ICON_RELS` and ``path`` a static file of the
+    project, linked through its static storage (with its hash under a manifest storage). Never a URL: nothing by a
+    CDN, and nothing at ``/favicon.ico``, which is no page of the SPA.
+    """
+    links = []
+    for icon in _spa_settings().get("icons", ()):
+        rel, path = icon.get("rel"), icon.get("path") or ""
+        if rel not in ICON_RELS:
+            raise ImproperlyConfigured(f'LIVE["spa"]["icons"]: rel {rel!r} is not one of {", ".join(ICON_RELS)}.')
+        if not path or path.startswith("/") or "://" in path:
+            raise ImproperlyConfigured(
+                f'LIVE["spa"]["icons"]: {path!r} must be a static file\'s path (e.g. "base/icons/favicon.ico"), '
+                "never a URL."
+            )
+        links.append({"rel": rel, "href": static(path), "sizes": icon.get("sizes", "")})
+    return links
+
+
 def spa_config(request: HttpRequest) -> dict[str, Any]:
     """What the SDK reads from the ``spa-config`` JSON block before its first request."""
     return {
@@ -215,6 +240,7 @@ def render_spa(
         "palette": config["palette"],
         "title": _spa_settings().get("title", "ERPlora"),
         "viewport": VIEWPORT_ZOOMABLE if user_scalable else VIEWPORT_FIXED,
+        "icons": spa_icons(),
         "assets": spa_assets(request),
         "json_blocks": [
             {"id": SPA_CONFIG_ID, "json": _json_for_script(config)},

@@ -5,7 +5,8 @@
   <meta name="viewport" content="{{ viewport }}">
   <meta name="color-scheme" content="light dark">
   <title>{{ title }}</title>
-{% for href in assets.css %}  <link rel="stylesheet" href="{{ href }}">
+{% for icon in icons %}  <link rel="{{ icon.rel }}" href="{{ icon.href }}"{% if icon.sizes %} sizes="{{ icon.sizes }}"{% endif %}>
+{% endfor %}{% for href in assets.css %}  <link rel="stylesheet" href="{{ href }}">
 {% endfor %}{% for href in assets.preload %}  <link rel="modulepreload" href="{{ href }}" nonce="{{ csp_nonce }}">
 {% endfor %}{% for block in json_blocks %}  <script id="{{ block.id }}" type="application/json" nonce="{{ csp_nonce }}">{{ block.json }}</script>
 {% endfor %}{% for src in assets.scripts %}  <script type="module" src="{{ src }}" nonce="{{ csp_nonce }}"></script>
