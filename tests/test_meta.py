@@ -12,6 +12,7 @@ from live.meta import (
     WIDGET_SIZES,
     BellCounter,
     Category,
+    DeviceNotice,
     LiveAppConfig,
     Nav,
     SetupCheck,
@@ -259,11 +260,43 @@ def test_a_bell_counter_needs_key_operation_route_and_label():
         SetupStep(key="catalog", operation="stock.catalog.status", title="Your catalog", route="/stock"),
         Widget(key="today", title="Today", kind="kpi", operation="stock.item.count"),
         BellCounter(key="to_confirm", operation="stock.item.count", route="/stock", label="To confirm"),
+        DeviceNotice(key="booked", operation="stock.item.changes", title=("New item",), route="/stock"),
     ],
 )
 def test_the_hooks_are_immutable_like_nav(hook):
     with pytest.raises(dataclasses.FrozenInstanceError):
         hook.key = "other"
+
+
+# --- The device's notices (PLAN-HUB round 2026-10-23): notices -----------------------------------------
+
+
+def test_live_app_config_declares_no_device_notices_by_default():
+    """A module's system notices of the device; empty unless the module declares them (live.E006 for a platform app)."""
+    assert LiveAppConfig.notices == []
+
+
+def test_a_device_notice_needs_key_operation_title_and_route():
+    notice = DeviceNotice(
+        key="booked",
+        operation="stock.item.changes",
+        title=("New item · {name}", "New item"),
+        route="/stock?sku={sku}",
+    )
+
+    assert (notice.key, notice.operation, tuple(notice.title), notice.route) == (
+        "booked",
+        "stock.item.changes",
+        ("New item · {name}", "New item"),
+        "/stock?sku={sku}",
+    )
+    assert (tuple(notice.body), tuple(notice.when), dict(notice.params), notice.permission, tuple(notice.refresh_on)) == (
+        (),
+        (),
+        {},
+        None,
+        (),
+    )
 
 
 def test_widget_sizes_and_kinds_are_those_of_the_old_board():

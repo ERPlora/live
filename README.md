@@ -26,7 +26,9 @@ fase 2: `use_hub`) y `saas-next` el suyo (el usuario); el resto (`live.spa`, `li
   mensajes salen en el idioma de la petición (HTTP) o del stream (`ctx.language`, en `/api/live`).
 - **Eventos**: `record_event(ctx, "<app>.<entidad>.<hecho>", payload)` solo dentro de un command, en su
   transacción (`live_outboxevent`); tras el COMMIT, `pg_notify(<canal del ámbito>, {"events": […]})` en
-  la BD de control. `live.py` de cada app: `live("<consulta>", on=[eventos])`.
+  la BD de control. `live.py` de cada app: `live("<consulta>", on=[eventos])`. En el admin de Django
+  (`live.admin`, solo lectura) la sección se llama «Live»/«Tiempo real» y el modelo «outbox events»/«eventos de
+  la bandeja de salida», traducidos por `live/locale/es` (`tests/test_admin.py`).
 - **`/api/live`** (SSE, una conexión por pestaña): `GET /api/live?s=<base64url JSON [{id, op, params}]>`
   con las suscripciones declaradas al abrir; si cambian, el SDK cierra y reabre (debounce 150 ms). Sin
   POST de suscripciones ni afinidad del ALB. Frames `hello`, `result {id, data, rev}`, `error {id,
@@ -84,9 +86,18 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
     bien `component` (un componente Vue de `frontend/components/` del módulo, sin `.vue`).
   - `bell: list[BellCounter]`, los contadores de la campana: `key`, `operation` (su primera fila
     trae `count`), `route` y `label`; `icon`, `params`, `permission` y `refresh_on`.
+- **Solo un módulo, para los avisos del dispositivo** (ronda PLAN-HUB 2026-10-23; los rellena `base`
+  con `base.notice.list` y la shell los da una vez por dispositivo con el aviso del sistema de la app
+  nativa): `notices: list[DeviceNotice]`, vacía por defecto. `key`, `operation` (una consulta de su
+  propio `queries.py` cuyas `rows` dicen qué pasó, lo más nuevo primero, cada una con `id` y el
+  instante `at`), `title` (lista de plantillas de `str.format` sobre los campos de la fila; gana la
+  primera con todos sus campos rellenos) y `route` (la pantalla que abre el toque, también plantilla),
+  obligatorios; `body` (partes que se juntan con « · », las que tengan todos sus campos rellenos),
+  `when` (lista de `SetupCheck` sobre la fila: solo las filas que las cumplen son de este aviso),
+  `params`, `permission` y `refresh_on`.
 - **Lectura**: `all_live_app_configs()` devuelve todas las apps nuestras instaladas (permisos,
   routers); `module_configs()`, solo las de `kind = "app"` (menú, página de apps, foto del SaaS, y
-  sus `setup`, `widgets` y `bell`); `declared_events()`, los eventos que declara la lista `ALL` del
+  sus `setup`, `widgets`, `bell` y `notices`); `declared_events()`, los eventos que declara la lista `ALL` del
   `events.py` de cada app nuestra (sin `events.py` o sin `ALL`, ninguno).
 - **Checks** (`live.checks`, etiqueta `live`, registrados al arrancar la app `live`; corren con
   `manage.py check` y `runserver` y miran siempre todas las apps nuestras):
@@ -97,8 +108,8 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
     etiqueta que no existe);
   - `live.E005`: un ciclo en `requires` (un error por ciclo);
   - `live.E006`: una app de plataforma no deja en su valor por defecto `requires`, `category`,
-    `premium`, `navigation`, `summary`, `description`, `verticals`, `listed`, `setup`, `widgets` o
-    `bell` (se compara con el valor por defecto, no con «verdadero»: `listed` vale `True`); los pasos
+    `premium`, `navigation`, `summary`, `description`, `verticals`, `listed`, `setup`, `widgets`,
+    `bell` o `notices` (se compara con el valor por defecto, no con «verdadero»: `listed` vale `True`); los pasos
     de plataforma de `base` los pone `base.setup.status`, no su `LiveAppConfig`;
   - `live.E007`: un módulo sin `summary`, con un `summary` de más de una línea o de más de 120
     caracteres, sin `description` o con un `verbose_name` de más de 80 (medidos en inglés; el `es`
@@ -106,8 +117,8 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
   - `live.E008`: un id de `verticals` que no casa `^[a-z][a-z0-9]*(_[a-z0-9]+)*$`, pasa de 50
     caracteres (`hub_template_<vertical>` cabe en 63), es `test` (reservado) o se repite; o
     `verticals` no es una lista;
-  - `live.E009`: `setup`, `widgets` o `bell` no es una lista (o tupla) de su dataclass;
-  - `live.E010`: el `operation` de un paso, panel o contador no es una consulta (`kind="query"`)
+  - `live.E009`: `setup`, `widgets`, `bell` o `notices` no es una lista (o tupla) de su dataclass;
+  - `live.E010`: el `operation` de un paso, panel, contador o aviso no es una consulta (`kind="query"`)
     declarada del propio módulo (su prefijo es el `label`); un panel por `component` puede no tenerlo;
   - `live.E011`: su `permission` no es uno de los `permissions` del módulo (`None` = sin permiso);
   - `live.E012`: su `refresh_on` no es una lista, o nombra un evento que ningún `events.py` declara
@@ -118,7 +129,14 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
     que no está en `WIDGET_KINDS` o con `kind` y sin `operation`;
   - `live.E015`: un panel con un `size` que no es `sm`, `md` ni `lg`;
   - `live.E016`: un `configured_when` que no es una lista de `SetupCheck`, o una condición sin
-    `field` o sin exactamente uno de `truthy` y `equals`.
+    `field` o sin exactamente uno de `truthy` y `equals`;
+  - `live.E018`: un aviso del dispositivo cuya consulta no responde una lista `rows` (o `items`) de
+    filas con `id` y `at`; un `title` vacío o que no es una lista de textos, un `body` que no es una
+    lista de textos, una `route` que no empieza por `/` (o empieza por `//`); una plantilla rota, con
+    un campo posicional, anidado, con atributo o índice, o que nombra un campo que la fila no tiene
+    (medidas en inglés); o un `when` que no es una lista de `SetupCheck`, o una condición sin
+    exactamente uno de `truthy` y `equals` o sobre un campo que la fila no tiene. (`live.E017` queda
+    para el `ai=` obligatorio de la ronda 2026-10-22b.)
 
   Los checks de los hooks necesitan las operaciones y los eventos registrados, cosa que
   `LiveConfig.ready` hace antes de cualquier check. La app de pruebas (`tests/testapp`) es un módulo

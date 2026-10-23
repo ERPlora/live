@@ -49,3 +49,38 @@ def test_not_even_a_superuser_adds_changes_or_deletes_an_event(model_admin, supe
     assert not model_admin.has_add_permission(superuser_request)
     assert not model_admin.has_change_permission(superuser_request, event)
     assert not model_admin.has_delete_permission(superuser_request, event)
+
+
+# --- Its section in the admin's index speaks the staff's language -------------------------------------------------
+
+
+def names_shown_in_the_admin():
+    """The section of the app and the names of each of its models, as the admin's index shows them."""
+    from django.apps import apps
+
+    config = apps.get_app_config("live")
+    names = {"app": config.verbose_name}
+    for model in config.get_models():
+        names[f"{model.__name__} (one)"] = model._meta.verbose_name
+        names[f"{model.__name__} (many)"] = model._meta.verbose_name_plural
+    return names
+
+
+def test_the_section_and_its_models_have_names_a_catalog_translates():
+    """A name in plain text, or taken from the class, stays in English in every language (the index of erplora.com's
+    admin showed «Live › Outbox events» in Spanish)."""
+    from django.utils.functional import Promise
+
+    assert [where for where, name in names_shown_in_the_admin().items() if not isinstance(name, Promise)] == []
+
+
+def test_every_name_of_the_section_has_its_spanish():
+    from django.utils import translation
+
+    names = names_shown_in_the_admin()
+    with translation.override("en"):
+        english = {where: str(name) for where, name in names.items()}
+    with translation.override("es"):
+        spanish = {where: str(name) for where, name in names.items()}
+
+    assert [where for where in names if spanish[where] == english[where]] == []

@@ -209,3 +209,15 @@ msgstr "Introduce un JSON válido."
 #: recaptcha.py
 msgid "We could not check that you are a person. Try again."
 msgstr "No hemos podido comprobar que eres una persona. Vuelve a intentarlo."
+
+#: apps.py
+msgid "Live"
+msgstr "Tiempo real"
+
+#: models.py
+msgid "outbox event"
+msgstr "evento de la bandeja de salida"
+
+#: models.py
+msgid "outbox events"
+msgstr "eventos de la bandeja de salida"

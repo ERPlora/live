@@ -6,6 +6,7 @@ from django.core.serializers.json import DjangoJSONEncoder
 from django.core.validators import RegexValidator
 from django.db import models
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 from live.operations import NAME_RE
 
@@ -40,6 +41,9 @@ class OutboxEvent(UUIDModel):
     class Meta:
         indexes = [models.Index(fields=["scope_kind", "scope_key", "created_at"])]
         ordering = ["created_at", "id"]
+        # «Bandeja de salida» is Spanish for an outbox (mail clients say so).
+        verbose_name = _("outbox event")
+        verbose_name_plural = _("outbox events")
 
     def __str__(self) -> str:
         return f"{self.name} ({self.scope_kind}:{self.scope_key})"

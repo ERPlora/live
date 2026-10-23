@@ -5,17 +5,22 @@ of ``apps/`` (turned on and off per hub), ``kind = "platform"`` an always-on app
 Round 16 (PLAN §21) adds the public store's metadata of a module: ``summary`` and ``description``
 (E007), ``verticals`` (E008) and ``listed``, which a platform app leaves at their defaults (E006).
 The PLAN-HUB round 2026-10-21 adds the Home's hooks of a module, ``setup``, ``widgets`` and ``bell``
-(E006, E009–E016). The checks run on ``manage.py check`` and when the server starts.
+(E006, E009–E016). The PLAN-HUB round 2026-10-23 adds the device's notices of a module, ``notices``
+(E006, E009–E013 like the Home's hooks, and E018 for its texts). The checks run on ``manage.py check`` and
+when the server starts.
 """
+
+import datetime as dt
 
 from types import SimpleNamespace
 
 import pytest
 from django.core import checks
 from django.core.checks.registry import registry
+from django.utils import translation
 from django.utils.translation import gettext_lazy
 from live.checks import check_app_metadata
-from live.meta import BellCounter, Category, LiveAppConfig, Nav, SetupCheck, SetupStep, Widget
+from live.meta import BellCounter, Category, DeviceNotice, LiveAppConfig, Nav, SetupCheck, SetupStep, Widget
 from live import operations
 from live.operations import Operation
 from ninja import Schema
@@ -40,6 +45,7 @@ def module(label, **overrides):
         "setup": [],
         "widgets": [],
         "bell": [],
+        "notices": [],
     }
     return SimpleNamespace(**{**fields, **overrides})
 
@@ -63,6 +69,7 @@ def platform(label="base", **overrides):
         "setup": [],
         "widgets": [],
         "bell": [],
+        "notices": [],
     }
     return SimpleNamespace(**{**fields, **overrides})
 
@@ -146,6 +153,7 @@ def test_module_with_only_the_defaults_misses_icon_category_summary_and_descript
             "setup",
             "widgets",
             "bell",
+            "notices",
         )
     }
 
@@ -282,10 +290,10 @@ def test_platform_app_declaring_a_store_field_is_e006(run, field, value):
     assert field in messages[0].msg
 
 
-@pytest.mark.parametrize("field", ["setup", "widgets", "bell"])
+@pytest.mark.parametrize("field", ["setup", "widgets", "bell", "notices"])
 def test_platform_app_declaring_a_home_hook_is_e006(run, field):
-    """Only a module declares steps, panels and counters; base's own steps live in base.setup.status."""
-    hook = {"setup": step(), "widgets": widget(), "bell": counter()}[field]
+    """Only a module declares steps, panels, counters and notices; base's own steps live in base.setup.status."""
+    hook = {"setup": step(), "widgets": widget(), "bell": counter(), "notices": notice()}[field]
     messages = run(platform(**{field: [hook]}), module("stock"))
 
     assert ids(messages) == ["live.E006"]
@@ -436,13 +444,38 @@ def test_verticals_that_are_not_a_list_is_e008(run, verticals):
 # --- The Home's hooks (PLAN-HUB round 2026-10-21): setup, widgets and bell, E009–E016 -----------------
 
 
-def query(name, kind="query"):
+class ChangeOut(Schema):
+    id: int
+    at: dt.datetime
+    kind: str
+    name: str
+    sku: str
+
+
+class ChangesOut(Schema):
+    rows: list[ChangeOut]
+
+
+class CountOut(Schema):
+    count: int
+
+
+class UntimedOut(Schema):
+    id: int
+    name: str
+
+
+class UntimedChangesOut(Schema):
+    items: list[UntimedOut]
+
+
+def query(name, kind="query", output=Schema):
     return Operation(
         name=name,
         kind=kind,
         permission="x.view",
         input=Schema,
-        output=Schema,
+        output=output,
         expose_api=False,
         ai=None,
         fn=lambda ctx, data: {},
@@ -456,6 +489,9 @@ def known(monkeypatch):
         query("stock.catalog.status"),
         query("stock.item.count"),
         query("stock.item.archive", kind="command"),
+        query("stock.item.changes", output=ChangesOut),
+        query("stock.item.total", output=CountOut),
+        query("stock.item.renamed", output=UntimedChangesOut),
         query("sale.sale.list"),
     ):
         monkeypatch.setitem(operations.registry, op.name, op)
@@ -479,8 +515,19 @@ def counter(key="low", **overrides):
     return BellCounter(**{**fields, **overrides})
 
 
-#: One builder per hook, for the rules that the three share.
-HOOKS = {"setup": step, "widgets": widget, "bell": counter}
+def notice(key="added", **overrides):
+    fields = {
+        "key": key,
+        "operation": "stock.item.changes",
+        "title": (gettext_lazy("New item · {name}"), gettext_lazy("New item")),
+        "body": ("{sku}",),
+        "route": "/stock?sku={sku}",
+    }
+    return DeviceNotice(**{**fields, **overrides})
+
+
+#: One builder per hook, for the rules that the four share.
+HOOKS = {"setup": step, "widgets": widget, "bell": counter, "notices": notice}
 
 
 def test_a_module_with_well_declared_hooks_passes(run):
@@ -506,6 +553,16 @@ def test_a_module_with_well_declared_hooks_passes(run):
             widget("trend", kind=None, component="StockTrend"),
         ],
         bell=[counter(permission="stock.view", refresh_on=("sale.sale.completed",))],
+        notices=[
+            notice(
+                permission="stock.view",
+                refresh_on=["stock.item.created"],
+                when=[SetupCheck(field="kind", equals="added")],
+                body=["{sku}", gettext_lazy("{name} at {at:%H:%M}"), "Plain text"],
+                route="/stock?day={at:%Y-%m-%d}&sku={sku!s}",
+            ),
+            notice("removed", title=["Item removed"], route="/stock"),
+        ],
     )
 
     assert run(platform(), stock) == []
@@ -522,7 +579,7 @@ def test_every_widget_size_is_accepted(run, size):
 
 
 def test_the_hooks_may_be_tuples(run):
-    assert run(module("stock", setup=(step(),), widgets=(widget(),), bell=(counter(),))) == []
+    assert run(module("stock", setup=(step(),), widgets=(widget(),), bell=(counter(),), notices=(notice(),))) == []
 
 
 # E009: each hook is a list of its own dataclass.
@@ -538,6 +595,8 @@ def test_the_hooks_may_be_tuples(run):
         ("widgets", [step()]),
         ("bell", [widget()]),
         ("bell", [counter(), {"key": "low"}]),
+        ("notices", [counter()]),
+        ("notices", notice()),
     ],
 )
 def test_a_hook_that_is_not_a_list_of_its_dataclass_is_e009(run, field, value):
@@ -575,7 +634,7 @@ def test_a_hook_whose_operation_is_not_a_query_of_its_app_is_e010(run, field, op
     assert repr(operation) in message.msg
 
 
-@pytest.mark.parametrize("field", ["setup", "bell"])
+@pytest.mark.parametrize("field", ["setup", "bell", "notices"])
 @pytest.mark.parametrize("operation", ["", None, 3])
 def test_a_step_or_counter_without_operation_is_e010(run, field, operation):
     """A widget may go without one when it renders a component; a kind without it is E014."""
@@ -765,3 +824,77 @@ def test_the_check_is_registered_with_the_live_tag():
 
 def test_the_installed_apps_pass():
     assert checks.run_checks(tags=["live"]) == []
+
+
+# E018: a notice's texts are templates on the fields of its query's rows, which say what happened and when.
+
+
+@pytest.mark.parametrize(
+    ("overrides", "problem"),
+    [
+        ({"title": ()}, "title"),  # nothing to say
+        ({"title": "New item"}, "title"),  # a bare text, not a list of templates
+        ({"title": ["New item", 3]}, "title"),  # not a text
+        ({"body": "{sku}"}, "body"),  # a bare text, not a list of parts
+        ({"body": [None]}, "body"),
+        ({"route": "stock"}, "route"),  # not a screen of the hub
+        ({"route": "//evil.example/stock"}, "route"),  # another address
+        ({"route": "https://evil.example/stock"}, "route"),
+        ({"route": None}, "route"),
+        ({"title": ["New item · {colour}"]}, "'colour'"),  # not a field of the row
+        ({"body": ["{name.upper}"]}, "'name.upper'"),  # an attribute of a field: only fields
+        ({"route": "/stock?sku={sku[0]}"}, "'sku[0]'"),
+        ({"title": ["New item · {}"]}, "positional"),  # a field without a name
+        ({"title": ["New item · {0}"]}, "positional"),
+        ({"title": ["New item · {name"]}, "template"),  # a broken template
+        ({"body": ["{name:{sku}}"]}, "template"),  # a nested field
+        ({"when": [SetupCheck(field="colour", equals="red")]}, "'colour'"),  # a condition on no field
+        ({"when": [SetupCheck(field="kind")]}, "when"),  # a condition with nothing to compare
+        ({"when": [{"field": "kind", "equals": "added"}]}, "when"),  # not a SetupCheck
+        ({"when": SetupCheck(field="kind", equals="added")}, "when"),  # not a list
+    ],
+)
+def test_a_notice_whose_texts_do_not_fit_its_rows_is_e018(run, overrides, problem):
+    [message] = run(module("stock", notices=[notice(**overrides)]))
+
+    assert message.id == "live.E018"
+    assert "'added'" in message.msg
+    assert problem in message.msg
+
+
+def test_the_texts_are_read_in_english_whatever_the_language(run):
+    """A lazy translation is measured by its source: the fields a translator writes are the .po's business.
+
+    The test app's ``es`` catalog translates the default title naming another field (``{nombre}``).
+    """
+    with translation.override("es"):
+        assert str(notice().title[0]) == "Artículo nuevo · {nombre}"
+        assert run(module("stock", notices=[notice()])) == []
+
+
+@pytest.mark.parametrize(
+    ("operation", "problem"),
+    [
+        ("stock.item.total", "rows"),  # one object, not a list of what happened
+        ("stock.item.renamed", "'at'"),  # rows that do not say when
+    ],
+)
+def test_a_notice_whose_query_does_not_list_what_happened_and_when_is_e018(run, operation, problem):
+    [message] = run(module("stock", notices=[notice(operation=operation, title=["New item"], body=(), route="/stock")]))
+
+    assert message.id == "live.E018"
+    assert repr(operation) in message.msg
+    assert problem in message.msg
+
+
+def test_a_notice_with_a_wrong_operation_is_only_e010(run):
+    """Its texts cannot be measured against a query that is not there: one error, the operation's."""
+    [message] = run(module("stock", notices=[notice(operation="stock.item.ghost")]))
+
+    assert message.id == "live.E010"
+
+
+def test_each_misfit_text_of_a_notice_is_its_own_e018(run):
+    messages = run(module("stock", notices=[notice(title=["{colour}"], body=["{size}"], route="/stock/{shape}")]))
+
+    assert ids(messages) == ["live.E018"] * 3
