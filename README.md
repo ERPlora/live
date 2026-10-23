@@ -26,7 +26,9 @@ fase 2: `use_hub`) y `saas-next` el suyo (el usuario); el resto (`live.spa`, `li
   mensajes salen en el idioma de la petición (HTTP) o del stream (`ctx.language`, en `/api/live`).
 - **Eventos**: `record_event(ctx, "<app>.<entidad>.<hecho>", payload)` solo dentro de un command, en su
   transacción (`live_outboxevent`); tras el COMMIT, `pg_notify(<canal del ámbito>, {"events": […]})` en
-  la BD de control. `live.py` de cada app: `live("<consulta>", on=[eventos])`.
+  la BD de control. `live.py` de cada app: `live("<consulta>", on=[eventos])`. En el admin de Django
+  (`live.admin`, solo lectura) la sección se llama «Live»/«Tiempo real» y el modelo «outbox events»/«eventos de
+  la bandeja de salida», traducidos por `live/locale/es` (`tests/test_admin.py`).
 - **`/api/live`** (SSE, una conexión por pestaña): `GET /api/live?s=<base64url JSON [{id, op, params}]>`
   con las suscripciones declaradas al abrir; si cambian, el SDK cierra y reabre (debounce 150 ms). Sin
   POST de suscripciones ni afinidad del ALB. Frames `hello`, `result {id, data, rev}`, `error {id,
