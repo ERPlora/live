@@ -20,6 +20,11 @@ The PLAN-HUB round 2026-10-21 adds the Home's hooks of a module, the old manifes
 (``BellCounter``). Each names a query of the module's own ``queries.py``; the Hub's ``base`` runs them
 as the person of the request and aggregates them (``base.setup.status``, ``base.widget.list``,
 ``base.bell.counters``).
+
+The PLAN-HUB round 2026-10-23 adds the device's notices of a module (``DeviceNotice``): what it tells
+the device with a system notice, the old shell's notices of a booking or a kitchen order without the
+shell knowing the module. Base runs its query as the person of the request (``base.notice.list``),
+fills in its texts, and the shell tells each new row once on the device.
 """
 
 from collections.abc import Iterable, Mapping, Sequence
@@ -147,6 +152,29 @@ class BellCounter:
     refresh_on: Sequence[str] = ()
 
 
+@dataclass(frozen=True)
+class DeviceNotice:
+    """A system notice of the device for each new row of ``operation``, the query of what happened.
+
+    The query lists what happened, the newest first, each row with its ``id`` and the instant it
+    happened, ``at``; only the rows that pass every ``when`` (``SetupCheck``) are this notice's. Its
+    texts are ``str.format`` templates on the row's fields, usually lazy translations: the title is
+    the first of ``title`` whose fields are all filled, the body joins with « · » the parts of ``body``
+    whose fields are all filled, and ``route`` is the screen a tap opens. Shown to whoever has
+    ``permission``; ``refresh_on`` names the events that may add a row.
+    """
+
+    key: str
+    operation: str
+    title: Sequence[str]
+    route: str
+    body: Sequence[str] = ()
+    when: Sequence[SetupCheck] = ()
+    params: Mapping[str, Any] = field(default_factory=dict)
+    permission: str | None = None
+    refresh_on: Sequence[str] = ()
+
+
 class LiveAppConfig(AppConfig):
     kind: ClassVar[Literal["platform", "app"]] = "platform"
     # Module metadata, round 15: the Hub's apps page (icon and name) and the right from the SaaS.
@@ -167,6 +195,8 @@ class LiveAppConfig(AppConfig):
     setup: ClassVar[list[SetupStep]] = []
     widgets: ClassVar[list[Widget]] = []
     bell: ClassVar[list[BellCounter]] = []
+    # Module metadata, PLAN-HUB round 2026-10-23: the device's notices, which base fills in.
+    notices: ClassVar[list[DeviceNotice]] = []
 
     # An apps.py that imports LiveAppConfig holds two AppConfig subclasses, and Django then
     # silently falls back to a plain AppConfig. The base opts out of auto-detection and every
