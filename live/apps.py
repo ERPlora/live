@@ -2,6 +2,7 @@
 
 from django.apps import AppConfig
 from django.utils.module_loading import autodiscover_modules
+from django.utils.translation import gettext_lazy as _
 
 # Modules of every installed app that declare operations, live queries and event reactions.
 DISCOVERED_MODULES = ("queries", "services", "live", "events")
@@ -10,7 +11,8 @@ DISCOVERED_MODULES = ("queries", "services", "live", "events")
 class LiveConfig(AppConfig):
     name = "live"
     label = "live"
-    verbose_name = "Live"
+    # The admin's index shows it to the staff in their language: «Tiempo real» in Spanish.
+    verbose_name = _("Live")
 
     def ready(self) -> None:
         # Importing live.checks registers the app metadata checks (tag "live").

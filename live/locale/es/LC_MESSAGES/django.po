@@ -205,3 +205,15 @@ msgstr[1] ""
 #: ninja.py
 msgid "Enter a valid JSON."
 msgstr "Introduce un JSON válido."
+
+#: apps.py
+msgid "Live"
+msgstr "Tiempo real"
+
+#: models.py
+msgid "outbox event"
+msgstr "evento de la bandeja de salida"
+
+#: models.py
+msgid "outbox events"
+msgstr "eventos de la bandeja de salida"
