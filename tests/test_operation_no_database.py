@@ -8,6 +8,7 @@ the hub of the context, the app's right) and the validated output. A query to an
 recording an event or asking for ``on_commit``: there is no transaction for them.
 """
 
+import threading
 from contextlib import contextmanager
 
 import pytest
@@ -27,7 +28,13 @@ pytestmark = pytest.mark.django_db(databases=["default", "other"], transaction=T
 
 @contextmanager
 def on_other(op, ctx):
-    """The test's hook: every operation runs on ``other``; it notes when it enters and leaves."""
+    """The test's hook: every operation runs on ``other``; it notes when it enters and leaves.
+
+    Like the Hub's, it reads control (the registry's row, the business's rights) before it yields: what the hook
+    reads is never what the operation was declared not to touch.
+    """
+    with connections["default"].cursor() as cursor:
+        cursor.execute("SELECT 1")
     entered.append((op.name, "enter"))
     try:
         yield "other"
@@ -103,6 +110,41 @@ def test_a_query_inside_it_is_a_misuse(alias):
     # Only while it runs: the connection works again after it.
     with connections[alias].cursor() as cursor:
         cursor.execute("SELECT 1")
+
+
+def test_a_query_on_a_connection_this_thread_never_used_is_a_misuse_too():
+    """The live executor runs an operation in a thread of its own: a connection no query of that thread opened yet
+    (the hub's alias, on its first use there) is refused the same as one already open."""
+
+    def fn(ctx, data):
+        with connections["other"].cursor() as cursor:
+            cursor.execute("SELECT 1")
+        return {}
+
+    op = declare("x.thing.wait", "query", fn, database=False)
+    outcome: list[str] = []
+
+    def run_in_a_fresh_thread():
+        try:
+            op(ctx(), Empty())
+            outcome.append("ran")
+        except LiveMisuse as exc:
+            outcome.append(str(exc))
+        finally:
+            connections.close_all()
+
+    thread = threading.Thread(target=run_in_a_fresh_thread)
+    thread.start()
+    thread.join()
+    assert outcome and "x.thing.wait touches no database" in outcome[0], outcome
+
+
+def test_what_the_hook_reads_before_it_is_not_refused():
+    """The project's hook reads the registry and the rights before the operation runs (``on_other`` reads control):
+    the refusal starts after it, with the operation's own code."""
+    op = declare("x.thing.wait", "query", lambda ctx, data: {}, database=False)
+    assert op(ctx(), Empty()) == Seen()
+    assert entered == [("x.thing.wait", "enter"), ("x.thing.wait", "exit")]
 
 
 def test_recording_an_event_inside_it_is_a_misuse():
