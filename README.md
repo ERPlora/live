@@ -16,8 +16,11 @@ fase 2: `use_hub`) y `saas-next` el suyo (el usuario); el resto (`live.spa`, `li
 ## Contrato (resumen; detalle en el plan §4.1 y en PLAN §16.2)
 
 - **Operaciones**: `@operation("<app>.<entidad>.<acción>", kind="query"|"command", permission, input,
-  output, expose_api=False, ai=None)`; `query` solo en `queries.py` (transacción `READ ONLY`,
-  `statement_timeout` 5 s), `command` solo en `services.py`. Cada ruta ninja llama a `run_operation`
+  output, expose_api=False, ai=None, database=True)`; `query` solo en `queries.py` (transacción `READ ONLY`,
+  `statement_timeout` 5 s), `command` solo en `services.py`. Con `database=False` la operación no toca
+  ninguna BD y corre **sin** transacción (lo que espera a la red, p. ej. la respuesta de otro servicio: la
+  espera no retiene una conexión); conserva el permiso, el gancho `LIVE["operation_database"]` y la salida
+  validada, y una consulta a cualquier BD, un evento o un `on_commit` dentro es `LiveMisuse`. Cada ruta ninja llama a `run_operation`
   con `operation_id` = nombre de la operación; OpenAPI en `/api/openapi.json` y Swagger en `/api/docs`.
   Errores: `{"error": {"code", "message", "fields"?}}`; 422 `invalid_payload` con `fields`. El 404 de
   una ruta inexistente y el 405 de método equivocado (no llegan a ninguna ruta) los convierte al mismo

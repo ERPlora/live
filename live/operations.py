@@ -10,11 +10,15 @@ The transaction opens on ``default`` unless the project names a hook in ``LIVE["
 path to ``(operation, context) -> context manager`` that yields the alias to use (hub-next phase 2: the hub of
 ``use_hub``, ``base.tenancy.context.operation_database``). ``READ ONLY``, ``statement_timeout`` and the
 notification after the COMMIT follow that alias's transaction; the notification still goes to the control database.
+
+An operation declared ``database=False`` touches no database: what waits on the network (another service's answer)
+runs with no transaction open, so the wait holds no connection. It keeps the permission, the project's hook and the
+validated output; a query to any database inside it, an event or an ``on_commit`` is a ``LiveMisuse``.
 """
 
 import re
-from collections.abc import Callable
-from contextlib import AbstractContextManager, nullcontext
+from collections.abc import Callable, Iterator
+from contextlib import AbstractContextManager, ExitStack, contextmanager, nullcontext
 from contextvars import ContextVar
 from dataclasses import dataclass
 from functools import cache, partial
@@ -22,7 +26,7 @@ from typing import Any, Literal, TypeVar
 
 import pydantic
 from django.conf import settings
-from django.db import DEFAULT_DB_ALIAS, transaction
+from django.db import DEFAULT_DB_ALIAS, connections, transaction
 from django.utils.module_loading import import_string
 from django.utils.translation import gettext
 from ninja import Schema
@@ -62,6 +66,8 @@ class Operation:
     expose_api: bool
     ai: Any | None
     fn: Callable[[OperationContext, Schema], Any]
+    #: ``False``: it touches no database and runs with no transaction open (what waits on the network).
+    database: bool = True
 
     @property
     def app_label(self) -> str:
@@ -73,6 +79,8 @@ class Operation:
             raise PermissionDenied(
                 gettext("Permission “%(permission)s” is required.") % {"permission": self.permission}
             )
+        if not self.database:
+            return self._without_database(ctx, data)
         operation_token = current_operation.set(self)
         events_token = _pending_events.set([])
         try:
@@ -100,6 +108,18 @@ class Operation:
             current_operation.reset(operation_token)
         return result
 
+    def _without_database(self, ctx: OperationContext, data: Schema) -> Schema:
+        operation_token = current_operation.set(self)
+        events_token = _pending_events.set(None)
+        alias_token = _operation_alias.set(None)
+        try:
+            with _database(self, ctx), _no_queries(self):
+                return self._validated(self.fn(ctx, data))
+        finally:
+            _operation_alias.reset(alias_token)
+            _pending_events.reset(events_token)
+            current_operation.reset(operation_token)
+
     def _validated(self, result: Any) -> Schema:
         if isinstance(result, self.output):
             return result
@@ -113,7 +133,7 @@ registry: dict[str, Operation] = {}
 
 
 def _declaration(op: Operation) -> tuple:
-    return (op.fn, op.kind, op.permission, op.input, op.output, op.expose_api, op.ai)
+    return (op.fn, op.kind, op.permission, op.input, op.output, op.expose_api, op.ai, op.database)
 
 
 def operation(
@@ -125,8 +145,12 @@ def operation(
     output: type[Schema],
     expose_api: bool = False,
     ai: Any | None = None,
+    database: bool = True,
 ) -> Callable[[F], Operation]:
-    """Declare and register an operation; misdeclarations fail at import time."""
+    """Declare and register an operation; misdeclarations fail at import time.
+
+    ``database=False``: the operation touches no database and runs with no transaction open (it waits on the network).
+    """
     if not NAME_RE.match(name):
         raise LiveMisuse(f"Operation name {name!r} must be <app>.<entity>.<action> (lowercase snake_case).")
     if kind not in _MODULE_SUFFIX:
@@ -148,6 +172,7 @@ def operation(
             expose_api=expose_api,
             ai=ai,
             fn=fn,
+            database=database,
         )
         existing = registry.get(name)
         if existing is not None:
@@ -186,6 +211,9 @@ def on_commit(fn: Callable[[], Any], *, robust: bool = True) -> None:
     there would run at once, before the COMMIT, and also after a rollback. ``robust``: a callback that raises is
     logged and the others still run. Outside an operation it is a misuse.
     """
+    running = current_operation.get()
+    if running is not None and not running.database:
+        raise LiveMisuse(f"{running.name} touches no database (database=False): it has no COMMIT to run on_commit after.")
     alias = _operation_alias.get()
     if alias is None:
         raise LiveMisuse("on_commit runs inside an operation, after the COMMIT of its transaction.")
@@ -195,6 +223,8 @@ def on_commit(fn: Callable[[], Any], *, robust: bool = True) -> None:
 def add_pending_event(name: str) -> None:
     """Record an event name to notify after the COMMIT of the running command (deduplicated)."""
     operation = current_operation.get()
+    if operation is not None and not operation.database:
+        raise LiveMisuse(f"{operation.name} touches no database (database=False): it records no event {name!r}.")
     names = _pending_events.get()
     if operation is None or operation.kind != "command" or names is None:
         raise LiveMisuse(f"Event {name!r} can only be recorded inside a command operation.")
@@ -208,6 +238,19 @@ def _database(op: Operation, ctx: OperationContext) -> AbstractContextManager[st
     if not path:
         return nullcontext(DEFAULT_DB_ALIAS)
     return _load_database_hook(path)(op, ctx)
+
+
+@contextmanager
+def _no_queries(op: Operation) -> Iterator[None]:
+    """While ``op`` runs, a query to any database is refused: it was declared ``database=False``."""
+
+    def refuse(execute, sql, params, many, context):
+        raise LiveMisuse(f"{op.name} touches no database (database=False), but it ran: {str(sql)[:80]!r}.")
+
+    with ExitStack() as stack:
+        for connection in connections.all(initialized_only=False):
+            stack.enter_context(connection.execute_wrapper(refuse))
+        yield
 
 
 @cache
