@@ -657,6 +657,63 @@ async def test_close_old_connections_is_called_after_a_session_reread(make_execu
 
 
 @pytest.mark.usefixtures("session_events")
+async def test_a_data_event_joining_a_pending_session_event_keeps_the_reread(make_executor):
+    executor = make_executor(debounce=0.1)
+    stream = make_stream(actor="ana")
+    subscribe(stream, FakeOp())
+    LiveTestContextBuilder.signed_out.add("ana")
+
+    await executor.on_events(stream, {SESSION_CLOSED})
+    await executor.on_events(stream, {"testapp.thing.created"})  # joins the burst: its run would re-read the context
+    del stream.subs["s1"]  # but it goes away before the burst runs
+
+    assert await next_queued(stream.queue) == parse_frame(BYE_FRAME)
+
+
+def _holding_the_scope(executor, scope=SCOPE_A, seconds=0.3):
+    """A stream of ``scope`` whose run keeps the scope's gate for ``seconds``; its task, to await at the end."""
+    holder = make_stream(scope, actor="bo")
+    subscribe(holder, FakeOp(body=lambda ctx, params: time.sleep(seconds) or ThingListOut(rows=[])))
+    return asyncio.ensure_future(executor.run_all(holder))
+
+
+@pytest.mark.usefixtures("session_events")
+async def test_a_session_event_whose_query_goes_away_while_waiting_for_the_scope_still_rereads(make_executor):
+    # The session event and a data event of the subscribed query arrive together: that query's run would be the
+    # re-read, but the tab unsubscribes it while the run waits for the scope (another stream's query holds it).
+    executor = make_executor(debounce=0.05)
+    holding = _holding_the_scope(executor)
+    await asyncio.sleep(0.05)
+    stream = make_stream(actor="ana")
+    subscribe(stream, FakeOp())
+    LiveTestContextBuilder.signed_out.add("ana")
+
+    await executor.on_events(stream, {SESSION_CLOSED, "testapp.thing.created"})
+    await asyncio.sleep(0.1)  # the burst ran out; its only run is waiting for the scope
+    del stream.subs["s1"]
+
+    assert await next_queued(stream.queue) == parse_frame(BYE_FRAME)
+    await holding
+
+
+@pytest.mark.usefixtures("session_events")
+async def test_a_session_reread_of_a_stream_closed_while_waiting_for_the_scope_is_skipped(make_executor):
+    executor = make_executor(debounce=0.05)
+    holding = _holding_the_scope(executor)
+    await asyncio.sleep(0.05)
+    stream = make_stream(actor="ana")
+    subscribe(stream, FakeOp())
+
+    await executor.on_events(stream, {SESSION_CLOSED})
+    await asyncio.sleep(0.1)  # the re-read is waiting for the scope
+    stream.close()  # the client went away
+    await holding
+    await asyncio.sleep(0.05)
+
+    assert LiveTestContextBuilder.refreshes == 1  # the holder's run only
+
+
+@pytest.mark.usefixtures("session_events")
 async def test_forget_cancels_a_pending_session_reread(make_executor):
     executor = make_executor(debounce=0.1)
     stream = make_stream(actor="ana")
@@ -702,6 +759,38 @@ async def test_one_run_at_a_time_per_scope_and_scopes_in_parallel(make_executor)
     assert peak == {"a": 1, "b": 1}
     assert peak_total[0] == 2
     assert elapsed < 0.7  # 4 runs of 0.1 s per scope in sequence, both scopes side by side (~0.4 s)
+
+
+async def test_a_subscription_dropped_while_waiting_for_the_scope_does_not_run(make_executor):
+    executor = make_executor()
+    holding = _holding_the_scope(executor)
+    await asyncio.sleep(0.05)
+    stream = make_stream(actor="ana")
+    op = FakeOp()
+    subscribe(stream, op)
+
+    running = asyncio.ensure_future(executor.run_all(stream))
+    await asyncio.sleep(0.05)  # waiting for the scope
+    del stream.subs["s1"]  # the tab unsubscribed it meanwhile
+    await asyncio.gather(holding, running)
+
+    assert op.calls == 0
+
+
+async def test_a_stream_closed_while_waiting_for_the_scope_runs_nothing(make_executor):
+    executor = make_executor()
+    holding = _holding_the_scope(executor)
+    await asyncio.sleep(0.05)
+    stream = make_stream(actor="ana")
+    op = FakeOp()
+    subscribe(stream, op)
+
+    running = asyncio.ensure_future(executor.run_all(stream))
+    await asyncio.sleep(0.05)  # waiting for the scope
+    stream.close()  # the client went away
+    await asyncio.gather(holding, running)
+
+    assert op.calls == 0
 
 
 async def test_a_cancelled_waiter_keeps_the_scope_serialized(make_executor):

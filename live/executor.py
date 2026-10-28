@@ -48,6 +48,8 @@ logger = logging.getLogger(__name__)
 QUEUE_MAX = 256
 #: The frame that ends a stream from the server side (the client reconnects).
 BYE_FRAME = frame(BYE)
+#: What ``Executor._in_thread`` gives when, once the scope was free, the stream was closed or its subscription gone.
+_SKIPPED = object()
 
 
 @dataclass(eq=False)
@@ -188,33 +190,40 @@ class Executor:
             if self._pending.get(stream) is pending:
                 del self._pending[stream]
         subs = [sub for sub in stream.subs.values() if sub.id in pending.sub_ids]
-        if pending.reread and not subs:
-            # No run re-reads the context this time (the event is no query's): one re-read alone.
+        if not await self._run_subs(stream, subs) and pending.reread:
+            # No run re-read the context this pass (the event is no query's, or its query went away before running):
+            # one re-read alone.
             await self._reread(stream)
-        await self._run_subs(stream, subs)
 
-    async def _run_subs(self, stream: Stream, subs: list[Subscription]) -> None:
+    async def _run_subs(self, stream: Stream, subs: list[Subscription]) -> bool:
+        """Run ``subs`` in order; whether any of them ran (and so re-read the stream's context)."""
+        ran = False
         for sub in subs:
             if stream.closed:
-                return
+                break
             if stream.subs.get(sub.id) is sub:
-                await self._run(stream, sub)
+                ran = await self._run(stream, sub) or ran
+        return ran
 
-    async def _run(self, stream: Stream, sub: Subscription) -> None:
+    async def _run(self, stream: Stream, sub: Subscription) -> bool:
+        """Run ``sub`` once and queue its frame; whether it reached a thread (its refresh re-read the context)."""
         data = await self._in_thread(stream, lambda: stream.subs.get(sub.id) is sub, self._run_one, stream, sub)
+        if data is _SKIPPED:
+            return False
         if sub.dropped and stream.subs.get(sub.id) is sub:
             del stream.subs[sub.id]
         if data is not None:
             stream.put(data)
+        return True
 
     async def _reread(self, stream: Stream) -> None:
         data = await self._in_thread(stream, lambda: True, self._reread_one, stream)
-        if data is not None:
+        if data is not None and data is not _SKIPPED:
             stream.put(data)
 
-    async def _in_thread(self, stream: Stream, wanted: Callable[[], bool], fn: Callable, *args: Any) -> bytes | None:
-        """``fn(*args)`` in a worker thread, one at a time per scope; ``None`` without calling it when, once the scope is
-        free, the stream is closed or ``wanted()`` no longer holds."""
+    async def _in_thread(self, stream: Stream, wanted: Callable[[], bool], fn: Callable, *args: Any) -> Any:
+        """``fn(*args)`` in a worker thread, one at a time per scope; ``_SKIPPED`` without calling it when, once the
+        scope is free, the stream is closed or ``wanted()`` no longer holds."""
         gate = self._gates.get(stream.scope)
         if gate is None:
             gate = self._gates[stream.scope] = _Gate()
@@ -226,7 +235,7 @@ class Executor:
             raise
         if stream.closed or not wanted():
             self._release(stream.scope, gate)
-            return None
+            return _SKIPPED
         try:
             future = self._get_loop().run_in_executor(self._get_pool(), fn, *args)
         except BaseException:
