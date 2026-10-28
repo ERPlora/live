@@ -21,6 +21,9 @@ They need the operations and the events registered, which ``LiveConfig.ready`` d
 PLAN-HUB round 2026-10-23: the device's notices of a module (``notices``) follow the same rules
 (E006, E009–E013), and their texts are templates on the fields of the rows of their query, which
 says what happened (``id``) and when (``at``) (E018).
+
+FIX-LIVE-SESSION-CLOSED-WAKES-ONLY-SESSION-LIST: ``settings.LIVE["session_events"]``, the events after which every
+live stream of the channel re-reads its context, is a list of events that some ``events.py`` declares (E019).
 """
 
 import re
@@ -28,6 +31,7 @@ import string
 import typing
 from typing import Any
 
+from django.conf import settings
 from django.core import checks
 from django.utils import translation
 from django.utils.functional import Promise
@@ -115,6 +119,25 @@ def check_app_metadata(
         ]
     errors += _cycle_errors(configs, modules)
     return errors
+
+
+@checks.register("live")
+def check_session_events(app_configs: Any = None, **kwargs: Any) -> list[checks.CheckMessage]:
+    """E019: ``LIVE["session_events"]`` (optional) is a list of event names that some ``events.py`` declares."""
+    value = getattr(settings, "LIVE", {}).get("session_events", [])
+    hint = (
+        'LIVE["session_events"] lists, by name, the events after which every live stream of the channel re-reads its '
+        "context (its session may have ended); each one is in the ALL list of an events.py."
+    )
+    if not isinstance(value, list | tuple):
+        message = f'LIVE["session_events"] is {value!r}; it must be a list of event names.'
+        return [checks.Error(message, hint=hint, id="live.E019")]
+    events = declared_events()
+    return [
+        checks.Error(f'LIVE["session_events"] names {event!r}, which no events.py declares.', hint=hint, id="live.E019")
+        for event in value
+        if not isinstance(event, str) or event not in events
+    ]
 
 
 def _module_errors(config: Any) -> list[checks.CheckMessage]:

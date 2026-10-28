@@ -7,9 +7,16 @@ Each app declares its live queries in ``live.py``::
 ``LiveConfig.ready()`` imports every app's ``live.py``. An app may import its ``live.py`` before its
 ``queries.py``, so whether the operation exists, is a query and has a permission is validated later,
 by :meth:`LiveRegistry.check` (system check E004), not at declaration time.
+
+An event that may end the session a stream was opened with (saas-next: ``accounts.session.closed``, a sign-out, a
+new password, «Close the other sessions») is no query's business: the project lists it once in
+``settings.LIVE["session_events"]`` (:func:`session_events`, system check ``live.E019``) and every stream of the
+channel it reaches re-reads its context (``live.executor``), so no ``live.py`` has to declare it.
 """
 
 from collections.abc import Iterable
+
+from django.conf import settings
 
 from live.errors import LiveMisuse
 from live.operations import NAME_RE, registry
@@ -82,3 +89,10 @@ live_registry = LiveRegistry()
 def live(op_name: str, *, on: list[str]) -> None:
     """Declare ``op_name`` as a live query, re-run after any of the events ``on``."""
     live_registry.register(op_name, on=on)
+
+
+def session_events() -> frozenset[str]:
+    """The events after which a stream re-reads its context, ``settings.LIVE["session_events"]`` (none by default).
+
+    Listed by name, never guessed from it: hub-next's ``cash_register.session.closed`` is a till's, not a sign-in's."""
+    return frozenset(getattr(settings, "LIVE", {}).get("session_events", ()))

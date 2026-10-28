@@ -13,6 +13,12 @@ A worker thread inherits no active language, so each run activates the stream's
 in it. Nor does it inherit the request's context vars: a builder with ``enter(ctx)`` gets each run
 (its refresh included) inside the context manager it returns (hub-next: ``use_hub`` of the stream's
 hub); one that cannot be entered (``Unauthorized``) ends the stream with ``bye``.
+
+An event of ``settings.LIVE["session_events"]`` (``live.live_registry.session_events``) may have ended the session
+the stream was opened with, and no query has to declare it: the stream re-reads its context once (the builder's
+``refresh``, in the same thread, language and ``enter`` as a run) and ends with ``bye`` if it raises
+``Unauthorized``; its queries do not re-run for it. A burst is still one pass, and when the same pass re-runs a
+query, that run's refresh is the re-read.
 """
 
 import asyncio
@@ -33,7 +39,7 @@ from ninja import Schema
 
 from live.context import OperationContext, Scope, get_builder
 from live.errors import AppInactive, OperationError, PermissionDenied, Unauthorized
-from live.live_registry import live_registry
+from live.live_registry import live_registry, session_events
 from live.sse import BYE, ERROR, MAX_RESULT_BYTES, RESULT, frame
 
 logger = logging.getLogger(__name__)
@@ -42,6 +48,8 @@ logger = logging.getLogger(__name__)
 QUEUE_MAX = 256
 #: The frame that ends a stream from the server side (the client reconnects).
 BYE_FRAME = frame(BYE)
+#: What ``Executor._in_thread`` gives when, once the scope was free, the stream was closed or its subscription gone.
+_SKIPPED = object()
 
 
 @dataclass(eq=False)
@@ -98,6 +106,8 @@ class _Pending:
     sub_ids: set[str]
     first_at: float
     due_at: float
+    #: A session event arrived: the stream re-reads its context even if no subscription re-runs.
+    reread: bool = False
     task: asyncio.Task | None = None
 
 
@@ -132,21 +142,25 @@ class Executor:
         await self._run_subs(stream, list(stream.subs.values()))
 
     async def on_events(self, stream: Stream, names: Iterable[str]) -> None:
-        """Schedule the subscriptions affected by ``names``; a burst within the debounce runs once."""
+        """Schedule the subscriptions affected by ``names`` (and a re-read of the context after a session event); a
+        burst within the debounce runs once."""
         if stream.closed:
             return
+        names = set(names)
         affected = live_registry.affected(names)
         ids = {sub.id for sub in stream.subs.values() if sub.op.name in affected}
-        if not ids:
+        reread = not names.isdisjoint(session_events())
+        if not ids and not reread:
             return
         now = self.clock()
         pending = self._pending.get(stream)
         if pending is None:
-            pending = _Pending(sub_ids=ids, first_at=now, due_at=now + self.debounce)
+            pending = _Pending(sub_ids=ids, first_at=now, due_at=now + self.debounce, reread=reread)
             self._pending[stream] = pending
             pending.task = self._spawn(self._flush(stream, pending))
         else:
             pending.sub_ids |= ids
+            pending.reread = pending.reread or reread
             pending.due_at = min(now + self.debounce, pending.first_at + self.max_debounce)
 
     def forget(self, stream: Stream) -> None:
@@ -175,16 +189,41 @@ class Executor:
         finally:
             if self._pending.get(stream) is pending:
                 del self._pending[stream]
-        await self._run_subs(stream, [sub for sub in stream.subs.values() if sub.id in pending.sub_ids])
+        subs = [sub for sub in stream.subs.values() if sub.id in pending.sub_ids]
+        if not await self._run_subs(stream, subs) and pending.reread:
+            # No run re-read the context this pass (the event is no query's, or its query went away before running):
+            # one re-read alone.
+            await self._reread(stream)
 
-    async def _run_subs(self, stream: Stream, subs: list[Subscription]) -> None:
+    async def _run_subs(self, stream: Stream, subs: list[Subscription]) -> bool:
+        """Run ``subs`` in order; whether any of them ran (and so re-read the stream's context)."""
+        ran = False
         for sub in subs:
             if stream.closed:
-                return
+                break
             if stream.subs.get(sub.id) is sub:
-                await self._run(stream, sub)
+                ran = await self._run(stream, sub) or ran
+        return ran
 
-    async def _run(self, stream: Stream, sub: Subscription) -> None:
+    async def _run(self, stream: Stream, sub: Subscription) -> bool:
+        """Run ``sub`` once and queue its frame; whether it reached a thread (its refresh re-read the context)."""
+        data = await self._in_thread(stream, lambda: stream.subs.get(sub.id) is sub, self._run_one, stream, sub)
+        if data is _SKIPPED:
+            return False
+        if sub.dropped and stream.subs.get(sub.id) is sub:
+            del stream.subs[sub.id]
+        if data is not None:
+            stream.put(data)
+        return True
+
+    async def _reread(self, stream: Stream) -> None:
+        data = await self._in_thread(stream, lambda: True, self._reread_one, stream)
+        if data is not None and data is not _SKIPPED:
+            stream.put(data)
+
+    async def _in_thread(self, stream: Stream, wanted: Callable[[], bool], fn: Callable, *args: Any) -> Any:
+        """``fn(*args)`` in a worker thread, one at a time per scope; ``_SKIPPED`` without calling it when, once the
+        scope is free, the stream is closed or ``wanted()`` no longer holds."""
         gate = self._gates.get(stream.scope)
         if gate is None:
             gate = self._gates[stream.scope] = _Gate()
@@ -194,21 +233,17 @@ class Executor:
         except BaseException:
             self._leave(stream.scope, gate)
             raise
-        if stream.closed or stream.subs.get(sub.id) is not sub:
+        if stream.closed or not wanted():
             self._release(stream.scope, gate)
-            return
+            return _SKIPPED
         try:
-            future = self._get_loop().run_in_executor(self._get_pool(), self._run_one, stream, sub)
+            future = self._get_loop().run_in_executor(self._get_pool(), fn, *args)
         except BaseException:
             self._release(stream.scope, gate)
             raise
         # The scope stays taken until the thread is done, even if the awaiting stream goes away.
         future.add_done_callback(lambda _future: self._release(stream.scope, gate))
-        data = await asyncio.shield(future)
-        if sub.dropped and stream.subs.get(sub.id) is sub:
-            del stream.subs[sub.id]
-        if data is not None:
-            stream.put(data)
+        return await asyncio.shield(future)
 
     def _run_one(self, stream: Stream, sub: Subscription) -> bytes | None:
         """Run one subscription in a worker thread; the frame to queue, or ``None`` if unchanged.
@@ -221,6 +256,23 @@ class Executor:
                 return self._run_in_language(stream, sub)
         finally:
             close_old_connections()
+
+    def _reread_one(self, stream: Stream) -> bytes | None:
+        """Re-read the stream's context in a worker thread, as a run does before its query: ``bye`` if the stream may
+        no longer run (its session ended), else ``None``. A failure is logged and keeps the stream: the next run
+        re-reads it again."""
+        try:
+            with override(stream.ctx.language):
+                builder = get_builder()
+                with _entered(builder, stream.ctx):
+                    builder.refresh(stream.ctx)
+        except Unauthorized:
+            return BYE_FRAME
+        except Exception:
+            logger.exception("Re-reading the context of live stream %s failed.", stream.id)
+        finally:
+            close_old_connections()
+        return None
 
     def _run_in_language(self, stream: Stream, sub: Subscription) -> bytes | None:
         try:

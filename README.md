@@ -40,6 +40,15 @@ fase 2: `use_hub`) y `saas-next` el suyo (el usuario); el resto (`live.spa`, `li
   3 hilos por proceso, 1 por ámbito, ráfagas de 150 ms, re-ejecución como ese usuario con los permisos
   releídos y envío solo si cambia el hash; red de seguridad cada 300 s y `resync` al reconectar el
   `LISTEN` (uno por proceso, fuera de PgBouncer). Sin Redis ni Channels.
+- **Eventos de fin de sesión** (`LIVE["session_events"]`, opcional; FIX-LIVE-SESSION-CLOSED-WAKES-ONLY-SESSION-LIST):
+  los eventos que pueden haber terminado la sesión con la que se abrió un stream (en `saas-next`,
+  `accounts.session.closed`: salir, una contraseña nueva, «Cerrar las demás sesiones»). Ninguna consulta viva tiene
+  que declararlos: al llegar uno al canal, cada stream relee su contexto una vez (el `refresh` del builder, en el
+  mismo hilo, idioma y `enter` que una re-ejecución) y se cierra con `bye` si lanza `Unauthorized`; sus consultas no
+  se re-ejecutan por él. Una ráfaga sigue siendo una pasada, y si en esa pasada se re-ejecuta alguna consulta (la que
+  sí lo declara), su `refresh` es la relectura. Se nombran uno a uno, nunca por su forma: en `hub-next`,
+  `cash_register.session.closed` y `table.session.closed` son de caja y de mesa. El Hub no lo usa: al revocar
+  sesiones despierta con `"*"` (`ALL_EVENTS`), que re-ejecuta todo.
 - **SPA y CSP**: `live.spa` lee el manifiesto de Vite (sin django-vite) y emite `<script type=module>` y
   `modulepreload` con nonce; en DEBUG apunta al servidor de Vite. `spa_assets(request, entry=…)` da
   otra entrada del mismo build (p. ej. `frontend/public.ts`, la web pública de `saas-next`, ronda 16);
@@ -143,6 +152,8 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
     (medidas en inglés); o un `when` que no es una lista de `SetupCheck`, o una condición sin
     exactamente uno de `truthy` y `equals` o sobre un campo que la fila no tiene. (`live.E017` queda
     para el `ai=` obligatorio de la ronda 2026-10-22b.)
+  - `live.E019`: `LIVE["session_events"]` no es una lista (o tupla), o nombra algo que no es un evento que declare
+    la lista `ALL` de algún `events.py` (`declared_events()`; `"*"` tampoco).
 
   Los checks de los hooks necesitan las operaciones y los eventos registrados, cosa que
   `LiveConfig.ready` hace antes de cualquier check. La app de pruebas (`tests/testapp`) es un módulo
