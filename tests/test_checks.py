@@ -19,7 +19,7 @@ from django.core import checks
 from django.core.checks.registry import registry
 from django.utils import translation
 from django.utils.translation import gettext_lazy
-from live.checks import check_app_metadata
+from live.checks import check_app_metadata, check_session_events
 from live.meta import BellCounter, Category, DeviceNotice, LiveAppConfig, Nav, SetupCheck, SetupStep, Widget
 from live import operations
 from live.operations import Operation
@@ -898,3 +898,57 @@ def test_each_misfit_text_of_a_notice_is_its_own_e018(run):
     messages = run(module("stock", notices=[notice(title=["{colour}"], body=["{size}"], route="/stock/{shape}")]))
 
     assert ids(messages) == ["live.E018"] * 3
+
+
+# E019: LIVE["session_events"], the events after which every live stream of the channel re-reads its context.
+
+
+@pytest.fixture
+def run_session_events(settings, known):
+    """Run the check with ``LIVE["session_events"]`` set to ``value`` (stock.item.created is a declared event)."""
+
+    def run(value):
+        settings.LIVE = {**settings.LIVE, "session_events": value}
+        return check_session_events(app_configs=None)
+
+    return run
+
+
+def test_declared_session_events_pass(run_session_events):
+    assert run_session_events(["stock.item.created"]) == []
+    assert run_session_events(("stock.item.created", "sale.sale.completed")) == []
+
+
+def test_no_session_events_pass(settings):
+    settings.LIVE = {key: value for key, value in settings.LIVE.items() if key != "session_events"}
+
+    assert check_session_events(app_configs=None) == []
+
+
+@pytest.mark.parametrize("value", ["stock.item.created", None, {"stock.item.created": True}])
+def test_session_events_that_are_not_a_list_are_one_e019(run_session_events, value):
+    [message] = run_session_events(value)
+
+    assert message.id == "live.E019"
+    assert repr(value) in message.msg
+    assert "list" in message.msg
+
+
+@pytest.mark.parametrize("event", ["*", "stock.item", None, 3])
+def test_a_session_event_that_is_not_an_event_name_is_e019(run_session_events, event):
+    [message] = run_session_events(["stock.item.created", event])
+
+    assert message.id == "live.E019"
+    assert repr(event) in message.msg
+
+
+def test_each_session_event_that_no_events_py_declares_is_its_own_e019(run_session_events):
+    messages = run_session_events(["a.b.c", "stock.item.created", "stock.item.vanished"])
+
+    assert ids(messages) == ["live.E019", "live.E019"]
+    assert ["'a.b.c'" in messages[0].msg, "'stock.item.vanished'" in messages[1].msg] == [True, True]
+
+
+def test_the_session_events_check_is_registered_with_the_live_tag():
+    assert check_session_events in registry.get_checks()
+    assert check_session_events.tags == ("live",)

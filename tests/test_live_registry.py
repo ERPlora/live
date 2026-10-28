@@ -3,7 +3,7 @@
 import pytest
 from live import live_registry as live_registry_module
 from live.errors import LiveMisuse
-from live.live_registry import LiveRegistry, live, live_registry
+from live.live_registry import LiveRegistry, live, live_registry, session_events
 from live.operations import operation, registry
 
 from tests.testapp import queries as _testapp_queries  # noqa: F401  (registers testapp operations)
@@ -179,3 +179,26 @@ def test_check_reports_every_problem(reg):
 
 def test_the_module_exposes_one_registry():
     assert isinstance(live_registry_module.live_registry, LiveRegistry)
+
+
+# Session events (settings.LIVE["session_events"]): no live query declares them, every stream re-reads its context
+
+
+def test_session_events_are_read_from_the_settings(settings):
+    settings.LIVE = {**settings.LIVE, "session_events": ["accounts.session.closed"]}
+
+    assert session_events() == frozenset({"accounts.session.closed"})
+
+
+def test_without_the_setting_no_event_is_a_session_event(settings):
+    settings.LIVE = {key: value for key, value in settings.LIVE.items() if key != "session_events"}
+
+    assert session_events() == frozenset()
+
+
+def test_a_session_event_affects_no_query_that_does_not_declare_it(reg, settings):
+    # The stream re-reads its context instead (live.executor): nothing re-runs for it.
+    settings.LIVE = {**settings.LIVE, "session_events": ["accounts.session.closed"]}
+    reg.register("x.item.list", on=["x.item.created"])
+
+    assert reg.affected(["accounts.session.closed"]) == set()
