@@ -2,7 +2,7 @@
 
 from live.context import OperationContext
 from live.errors import Conflict
-from live.operations import operation
+from live.operations import AI, INTERNAL, operation
 from live.outbox import record_event
 
 from tests.testapp.models import Thing
@@ -15,6 +15,7 @@ from tests.testapp.schemas import ThingIn, ThingOut
     permission="testapp.manage",
     input=ThingIn,
     output=ThingOut,
+    ai=AI(description="Creates a thing with its name."),
 )
 def create_thing(ctx: OperationContext, data: ThingIn) -> Thing:
     thing = Thing.objects.create(name=data.name)
@@ -28,6 +29,7 @@ def create_thing(ctx: OperationContext, data: ThingIn) -> Thing:
     permission="testapp.manage",
     input=ThingIn,
     output=ThingOut,
+    ai=INTERNAL,
 )
 def create_thing_twice_event(ctx: OperationContext, data: ThingIn) -> Thing:
     """Records the same event twice: two outbox rows, one name in the notification."""
@@ -43,6 +45,7 @@ def create_thing_twice_event(ctx: OperationContext, data: ThingIn) -> Thing:
     permission="testapp.manage",
     input=ThingIn,
     output=ThingOut,
+    ai=INTERNAL,
 )
 def fail_after_event(ctx: OperationContext, data: ThingIn) -> Thing:
     """Records an event and then fails, so the whole command rolls back."""

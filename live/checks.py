@@ -24,6 +24,10 @@ says what happened (``id``) and when (``at``) (E018).
 
 FIX-LIVE-SESSION-CLOSED-WAKES-ONLY-SESSION-LIST: ``settings.LIVE["session_events"]``, the events after which every
 live stream of the channel re-reads its context, is a list of events that some ``events.py`` declares (E019).
+
+PLAN §30 (round 2026-10-22b): every operation tells the assistant what it is — a tool, ``ai=AI(description=…,
+risk=…)``, or not one, ``ai=INTERNAL`` — never by omission, with a risk of ``RISKS``; a ``dict`` with its
+``description`` is still accepted (E017). Like the metadata checks, it looks at every registered operation.
 """
 
 import re
@@ -119,6 +123,41 @@ def check_app_metadata(
         ]
     errors += _cycle_errors(configs, modules)
     return errors
+
+
+@checks.register("live")
+def check_ai_declared(app_configs: Any = None, **kwargs: Any) -> list[checks.CheckMessage]:
+    """E017: every registered operation declares ``ai=``: ``AI(...)``, ``INTERNAL`` or a ``dict`` with its
+    ``description``, and a risk, when it says one, of ``RISKS``."""
+    hint = (
+        "Declare ai=AI(description=…, risk='normal'|'high') for an assistant tool (its description tells the model, in "
+        "English, what it does; 'high' asks to type a word before it runs), or ai=INTERNAL for what is not one "
+        "(PLAN §30: every operation is a tool unless it says otherwise)."
+    )
+    return [
+        checks.Error(f"Operation {name!r} {problem}.", hint=hint, obj=name, id="live.E017")
+        for name, op in sorted(operations.registry.items())
+        if (problem := _ai_problem(op.ai)) is not None
+    ]
+
+
+def _ai_problem(declared: Any) -> str | None:
+    """Why ``declared`` (an operation's ``ai=``) tells the assistant nothing, or ``None``."""
+    if declared is None:
+        return "declares no ai="
+    if isinstance(declared, operations.Internal):
+        return None
+    if isinstance(declared, operations.AI):
+        description, risk = declared.description, declared.risk
+    elif isinstance(declared, dict):
+        description, risk = declared.get("description"), declared.get("risk", "normal")
+    else:
+        return f"declares ai={declared!r}, which is neither AI(...), INTERNAL nor a dict"
+    if not isinstance(description, str) or not description.strip():
+        return "declares an assistant tool without a description"
+    if risk not in operations.RISKS:
+        return f"declares risk {risk!r}; it must be one of {', '.join(operations.RISKS)}"
+    return None
 
 
 @checks.register("live")

@@ -16,12 +16,18 @@ fase 2: `use_hub`) y `saas-next` el suyo (el usuario); el resto (`live.spa`, `li
 ## Contrato (resumen; detalle en el plan §4.1 y en PLAN §16.2)
 
 - **Operaciones**: `@operation("<app>.<entidad>.<acción>", kind="query"|"command", permission, input,
-  output, expose_api=False, ai=None, database=True)`; `query` solo en `queries.py` (transacción `READ ONLY`,
+  output, expose_api=False, ai=…, database=True)`; `query` solo en `queries.py` (transacción `READ ONLY`,
   `statement_timeout` 5 s), `command` solo en `services.py`. Con `database=False` la operación no toca
   ninguna BD y corre **sin** transacción (lo que espera a la red, p. ej. la respuesta de otro servicio: la
   espera no retiene una conexión); conserva el permiso, el gancho `LIVE["operation_database"]` y la salida
   validada, y una consulta a cualquier BD, un evento o un `on_commit` dentro es `LiveMisuse`. Cada ruta ninja llama a `run_operation`
   con `operation_id` = nombre de la operación; OpenAPI en `/api/openapi.json` y Swagger en `/api/docs`.
+  `ai=` es obligatorio (PLAN §30, `live.E017`): `AI(description=…, risk="normal"|"high", preview=None)` para una
+  herramienta del asistente (la descripción, en inglés, es lo que lee el modelo; `high` pide teclear una palabra) o
+  `INTERNAL` (centinela falso) para lo que no lo es. Un `dict` con `description` se sigue aceptando y
+  `Operation.ai_spec()` lo lee como uno de los dos: sin descripción, con «Not an assistant tool…»/«System only…» o en
+  una operación que solo corre la plataforma (sin permiso o con uno que ninguna app declara, `declared_permissions()`)
+  es `INTERNAL`.
   Errores: `{"error": {"code", "message", "fields"?}}`; 422 `invalid_payload` con `fields`. El 404 de
   una ruta inexistente y el 405 de método equivocado (no llegan a ninguna ruta) los convierte al mismo
   sobre `live.api_errors.ApiErrorEnvelopeMiddleware` (en `MIDDLEWARE` tras auth), bajo
@@ -150,8 +156,9 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
     lista de textos, una `route` que no empieza por `/` (o empieza por `//`); una plantilla rota, con
     un campo posicional, anidado, con atributo o índice, o que nombra un campo que la fila no tiene
     (medidas en inglés); o un `when` que no es una lista de `SetupCheck`, o una condición sin
-    exactamente uno de `truthy` y `equals` o sobre un campo que la fila no tiene. (`live.E017` queda
-    para el `ai=` obligatorio de la ronda 2026-10-22b.)
+    exactamente uno de `truthy` y `equals` o sobre un campo que la fila no tiene;
+  - `live.E017`: una operación registrada sin `ai=`, con un `AI` o un `dict` sin descripción, con un `risk` que no
+    es `normal` ni `high`, o con algo que no es `AI`, `INTERNAL` ni un `dict` (ronda 2026-10-22b, PLAN §30);
   - `live.E019`: `LIVE["session_events"]` no es una lista (o tupla), o nombra algo que no es un evento que declare
     la lista `ALL` de algún `events.py` (`declared_events()`; `"*"` tampoco).
 
@@ -177,6 +184,18 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
   `nh3`, la lista blanca del SaaS viejo), ```` ```mermaid ```` como `<pre class="mermaid">`, `id` en
   los títulos (`toc` con `slugify_unicode`) e imágenes solo de `docs/img/` de la app, reescritas a
   `image_base`; cualquier otro origen quita la `<img>` y sin `image_base` no queda ninguna.
+
+## Asistente (`live.assistant`, PLAN §30 y plan 2026-10-30 del asistente del SaaS §2)
+
+Las mecánicas del asistente que no dependen de la pasarela, las mismas en el Hub y en el panel del SaaS:
+`catalog(ctx, active_labels=…, not_from_chat=…, approvable=…)` (las herramientas de la persona: operaciones con
+`AI`, de las apps encendidas, con su permiso), `relevant(tools, texts, language, always=…, app_words=…)` (como mucho
+`MAX_TOOLS`), `tool_spec`, `card(op, arguments, language, words)` (la tarjeta de una escritura) con `confirmed` y
+`CONFIRM_WORD`, `run_tool` (ejecuta como la persona, resultado cortado en `MAX_RESULT_CHARS`), `preview` (la lectura
+que nombra `AI.preview`) y `rounds`/`MAX_ROUNDS`. Cada proyecto dice los datos con sus palabras (`Words`: momento,
+registro, importe, nombre de la app); `PlainWords` no lee nada (euros con 2 decimales, UTC con los formatos de
+Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda del negocio, `refers`) viven en su
+`base/assistant.py`.
 
 ## Slugs reservados
 
