@@ -33,6 +33,16 @@ fase 2: `use_hub`) y `saas-next` el suyo (el usuario); el resto (`live.spa`, `li
   sobre `live.api_errors.ApiErrorEnvelopeMiddleware` (en `MIDDLEWARE` tras auth), bajo
   `LIVE["api_prefix"]` (`/api/` por defecto); no toca JSON, streams, `/api/live` ni `/api/docs`. Los
   mensajes salen en el idioma de la petición (HTTP) o del stream (`ctx.language`, en `/api/live`).
+- **Transacciones anidadas** (`live.operations.atomic`, `current_alias`): lo que un `services.py` envuelve en un
+  savepoint va con `atomic()` (gestor de contexto o decorador, `savepoint` y `durable` como en Django), nunca con un
+  `transaction.atomic()` desnudo, cuyo alias es `default`: con `LIVE["operation_database"]` la transacción de la
+  operación no está en `default` (hub-next, fase 2: la BD del hub) y un `try: with transaction.atomic(): create…
+  except IntegrityError:` abriría otra transacción en `default` y el error abortaría la de la operación. `atomic()`
+  abre en `current_alias()`: lo que dice `LIVE["current_database"]` (ruta a una función sin argumentos; hub-next:
+  `base.tenancy.context.current_alias`, el alias del `use_hub` activo y `HubContextMissing` sin contexto, nunca
+  `default` por omisión), si no el alias de la operación en curso y, fuera de una, `default` (el SaaS, sin tenencia).
+  Dentro de una operación `database=False` es `LiveMisuse`. Lo lee al entrar en el bloque (un decorador, en cada
+  llamada).
 - **Eventos**: `record_event(ctx, "<app>.<entidad>.<hecho>", payload)` solo dentro de un command, en su
   transacción (`live_outboxevent`); tras el COMMIT, `pg_notify(<canal del ámbito>, {"events": […]})` en
   la BD de control. `live.py` de cada app: `live("<consulta>", on=[eventos])`. En el admin de Django
