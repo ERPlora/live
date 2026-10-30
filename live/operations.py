@@ -10,6 +10,9 @@ The transaction opens on ``default`` unless the project names a hook in ``LIVE["
 path to ``(operation, context) -> context manager`` that yields the alias to use (hub-next phase 2: the hub of
 ``use_hub``, ``base.tenancy.context.operation_database``). ``READ ONLY``, ``statement_timeout`` and the
 notification after the COMMIT follow that alias's transaction; the notification still goes to the control database.
+What a ``services.py`` wraps in a savepoint goes through :func:`atomic`, never a bare ``transaction.atomic()`` (whose
+alias is ``default``): it opens on :func:`current_alias`, the project's ``LIVE["current_database"]`` (hub-next: the
+active ``use_hub``'s alias, ``base.tenancy.context.current_alias``), else the running operation's, else ``default``.
 
 An operation declared ``database=False`` touches no database: what waits on the network (another service's answer)
 runs with no transaction open, so the wait holds no connection. It keeps the permission, the project's hook and the
@@ -22,7 +25,7 @@ declared before ``AI`` existed is still accepted: ``Operation.ai_spec()`` reads 
 
 import re
 from collections.abc import Callable, Iterator
-from contextlib import AbstractContextManager, ExitStack, contextmanager, nullcontext
+from contextlib import AbstractContextManager, ContextDecorator, ExitStack, contextmanager, nullcontext
 from contextvars import ContextVar
 from dataclasses import dataclass
 from functools import cache, partial
@@ -285,6 +288,63 @@ def on_commit(fn: Callable[[], Any], *, robust: bool = True) -> None:
     transaction.on_commit(fn, using=alias, robust=robust)
 
 
+def current_alias() -> str:
+    """The alias the code running now works on: where :func:`atomic` opens.
+
+    The project's ``LIVE["current_database"]`` (a dotted path to a callable with no arguments) says it when it names one
+    (hub-next: the active ``use_hub``'s alias, ``HubContextMissing`` without a context, never a guess): inside an
+    operation that is the alias its transaction is open on, or the one of a context entered inside it. Without it, the
+    running operation's alias, else ``default`` (the SaaS, with no tenancy). An operation declared ``database=False``
+    has none: a misuse.
+    """
+    running = current_operation.get()
+    if running is not None and not running.database:
+        raise LiveMisuse(
+            f"{running.name} touches no database (database=False): it has no transaction to open atomic() in."
+        )
+    path = getattr(settings, "LIVE", {}).get("current_database")
+    if path:
+        return _load_hook(path, "current_database")()
+    return _operation_alias.get() or DEFAULT_DB_ALIAS
+
+
+class _Atomic(ContextDecorator):
+    """``transaction.atomic`` on :func:`current_alias`, read when the block is entered (a decorator's, at each call)."""
+
+    def __init__(self, savepoint: bool, durable: bool) -> None:
+        self.savepoint, self.durable = savepoint, durable
+        self._blocks: list[transaction.Atomic] = []
+
+    def _recreate_cm(self) -> Self:
+        # Each call of a decorated function enters a block of its own: a recursive or concurrent one shares nothing.
+        return type(self)(self.savepoint, self.durable)
+
+    def __enter__(self) -> None:
+        block = transaction.atomic(using=current_alias(), savepoint=self.savepoint, durable=self.durable)
+        block.__enter__()
+        self._blocks.append(block)
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        self._blocks.pop().__exit__(exc_type, exc_value, traceback)
+
+
+def atomic(func: Callable[..., Any] | None = None, /, *, savepoint: bool = True, durable: bool = False) -> Any:
+    """``transaction.atomic`` on the alias the code running now works on (:func:`current_alias`), never ``default`` by
+    omission: what a ``services.py`` writes instead of a bare ``transaction.atomic()``.
+
+    Inside an operation it is a savepoint of the operation's own transaction, so ``try: with atomic(): create…
+    except IntegrityError:`` rolls back to it and the operation goes on writing; a bare ``transaction.atomic()``
+    opens another transaction on ``default`` when the operation's is elsewhere (hub-next phase 2: the hub's database),
+    and the error aborts the operation's. As Django's, a context manager or a decorator (``@atomic``, ``@atomic(...)``);
+    ``savepoint`` and ``durable`` are Django's. It takes no alias.
+    """
+    if func is None:
+        return _Atomic(savepoint, durable)
+    if not callable(func):
+        raise LiveMisuse(f"atomic() takes no alias ({func!r}): it opens on current_alias().")
+    return _Atomic(savepoint, durable)(func)
+
+
 def add_pending_event(name: str) -> None:
     """Record an event name to notify after the COMMIT of the running command (deduplicated)."""
     operation = current_operation.get()
@@ -302,7 +362,7 @@ def _database(op: Operation, ctx: OperationContext) -> AbstractContextManager[st
     path = getattr(settings, "LIVE", {}).get("operation_database")
     if not path:
         return nullcontext(DEFAULT_DB_ALIAS)
-    return _load_database_hook(path)(op, ctx)
+    return _load_hook(path, "operation_database")(op, ctx)
 
 
 @contextmanager
@@ -319,11 +379,12 @@ def _no_queries(op: Operation) -> Iterator[None]:
 
 
 @cache
-def _load_database_hook(path: str) -> Callable[[Operation, OperationContext], AbstractContextManager[str]]:
+def _load_hook(path: str, key: str) -> Callable[..., Any]:
+    """The callable ``settings.LIVE[key]`` names (``operation_database``, ``current_database``)."""
     try:
         return import_string(path)
     except ImportError as exc:
-        raise LiveMisuse(f'settings.LIVE["operation_database"] = {path!r} cannot be imported: {exc}') from exc
+        raise LiveMisuse(f'settings.LIVE["{key}"] = {path!r} cannot be imported: {exc}') from exc
 
 
 def _notify(scope: Scope, names: list[str]) -> None:
