@@ -29,6 +29,7 @@ fills in its texts, and the shell tells each new row once on the device.
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
+from functools import cache
 from importlib import import_module
 from typing import Any, ClassVar, Literal, get_args
 
@@ -229,6 +230,14 @@ def permissions_for_role(configs: Iterable[LiveAppConfig], role: str) -> frozens
 def all_live_app_configs() -> list[LiveAppConfig]:
     """Every installed app of ours: platform apps and modules."""
     return [config for config in apps.get_app_configs() if isinstance(config, LiveAppConfig)]
+
+
+@cache
+def declared_permissions() -> frozenset[str]:
+    """Every permission an app of ours declares: all the owner of a business holds, and the most a role is given. One
+    no app declares (``<app>.system``, ``system.<app>``: the platform's reactions and scheduled tasks) only «*» reaches:
+    a superuser and the system. Read once: the apps' metadata does not change in a process."""
+    return frozenset(permission for config in all_live_app_configs() for permission in config.permissions)
 
 
 def module_configs() -> list[LiveAppConfig]:

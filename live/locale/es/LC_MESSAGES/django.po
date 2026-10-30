@@ -221,3 +221,8 @@ msgstr "evento de la bandeja de salida"
 #: models.py
 msgid "outbox events"
 msgstr "eventos de la bandeja de salida"
+
+#: assistant.py
+msgctxt "assistant"
+msgid "CONFIRM"
+msgstr "CONFIRMAR"

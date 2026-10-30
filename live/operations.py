@@ -14,6 +14,10 @@ notification after the COMMIT follow that alias's transaction; the notification 
 An operation declared ``database=False`` touches no database: what waits on the network (another service's answer)
 runs with no transaction open, so the wait holds no connection. It keeps the permission, the project's hook and the
 validated output; a query to any database inside it, an event or an ``on_commit`` is a ``LiveMisuse``.
+
+Every operation tells the assistant what it is (PLAN §30: every operation is a tool by default): ``ai=AI(description=…,
+risk="normal"|"high")`` for a tool, ``ai=INTERNAL`` for what is not one, never by omission (``live.E017``). A ``dict``
+declared before ``AI`` existed is still accepted: ``Operation.ai_spec()`` reads it as one of the two.
 """
 
 import re
@@ -22,7 +26,7 @@ from contextlib import AbstractContextManager, ExitStack, contextmanager, nullco
 from contextvars import ContextVar
 from dataclasses import dataclass
 from functools import cache, partial
-from typing import Any, Literal, TypeVar
+from typing import Any, Literal, Self, TypeVar
 
 import pydantic
 from django.conf import settings
@@ -50,10 +54,51 @@ class UnknownOperation(LiveMisuse):
 # it to live.outbox.notify.
 notify_hook: Callable[[Scope, list[str]], None] | None = None
 
-current_operation: ContextVar["Operation | None"] = ContextVar("live_current_operation", default=None)
+current_operation: ContextVar[Operation | None] = ContextVar("live_current_operation", default=None)
 _pending_events: ContextVar[list[str] | None] = ContextVar("live_pending_events", default=None)
 #: The alias the running operation's transaction is open on (``on_commit``).
 _operation_alias: ContextVar[str | None] = ContextVar("live_operation_alias", default=None)
+
+
+#: The words a ``dict`` declaration starts with to say it is no tool (the Hub's before ``INTERNAL`` existed).
+NOT_A_TOOL = ("Not an assistant tool", "System only")
+#: The risks of a tool: ``normal`` asks a click on its card, ``high`` to type a word (or how many records it touches).
+RISKS = ("normal", "high")
+
+
+@dataclass(frozen=True)
+class AI:
+    """An assistant tool: what it does, told to the model in English (``description``); its ``risk`` (``RISKS``); and,
+    for a dangerous write, the read of its own app that shows what it will do on its card (``preview``:
+    ``{"operation": <a query>, "fields": [<data of its answer>]}``)."""
+
+    description: str
+    risk: Literal["normal", "high"] = "normal"
+    preview: dict | None = None
+
+
+class Internal:
+    """What is not an assistant tool: the platform's reactions, scheduled tasks and doors, a screen's own reads, a file.
+    One instance, ``INTERNAL``; falsy, as no declaration is, so ``op.ai or {}`` reads it as nothing for the assistant."""
+
+    _instance: Internal | None = None
+
+    def __new__(cls) -> Self:
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __repr__(self) -> str:
+        return "INTERNAL"
+
+    def __bool__(self) -> bool:
+        return False
+
+    def __reduce__(self) -> str:
+        return "INTERNAL"
+
+
+INTERNAL = Internal()
 
 
 @dataclass(eq=False)
@@ -64,7 +109,8 @@ class Operation:
     input: type[Schema]
     output: type[Schema]
     expose_api: bool
-    ai: Any | None
+    #: ``AI``, ``INTERNAL`` or a ``dict`` (``ai_spec()``); ``None`` only until ``live.E017`` says so.
+    ai: AI | Internal | dict | None
     fn: Callable[[OperationContext, Schema], Any]
     #: ``False``: it touches no database and runs with no transaction open (what waits on the network).
     database: bool = True
@@ -72,6 +118,25 @@ class Operation:
     @property
     def app_label(self) -> str:
         return self.name.split(".", 1)[0]
+
+    def ai_spec(self) -> AI | Internal | None:
+        """What ``ai=`` declares, typed: ``AI`` or ``INTERNAL`` as declared; a ``dict`` read as the rules of the Hub's
+        assistant before ``AI`` existed — one without a description, one that says it is no tool (``NOT_A_TOOL``) and
+        one on what only the platform runs (no permission, or one no app declares: its reactions and scheduled tasks)
+        are ``INTERNAL``, any other the tool it describes —; ``None`` when it declares nothing (``live.E017``)."""
+        declared = self.ai
+        if declared is None or isinstance(declared, AI | Internal):
+            return declared
+        if not isinstance(declared, dict):
+            return None
+        description = str(declared.get("description", "")).strip()
+        if not description or description.startswith(NOT_A_TOOL):
+            return INTERNAL
+        from live.meta import declared_permissions
+
+        if self.permission is None or self.permission not in declared_permissions():
+            return INTERNAL
+        return AI(description, "high" if declared.get("risk") == "high" else "normal", declared.get("preview"))
 
     def __call__(self, ctx: OperationContext, data: Schema) -> Schema:
         if not ctx.has(self.permission):
@@ -144,7 +209,7 @@ def operation(
     input: type[Schema],
     output: type[Schema],
     expose_api: bool = False,
-    ai: Any | None = None,
+    ai: AI | Internal | dict | None = None,
     database: bool = True,
 ) -> Callable[[F], Operation]:
     """Declare and register an operation; misdeclarations fail at import time.
