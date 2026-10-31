@@ -97,15 +97,15 @@ def test_what_is_always_at_hand_and_the_apps_words_are_the_turns():
 
 
 def test_the_misses_come_sorted_by_tool_and_phrase():
-    bad = {"es": ("zz lista nada", "aa muestra nada"), "en": ("nothing at all",)}
+    bad = {"es": ("zz list things", "aa show things"), "en": ("nothing at all",)}
     tools = {op.name: op for op in [tool(f"x.thing{i}.list", "Lists things.", "query") for i in range(3)]}
     tools |= {op.name: op for op in reversed([tool(f"y.other{i}.void", "Voids it.", asks=bad) for i in range(2)])}
     found = misses(tools, language="es", top=1)
     assert [(miss.tool_name, miss.ask) for miss in found] == [
-        ("y__other0__void", "aa muestra nada"),
-        ("y__other0__void", "zz lista nada"),
-        ("y__other1__void", "aa muestra nada"),
-        ("y__other1__void", "zz lista nada"),
+        ("y__other0__void", "aa show things"),
+        ("y__other0__void", "zz list things"),
+        ("y__other1__void", "aa show things"),
+        ("y__other1__void", "zz list things"),
     ]
     assert found == misses(tools, language="es", top=1)
 
@@ -195,3 +195,78 @@ def test_the_catalogue_of_no_tools_is_empty():
 def test_an_operation_without_input_data_exports_its_empty_schema():
     [entry] = export_catalog({"x.thing.list": tool("x.thing.list", "Lists things.", "query")}, "es")
     assert entry["input_schema"] == NoIn.model_json_schema()
+
+
+# ── Layer 1 without the phrase itself: what generalises, not what matches itself ───────────────────────────────────
+
+
+def test_a_tools_own_ask_counts_for_it_unless_left_out():
+    """Words that name nothing of the tool reach it only because the phrase is its own: left out (``own_asks=False``),
+    the phrase is ranked by the tool's other asks and its description, as a new phrase of a person would be."""
+    unrelated = tool("zz.item.create", "Creates an item.", asks={"es": ("xyzzy plugh", "frobnicate quux")})
+    tools = {op.name: op for op in [*NOISE, unrelated]}
+    assert misses(tools, language="es") == []
+    assert {miss.ask for miss in misses(tools, language="es", own_asks=False)} == {"xyzzy plugh", "frobnicate quux"}
+
+
+def test_left_out_a_phrase_still_has_the_tools_other_asks_and_its_description():
+    billing = tool("zz.document.list", "Lists the documents of the business.", "query",
+                   asks={"es": ("¿cuánto he facturado este mes?", "lo facturado este mes"),
+                         "en": ("my billing this month",)})
+    described = tool("zz.payroll.list", "Lists the payrolls of the staff.", "query",
+                     asks={"es": ("las nóminas del personal",), "en": ("the payrolls of the staff",)})
+    tools = {op.name: op for op in [*NOISE, billing, described]}
+    assert misses(tools, language="es", top=1, own_asks=False) == []
+
+
+def test_the_report_says_where_each_ask_ranks_with_its_own_words_and_without():
+    unrelated = tool("zz.item.create", "Creates an item.", asks={"es": ("xyzzy plugh", "créame un item")})
+    tools = {op.name: op for op in [*CATALOGUE.values(), unrelated]}
+    found = assistant_qa.report(tools, "es", top=1)
+    assert [reach.tool_name for reach in found] == sorted(
+        assistant.tool_name(op.name) for op in tools.values() if assistant.asks_of(op).get("es")
+    )
+    [item] = [reach for reach in found if reach.tool_name == "zz__item__create"]
+    assert item.asks == ("xyzzy plugh", "créame un item")
+    assert item.own == (1, 1)
+    assert item.unseen[0] is None or item.unseen[0] > 1
+    assert item.unseen[1] == 1
+    assert (item.own_within, item.unseen_within) == (2, 1)
+    # The same positions ``misses`` reports, mode by mode.
+    for own_asks, positions in ((True, "own"), (False, "unseen")):
+        missed = {(miss.tool_name, miss.ask): miss.position for miss in misses(tools, language="es", top=1,
+                                                                               own_asks=own_asks)}
+        for reach in found:
+            for ask, position in zip(reach.asks, getattr(reach, positions), strict=True):
+                assert missed.get((reach.tool_name, ask), 1) == position
+
+
+def test_the_report_ranks_as_the_turn_does():
+    same = {"es": ("lo de siempre", "lo mismo de siempre")}
+    tools = {op.name: op for op in (tool("a.thing.list", "Lists.", "query", asks=same),
+                                    tool("b.thing.list", "Lists.", "query", asks=same))}
+    [_, b] = assistant_qa.report(tools, "es", top=1)
+    assert b.own == (2, 2)
+    [_, b] = assistant_qa.report(tools, "es", top=1, always=["b.thing.list"])
+    assert b.own == (1, 1)
+
+
+@pytest.mark.parametrize("top", [0, assistant.MAX_TOOLS + 1])
+def test_the_report_refuses_a_top_the_turn_never_offers(top):
+    with pytest.raises(ValueError, match="top"):
+        assistant_qa.report(CATALOGUE, "es", top=top)
+
+
+def test_the_how_to_questions_and_the_projects_words_reach_the_qa():
+    docs = tool("zz.docs.search", "Searches the help.", "query", asks={"es": ("¿cómo invito a alguien?", "ayuda")})
+    tools = {op.name: op for op in [*NOISE, docs]}
+    plain = misses(tools, language="es", top=3, own_asks=False)
+    assert {miss.ask for miss in plain} == {"¿cómo invito a alguien?", "ayuda"}
+    helped = misses(tools, language="es", top=3, own_asks=False, howto=[docs.name])
+    assert helped == [miss for miss in plain if miss.ask == "ayuda"]
+    check = tool("zz.order.get", "An open check with its lines.", "query", asks={"es": ("la cuenta", "otra cosa")})
+    tools = {op.name: op for op in [*NOISE, check]}
+    assert ("zz__order__get", "la cuenta") in [miss[:2] for miss in misses(tools, language="es", top=1,
+                                                                            own_asks=False)]
+    assert [miss.ask for miss in misses(tools, language="es", top=1, own_asks=False,
+                                        synonyms=(("cuenta", "check"),))] == ["otra cosa"]

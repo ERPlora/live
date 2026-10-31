@@ -27,7 +27,7 @@ import uuid
 from collections.abc import Callable, Collection, Iterable, Mapping
 from dataclasses import dataclass
 from functools import cache, lru_cache
-from typing import Any, Protocol
+from typing import Any, NamedTuple, Protocol
 
 import pydantic
 from django.conf import settings
@@ -147,46 +147,106 @@ def catalog(
 # ── By relevance ─────────────────────────────────────────────────────────────────────────────────────────────────
 #
 # A turn offers the few tools of what was asked (``relevant``), chosen with no model nor network: the words of the
-# question, cut to their stems (``stem``: «vendí», «vendido» and «vender» are one), each with the words that name the
-# same thing (``SYNONYMS``: «empleado» is the ``staff``'s ``member``), against each tool's app (its names in both
-# languages), the parts of its name, its ``ai=`` description and what people say to ask for it (its ``asks``); the
-# action asked (``VERBS``) of the thing named weighs most. The same question always gets the same tools.
+# question, cut to their stems (``stem``: «vendí», «vendido» and «vender» are one; «cóbrale» is «cobra»), each with the
+# words that name the same thing (``SYNONYMS``, and the project's own: «cuenta» is a check in the Hub, the account in
+# the SaaS), against each tool's app (its names in both languages), the parts of its name, its ``ai=`` description and
+# what people say to ask for it (its ``asks``); the action asked (``VERBS``) of the thing named weighs most. A question
+# asks to know: its reads come first, and the action it names without asking for it («what can customers pay with?»)
+# is what it asks about; a how-to question («how do I…?») is answered from the help (``howto``). The same question
+# always gets the same tools.
 
 #: What a person says (Spanish or English) → the action of the operations that does it: the last part of an
-#: operation's name or one of its words (``bulk_create``, ``set_image``). A phrase counts when its words come in a row.
+#: operation's name or one of its words (``bulk_create``, ``set_image``). A phrase counts when its words come in a row,
+#: and its words then ask for no other action and name nothing (``_PHRASE_NAMES`` aside): «get rid of» is no ``get``,
+#: «set up» no ``set``, «turn on» no «turno».
 VERBS = {
-    "create": ("crea", "crear", "creame", "alta", "anade", "anadir", "agrega", "agregar", "registra", "registrar",
-               "nuevo", "nueva", "add", "create", "new", "register"),
+    "create": ("crea", "crear", "creame", "alta", "anade", "anadir", "agrega", "agregar", "apunta", "apuntar",
+               "registra", "registrar", "reservar", "nuevo", "nueva", "add", "create", "new", "register", "book"),
+    "add": ("anade", "anadir", "agrega", "agregar", "apunta", "apuntar", "mete", "meter", "ponle", "add"),
     "update": ("cambia", "cambiar", "modifica", "modificar", "actualiza", "actualizar", "edita", "editar", "pon",
-               "ponle", "poner", "update", "change", "edit", "set"),
+               "ponle", "poner", "sube", "subir", "configura", "configurar", "ajusta", "ajustar", "update", "change",
+               "edit", "set", "set up", "configure", "cambia el nombre", "cambiale el nombre", "cambiar el nombre",
+               "ponle de nombre", "ponle el nombre", "ponle nombre", "pon de nombre", "change the name",
+               "change its name"),
     "change": ("cambia", "cambiar", "change"),
-    "rename": ("renombra", "renombrar", "rename"),
-    "set": ("pon", "ponle", "poner", "asigna", "asignar", "set", "assign"),
-    "delete": ("borra", "borrar", "elimina", "eliminar", "quita", "quitar", "delete", "remove"),
-    "remove": ("quita", "quitar", "remove"),
+    "rename": ("renombra", "renombrar", "rename", "cambia el nombre", "cambiale el nombre", "cambiar el nombre",
+               "ponle de nombre", "ponle el nombre", "ponle nombre", "pon de nombre", "change the name",
+               "change its name"),
+    "set": ("pon", "ponle", "poner", "asigna", "asignar", "cambia", "cambiar", "ponle de nombre", "ponle el nombre",
+            "ponle nombre", "pon de nombre", "set", "assign", "change"),
+    "delete": ("borra", "borrar", "borremos", "borrad", "elimina", "eliminar", "quita", "quitar", "delete", "remove",
+               "get rid"),
+    "remove": ("borra", "borrar", "borremos", "borrad", "elimina", "eliminar", "quita", "quitar", "delete", "remove",
+               "get rid"),
+    "erase": ("erase", "wipe", "borra sus datos", "borra todos sus datos", "borra los datos", "borrar sus datos",
+              "borrar todos sus datos", "borrar los datos", "borrad todos sus datos", "borremos todos sus datos",
+              "borremos sus datos"),
     "list": ("lista", "listar", "muestra", "muestrame", "ensena", "ensename", "ver", "dime", "cuantos", "cuantas",
-             "cuales", "busca", "buscar", "list", "show", "find", "search", "how", "which"),
+             "busca", "buscar", "list", "show", "find", "search", "how many"),
+    "count": ("cuantos", "cuantas", "contar", "count", "how many"),
     "get": ("dame", "datos", "detalle", "get", "detail"),
-    "complete": ("cobra", "cobrar", "charge", "pay"),
+    "check": ("cuadra", "cuadran", "cuadrar", "cuadre", "comprueba", "comprobar", "reconcilia", "add up", "adds up",
+              "reconcile"),
+    "stats": ("cuadra", "cuadran", "cuadrar", "cuadre", "cuantos", "cuantas", "add up", "adds up", "how many"),
+    "export": ("exporta", "exportar", "descarga", "descargar", "saca", "sacar", "export", "download"),
+    "import": ("importa", "importar", "sube", "subir", "subeme", "import", "upload"),
+    "upload": ("sube", "subir", "subeme", "upload"),
+    "complete": ("cobra", "cobrar", "paga", "pagar", "charge", "pay"),
     "void": ("anula", "anular", "void"),
     "cancel": ("cancela", "cancelar", "anula", "anular", "cancel"),
     "close": ("cierra", "cerrar", "close"),
-    "open": ("abre", "abrir", "open"),
+    "open": ("abre", "abrir", "empieza", "inicia", "open", "start", "begin"),
+    "start": ("empieza", "inicia", "start", "begin"),
     "enable": ("activa", "activar", "activame", "enciende", "encender", "habilita", "habilitar", "enable", "activate",
-               "turn on", "switch on"),
+               "turn on", "switch on", "quiero el modulo", "quiero la app", "quiero la aplicacion"),
     "disable": ("desactiva", "desactivar", "apaga", "apagar", "deshabilita", "deshabilitar", "disable", "deactivate",
                 "turn off", "switch off"),
     "invite": ("invita", "invitar", "invite"),
-    "print": ("imprime", "imprimir", "print"),
+    "print": ("imprime", "imprimir", "saca", "sacar", "print"),
     "refund": ("devuelve", "devolver", "reembolsa", "reembolsar", "refund"),
 }
-#: The actions that only read: a question that asks for none of the others asks to know, not to do.
-READ_VERBS = frozenset({"list", "get"})
-#: The words that ask to know (with those of ``READ_VERBS``): its reads come before the writes of what it names.
+#: The words of a verb's phrase that still name what they name: «cambia el nombre» changes a name.
+_PHRASE_NAMES = frozenset({"nombre", "name", "datos", "modulo", "app", "aplicacion"})
+#: The actions that only read: a question that asks for none of the others asks to know, not to do. Asked of nothing
+#: named, they bring no tool: «¿cuántos…?» is no list of everything.
+READ_VERBS = frozenset({"list", "get", "count", "check", "stats"})
+#: The actions that turn something on or off: of a setting a write takes («turn off the alerts»), they change it.
+SWITCHES = frozenset({"enable", "disable"})
+#: The actions that change what a write takes.
+_CHANGES = frozenset({"update", "set"})
+#: Words of ``VERBS`` that name a thing, not an action of it: no verb's stem.
+_NOT_VERBS = frozenset({"alta", "nuevo", "nueva", "new", "datos", "detalle", "detail"})
+#: Verbs whose stem joins forms ``VERBS`` does not list, and the irregular ones («haz» is «hacer», «di» is «decir»).
+_OTHER_VERBS = frozenset({"hacer", "decir"})
+_IRREGULAR = {"haz": "hac", "di": "dec"}
+#: The pronouns a Spanish command carries at its end («cóbrale», «dímelo», «quítaselos»), longest first. «te» and a
+#: lone «se» are left out: an English verb ends in them («create») and an assistant is not asked to do it to itself.
+_ENCLITICS = ("selos", "selas", "melos", "melas", "noslo", "nosla", "selo", "sela", "melo", "mela", "les", "los",
+              "las", "nos", "le", "lo", "la", "me")
+#: The words that ask something at the start of a sentence; with an accent («qué», «cómo») anywhere.
 QUESTION_WORDS = frozenset(
-    {"que", "cual", "cuales", "cuanto", "cuanta", "cuantos", "cuantas", "quien", "quienes", "donde", "cuando", "what",
-     "which", "who", "where", "when", "how"}
+    {"que", "cual", "cuales", "cuanto", "cuanta", "cuantos", "cuantas", "quien", "quienes", "como", "what", "which",
+     "who", "whom", "how", "why"}
 )
+_INTERROGATIVE = re.compile(r"\b(?:qué|cuál|cuáles|cuánt[oa]s?|quién(?:es)?|dónde|cuándo|cómo)\b")
+#: The English words a yes/no question starts with.
+_AUXILIARIES = frozenset({"do", "does", "did", "is", "are", "was", "were", "can", "could", "should", "will", "would",
+                          "have", "has", "am", "must", "may", "shall"})
+#: How a question that asks to do starts («can you charge table 4?»): a request, not a question.
+_REQUESTS = frozenset({("can", "you"), ("could", "you"), ("would", "you"), ("will", "you"), ("me", "puedes"),
+                       ("me", "podrias"), ("nos", "puedes"), ("please",), ("puedes",), ("podrias",), ("por", "favor")})
+#: How a how-to question goes on after «how» / «cómo» / «where» / «dónde»: «how do I…», «¿cómo se…?», «¿cómo invito…?»
+#: (any first person in «-o»), «where can I…».
+_HOW_TO = {
+    "how": frozenset({"do", "does", "can", "to", "should", "would", "could", "shall"}),
+    "where": frozenset({"do", "can"}),
+    "como": frozenset({"se", "puedo", "podemos", "puede", "pueden", "hago", "hacemos", "hay", "funciona", "funcionan",
+                       "debo", "debemos", "tengo", "tenemos"}),
+    "donde": frozenset({"se", "puedo", "esta", "estan", "encuentro", "veo"}),
+}
+_CLITICS = frozenset({"lo", "la", "le", "los", "las", "les", "me", "te", "nos"})
+#: Points of the help (``howto``) for a how-to question: as much as an action asked of the thing named.
+HOWTO_POINTS = 9
 #: Words that name nothing by themselves (articles, pronouns, question words, the commonest verbs; Spanish and
 #: English): no word of a tool.
 STOP_WORDS = frozenset(
@@ -205,7 +265,8 @@ STOP_WORDS = frozenset(
 )
 #: Words of one thing of a business, as people say it in Spanish or English and as the operations name it: one of
 #: them asked asks for all. Only what stems cannot join («empleado» and ``staff``, «vendí» and ``sale``, «hoy» and
-#: «today»).
+#: «today»); a phrase («foto de perfil») counts when its words come in a row. A project adds its own
+#: (``relevant``'s ``synonyms``): what a word names there and nowhere else («cuenta»).
 SYNONYMS = (
     ("empleado", "empleada", "trabajador", "trabajadora", "trabajar", "personal", "equipo", "cajero", "cajera",
      "camarero", "camarera", "dependiente", "dependienta", "profesional", "peluquero", "peluquera", "estilista",
@@ -247,47 +308,142 @@ SYNONYMS = (
     ("bono", "voucher"),
     ("menu", "combo"),
     ("ticket", "tique", "recibo", "receipt"),
+    ("aviso", "alerta", "notificacion", "alert", "notice", "notification"),
+    ("grupo", "group"),
+    ("compra", "purchase"),
+    ("dato", "datos", "data"),
+    ("descarga", "descargar", "download"),
+    ("ficha", "card"),
+    ("nota", "note"),
+    ("dispositivo", "aparato", "tablet", "portatil", "ordenador", "device", "laptop", "computer"),
+    ("carpeta", "folder"),
+    ("perfil", "profile"),
+    ("avatar", "foto de perfil", "profile picture", "profile photo"),
+    ("recibir", "receive"),
+    ("devolucion", "reembolso", "refund"),
+    ("aparcar", "aparcada", "park"),
+    ("etiqueta", "tag"),
+    ("ajustes", "ajuste", "configuracion", "configurar", "configura", "settings", "setting", "setup", "configure",
+     "set up"),
 )
 _WORD = re.compile(r"[a-z0-9]+")
+#: What ends a sentence or a quote: its first word may be a command («Ficha la entrada»), a question word, a name.
+_BREAK = re.compile(r"[«»\"“”()\[\].,;:!?¿¡\n]+")
 #: Words kept whole: cut, they would be another word's stem («personal», the staff, is not «persona»).
 _WHOLE = frozenset({"personal"})
+#: Words kept apart from another's stem (as said, or without their plural «s»): «tablet» is no «table», «compartido»
+#: no «company», «peluquería» (the business) no «peluquero» (its staff), «carta» (the menu) no «cart», «contrato» and
+#: «contraseña» no «control», «recibo» (a receipt) no «recibir», «ficha» (a customer's card) no «fichar»,
+#: «settings» no «set», «registro» (a record) no «register» (the till).
+_APART_WORDS = {"ficha": "ficha", "carta": "carta", "recibo": "recibo", "registro": "registro", "fiche": "fichar",
+                "ficho": "fichar"}
+_APART_PREFIXES = (
+    ("peluqueri", "peluqueri"), ("contrasen", "contrasen"), ("compart", "compart"), ("contract", "contrat"),
+    ("contrat", "contrat"), ("receipt", "receipt"), ("fichaj", "fichar"), ("fichar", "fichar"), ("fichad", "fichar"),
+    ("fichand", "fichar"), ("ficham", "fichar"), ("fichal", "fichar"), ("tablet", "tablet"), ("setting", "setting"),
+)
+#: A noun that is a command at the start of a sentence, followed by these: «ficha la entrada de Ana» clocks in, «abre
+#: la ficha de Ana» is her card; «reserva una mesa» books, «cancela la reserva» names one.
+_COMMANDS = {
+    "ficha": ("fichar", frozenset({"a", "al", "la", "el", "mi", "su", "tu", "ya", "entrada", "salida", "ahora"})),
+    "reserva": ("reservar", frozenset({"una", "un", "mesa", "para", "a", "al", "hoy", "manana"})),
+}
 #: Endings of a Spanish verb that end in «s» («vendimos»): cut before a plural «s» is.
 _VERB_S_ENDINGS = ("amos", "emos", "imos")
 #: Endings cut once a plural «s» is, longest first: Spanish and English tenses, participles and gender.
 _ENDINGS = ("ieron", "iendo", "ando", "aron", "aste", "iste", "ado", "ido", "ada", "ida", "aba", "ing", "ar", "er",
             "ir", "ed", "a", "e", "i", "o")
-#: The verbs said in two words.
-_PHRASES = tuple(form for forms in VERBS.values() for form in forms if " " in form)
+#: English endings before which a verb doubles its last consonant («tagged», «stopping»; never «billing»).
+_DOUBLING = frozenset({"ed", "ing"})
+#: The verbs said in two words or more, and what only asks («give me», «tell me»): their words name nothing.
+_FILLERS = ("give me", "give us", "tell me", "tell us", "let me know")
+_PHRASES = tuple(sorted({form for forms in VERBS.values() for form in forms if " " in form} | set(_FILLERS)))
+#: Each verb said in one word → the actions it asks for.
+_VERB_OF: dict[str, frozenset[str]] = {}
+for _verb, _forms in VERBS.items():
+    for _form in _forms:
+        if " " not in _form:
+            _VERB_OF[_form] = _VERB_OF.get(_form, frozenset()) | {_verb}
+#: The words a verb is said with: their stem keeps a root of three letters («sube», «subir» → «sub»).
+_VERB_WORDS = frozenset(_VERB_OF) - _NOT_VERBS | _OTHER_VERBS
 
 
 def _plain(text: str) -> str:
     return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().lower()
 
 
+def _unclitic(word: str) -> str | None:
+    """The command ``word`` without the pronouns at its end («cobrale» → «cobra», «dime» → «di»), when what is left is
+    a verb; else ``None``."""
+    for clitic in _ENCLITICS:
+        if word.endswith(clitic) and len(word) > len(clitic):
+            rest = word[: -len(clitic)]
+            if rest in _VERB_WORDS or rest in _IRREGULAR:
+                return rest
+    return None
+
+
+def _apart(word: str) -> str | None:
+    if word in _APART_WORDS:
+        return _APART_WORDS[word]
+    return next((kept for prefix, kept in _APART_PREFIXES if word.startswith(prefix)), None)
+
+
 @lru_cache(maxsize=65_536)
 def stem(word: str) -> str:
-    """``word`` (plain: lowercase, no accents) cut to its stem, Spanish or English: a plural «s» and one ending of a
-    verb or a gender off, then five letters at most («vendí», «vendido», «vendimos» → «vend»; «clientes», «client» →
-    «clien»). The root keeps four letters, three for a plural («apps» → «app»; «mesa» is never «mes»); a word of
-    ``_WHOLE`` stays whole."""
+    """``word`` (plain: lowercase, no accents) cut to its stem, Spanish or English: the pronouns of a command off
+    («cóbrale» is «cobra»), a plural «s» and one ending of a verb or a gender off, then five letters at most («vendí»,
+    «vendido», «vendimos» → «vend»; «clientes», «client» → «clien»). The root keeps four letters, three for a plural
+    («apps» → «app»; «mesa» is never «mes») and for a verb («sube», «subir» → «sub»); an English verb's doubled
+    consonant goes with its ending («tagged» → «tag»); a word of ``_WHOLE`` stays whole and one kept apart
+    (``_APART_WORDS``, ``_APART_PREFIXES``) has its own stem."""
     if word in _WHOLE:
         return word
+    bare = _unclitic(word)
+    verbal = bare is not None or word in _VERB_WORDS
+    word = bare or word
+    if word in _IRREGULAR:
+        return _IRREGULAR[word]
+    if (kept := _apart(word)) is not None:
+        return kept
     for ending in _VERB_S_ENDINGS:
         if word.endswith(ending) and len(word) - len(ending) >= 4:
             return word[: -len(ending)][:5]
     if word.endswith("s") and len(word) >= 4:
         word = word[:-1]
+        if (kept := _apart(word)) is not None:
+            return kept
+    root = 3 if verbal else 4
     for ending in _ENDINGS:
-        if word.endswith(ending) and len(word) - len(ending) >= 4:
+        if word.endswith(ending) and len(word) - len(ending) >= root:
             word = word[: -len(ending)]
+            if ending in _DOUBLING and word[-1] == word[-2] and word[-1] not in "aeioulsfz":
+                word = word[:-1]
             break
     return word[:5]
+
+
+def _sentences(text: str) -> list[list[str]]:
+    """The plain words of ``text``, by sentence or quote (``_BREAK``), a noun at the start that is a command
+    (``_COMMANDS``) said as its verb."""
+    found = []
+    for part in _BREAK.split(text):
+        words = _WORD.findall(_plain(part))
+        if words and words[0] in _COMMANDS:
+            verb, before = _COMMANDS[words[0]]
+            if len(words) > 1 and words[1] in before:
+                words[0] = verb
+        if words:
+            found.append(words)
+    return found
 
 
 def stems(text: str) -> set[str]:
     """The words of ``text`` that may name something, as their stems (``stem``): without accents, lowercase, of three
     letters or more and none that names nothing by itself (``STOP_WORDS``)."""
-    return {stem(word) for word in _WORD.findall(_plain(text)) if len(word) >= 3 and word not in STOP_WORDS}
+    return {
+        stem(word) for words in _sentences(text) for word in words if len(word) >= 3 and word not in STOP_WORDS
+    }
 
 
 @lru_cache(maxsize=16_384)
@@ -301,42 +457,174 @@ def _taken(schema: type) -> frozenset[str]:
     return frozenset(stems(" ".join(name.replace("_", " ") for name in getattr(schema, "model_fields", {}))))
 
 
-@cache
-def _synonyms() -> dict[str, frozenset[str]]:
-    """Each stem of ``SYNONYMS`` → the stems of every group it is in."""
+def _groups(synonyms: Iterable[Iterable[str]]) -> tuple[tuple[str, ...], ...]:
+    return tuple(tuple(group) for group in synonyms)
+
+
+@lru_cache(maxsize=64)
+def _synonyms(extra: tuple[tuple[str, ...], ...] = ()) -> tuple[dict[str, frozenset[str]], tuple]:
+    """Each stem of ``SYNONYMS`` and of the project's ``extra`` groups → the stems of every group it is in; and each
+    phrase of them → the stems of its group's words."""
     index: dict[str, set[str]] = {}
-    for group in SYNONYMS:
-        said = {stem(word) for word in group}
+    phrases: list[tuple[str, frozenset[str]]] = []
+    for group in (*SYNONYMS, *extra):
+        said = {stem(_plain(word)) for word in group if " " not in word}
         for one in said:
             index.setdefault(one, set()).update(said)
-    return {one: frozenset(group) for one, group in index.items()}
+        phrases += [(f" {' '.join(_WORD.findall(_plain(word)))} ", frozenset(said)) for word in group if " " in word]
+    return {one: frozenset(group) for one, group in index.items()}, tuple(phrases)
 
 
 @lru_cache(maxsize=65_536)
-def _concept(word: str) -> frozenset[str]:
-    """What the plain ``word`` names: its stem and those of its synonyms."""
+def _concept(word: str, extra: tuple[tuple[str, ...], ...] = ()) -> frozenset[str]:
+    """What the plain ``word`` names: its stem and those of its synonyms (``SYNONYMS`` and the project's ``extra``)."""
     one = stem(word)
-    return _synonyms().get(one, frozenset()) | {one}
+    return _synonyms(extra)[0].get(one, frozenset()) | {one}
 
 
-def _asked(texts: Iterable[str]) -> tuple[set[frozenset[str]], set[str], bool]:
-    """What ``texts`` ask: what each of their words names (``_concept``; a word of a verb's phrase names nothing), the
-    actions they ask for (``VERBS``) and whether they ask to know (``QUESTION_WORDS``, ``READ_VERBS``)."""
-    said: set[str] = set()
-    phrases: set[str] = set()
-    naming: list[str] = []
+class Asked(NamedTuple):
+    """What texts ask (``asked``): what their words name (``concepts``, each a set of stems), the actions they ask for
+    (``verbs``), whether they ask to know (``reading``), what a question asks about (``about``: what the action it names
+    without asking for it names, «pay» in «what can customers pay with?»), whether it asks how something is done
+    (``howto``) and what each command acts on (``objects``: the first thing it names from its verb on — «crea la
+    carpeta Facturas» creates a folder; «cobra la mesa» charges a sale, the verb's own thing), of which ``records``
+    the ones a word after the verb names («borra el cliente Ana»: a customer to find)."""
+
+    concepts: frozenset[frozenset[str]]
+    verbs: frozenset[str]
+    reading: bool
+    about: frozenset[frozenset[str]]
+    howto: bool
+    objects: frozenset[frozenset[str]] = frozenset()
+    records: frozenset[frozenset[str]] = frozenset()
+
+
+def _phrase_verbs(phrase: str) -> frozenset[str]:
+    """The actions a verb said in words (`` set up ``) asks for."""
+    return frozenset(verb for verb, forms in VERBS.items() if phrase.strip() in forms)
+
+
+def _verbs_of(word: str) -> frozenset[str]:
+    """The actions the plain ``word`` asks for: as said, or without the pronouns of a command («cóbrale»)."""
+    found = _VERB_OF.get(word)
+    if found is None and (bare := _unclitic(word)) is not None:
+        found = _VERB_OF.get(bare)
+    return found or frozenset()
+
+
+def _starts(sentences: list[list[str]], openings: Collection[tuple[str, ...]]) -> bool:
+    return any(tuple(words[: len(opening)]) == opening for words in sentences for opening in openings)
+
+
+def _how_to(sentences: list[list[str]]) -> str | None:
+    """Whether a sentence asks how something is done (``_HOW_TO``): the word that says what is done after «cómo»
+    («invito»), «-» when none; ``None`` when no sentence asks so."""
+    for words in sentences:
+        after = [word for word in words[1:] if word not in _CLITICS]
+        if words[0] in _HOW_TO and after:
+            if after[0] in _HOW_TO[words[0]]:
+                return "-"
+            if words[0] == "como" and after[0].endswith("o") and len(after[0]) >= 4:
+                return after[0]
+    return None
+
+
+def _is_question(text: str, sentences: list[list[str]]) -> bool:
+    """Whether ``text`` is a question: a question word with its accent, a text that starts with one or with the
+    auxiliary of a yes/no question, or its marks («?», «¿») with no sentence that starts with a command («crea un
+    cliente, ¿vale?»). An unaccented «que» asks only with the marks: inside a sentence («dice que sí»), after a command
+    («anula el ticket, que me equivoqué») or at the start of a wish («que no se pueda cobrar sin cliente») it is
+    none."""
+    if _INTERROGATIVE.search(text.lower()):
+        return True
+    marked = "?" in text or "¿" in text
+    first = sentences[0][0] if sentences else ""
+    if first in _AUXILIARIES or (first in QUESTION_WORDS and (first != "que" or marked)):
+        return True
+    return marked and not any(_verbs_of(words[0]) - READ_VERBS for words in sentences)
+
+
+def _objects(
+    sentences: list[list[str]], acting: Mapping[str, frozenset[str]], verbal: Collection[str], extra: tuple
+) -> tuple[set[frozenset[str]], set[frozenset[str]]]:
+    """What the command of each sentence acts on: the first thing named from its verb on — the verb's own when it
+    names one («cobra»: a sale), else the first word after it that names something («crea la carpeta»: a folder) —;
+    and of those, the ones named by a word after the verb (a record to find)."""
+    found: set[frozenset[str]] = set()
+    after: set[frozenset[str]] = set()
+    for words in sentences:
+        seen = False
+        for word in words:
+            if word in acting or word in verbal:
+                own = _concept(word, extra) if word in acting and not seen else frozenset()
+                if len(own) > 1:
+                    found.add(own)
+                    break
+                seen = True
+            elif seen and len(word) >= 3 and word not in STOP_WORDS:
+                found.add(_concept(word, extra))
+                after.add(_concept(word, extra))
+                break
+    return found, after
+
+
+def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked:
+    """What ``texts`` ask (``Asked``): what each of their words names (``_concept``, with the project's ``synonyms``; a
+    word of a verb's phrase names nothing, nor a verb but by its synonyms: «show me», «dame»), the actions they ask for
+    (``VERBS``, a command with its pronouns too) and whether they ask to know (a question, ``_is_question``, or a read
+    of ``READ_VERBS``). A question asks to do nothing it names unless it is a request («can you…?») or asks how («how
+    do I…?»): its other actions are what it asks about (``Asked.about``)."""
+    extra = _groups(synonyms)
+    phrases_named = _synonyms(extra)[1]
+    concepts: set[frozenset[str]] = set()
+    verbs: set[str] = set()
+    about: set[frozenset[str]] = set()
+    objects: set[frozenset[str]] = set()
+    records: set[frozenset[str]] = set()
+    reading = howto = False
     for text in texts:
-        words = _WORD.findall(_plain(text))
-        joined = f" {' '.join(words)} "
-        found = {phrase for phrase in _PHRASES if f" {phrase} " in joined}
+        sentences = _sentences(text)
+        joined = [f" {' '.join(words)} " for words in sentences]
+        found = {phrase for phrase in _PHRASES if any(f" {phrase} " in one for one in joined)}
         verbal = {word for phrase in found for word in phrase.split()}
-        phrases |= found
-        said.update(words)
-        naming += [word for word in words if word not in verbal]
-    verbs = {verb for verb, forms in VERBS.items() if any(form in phrases or form in said for form in forms)}
-    reading = bool(said & QUESTION_WORDS) or any(said & set(VERBS[verb]) for verb in READ_VERBS)
-    concepts = {_concept(word) for word in naming if len(word) >= 3 and word not in STOP_WORDS}
-    return concepts, verbs, reading
+        said = {verb for verb, forms in VERBS.items() if not found.isdisjoint(forms)}
+        acting: dict[str, frozenset[str]] = {}
+        for words in sentences:
+            for word in words:
+                if word not in verbal and (of := _verbs_of(word)):
+                    acting[word] = of
+        doing = _how_to(sentences)
+        if doing and doing != "-" and doing not in acting:
+            acting[doing] = _verbs_of(doing[:-1] + "a") or _verbs_of(doing[:-1] + "e")
+        for of in acting.values():
+            said |= of
+        # A word that asks (a verb) names a thing only through its synonyms («cobra»: a sale); «show», «dame» none.
+        naming = [
+            word for words in sentences for word in words
+            if (word not in verbal or word in _PHRASE_NAMES) and len(word) >= 3 and word not in STOP_WORDS
+            and (word not in acting or len(_concept(word, extra)) > 1)
+        ]
+        concepts |= {_concept(word, extra) for word in naming}
+        concepts |= {group for phrase, group in phrases_named if any(phrase in one for one in joined)}
+        acted, named_after = _objects(sentences, acting, verbal, extra)
+        objects |= acted
+        records |= named_after
+        question = _is_question(text, sentences) and not _starts(sentences, _REQUESTS)
+        if question and not doing:
+            asked_about = said - READ_VERBS
+            about |= {_concept(word, extra) for word, of in acting.items() if of & asked_about}
+            about |= {
+                group
+                for phrase, group in phrases_named
+                if phrase.strip() in found and _phrase_verbs(phrase) & asked_about
+            }
+            said -= asked_about
+        reading = reading or question or not said.isdisjoint(READ_VERBS)
+        howto = howto or doing is not None
+        verbs |= said
+    return Asked(
+        frozenset(concepts), frozenset(verbs), reading, frozenset(about), howto, frozenset(objects), frozenset(records)
+    )
 
 
 @cache
@@ -354,6 +642,27 @@ def app_words(label: str, language: str) -> frozenset[str]:
     return frozenset(words)
 
 
+#: The stems of an operation's entity that name an app («base.app.enable»): an app named by its name is that entity.
+_APP_THING = frozenset(stem(word) for word in ("app", "aplicacion", "modulo", "module"))
+
+
+#: The words of an action that say for what, not what it acts on (``list_for_customer``, ``by_phone``,
+#: ``create_from_sale``): what comes after them is no object of it.
+_QUALIFIERS = frozenset({"for", "by", "from", "to", "of", "in", "with"})
+
+
+@lru_cache(maxsize=8_192)
+def _parts(action: str) -> tuple[frozenset[str], frozenset[str], frozenset[str]]:
+    """The stems of what an operation's ``action`` acts on — its words before a qualifier (``_QUALIFIERS``) that are no
+    action asked (``create_folder`` → «folder», ``avatar_set`` → «avatar», ``today``) —, of the actions it does
+    (``create``) and of what it says for what (``customer`` of ``list_for_customer``)."""
+    words = action.split("_")
+    cut = next((i for i, word in enumerate(words) if word in _QUALIFIERS), len(words))
+    acted_on = [word for word in words[:cut] if word not in VERBS]
+    doing = [word for word in words[:cut] if word in VERBS]
+    return _stems_of(" ".join(acted_on)), _stems_of(" ".join(doing)), _stems_of(" ".join(words[cut:]))
+
+
 def relevant(
     tools: dict[str, Operation],
     texts: Iterable[str],
@@ -361,33 +670,106 @@ def relevant(
     *,
     always: Iterable[str] = (),
     app_words: Callable[[str, str], frozenset[str]] = app_words,
+    synonyms: Iterable[Iterable[str]] = (),
+    howto: Iterable[str] = (),
 ) -> list[Operation]:
     """The tools of what ``texts`` ask, best first, at most ``MAX_TOOLS``; ``always`` (what is always at hand) first.
-    Each thing the question names (``_asked``) counts once per place of the tool it is in: its app (in either
-    language, ``app_words``) 4, the entity or the action of its name 2 each, its description, what people say to ask
-    for it (``asks_of``, in any language) and the data its input takes 1 each. The action asked adds 3, and 6 more
-    when the question also names the tool's entity (the thing asked to be done: «activa la app» is
-    ``base.app.enable``, never an operation of the app named after it), 7 when its
-    action is that verb itself (``create``, before ``bulk_create``), 4 when it names only a datum the tool takes
-    («cambia el precio»: a write that takes a ``price``). A question that asks to know and to do nothing puts the
-    reads first (1). Ties go by name: the same question, the same tools."""
-    asked, verbs, reading = _asked(texts)
+
+    Each thing the question names (``asked``, with the project's ``synonyms``) counts 2 when it names the tool's entity
+    or what its action acts on (``_parts``: ``create_folder`` acts on a folder), else 1 when it names only the tool's
+    app (in either language, ``app_words``: an app's name breaks ties, it never drowns the thing asked); 2 more when it
+    names the action itself, 1 when it names what the action says it is for (``list_for_customer``), and 1 for each of
+    its description, what people say to ask for it (``asks_of``, in any language) and the data its input takes.
+
+    The action asked (``VERBS``) of a thing the question names adds 9, 1 more when the tool's action is that verb
+    itself (``create``, before ``bulk_create``) and 3 more when that thing is what the command acts on
+    (``Asked.objects``: «crea la carpeta Facturas» creates a folder, not an invoice); «activa la app» is
+    ``base.app.enable``, never an operation of the app named after it, and so is «activa los clientes», an app named
+    by its name. Of no thing named, it adds 7 to a write that takes a datum the question names («cambia el precio»: a
+    write that takes a ``price``; «turn off the alerts»: a write that takes them, as turning on or off changes it), 3 to
+    any other write unless what the command acts on is a tool's thing («reserva una mesa»: no write of the staff), 1 to
+    a read of the app named and nothing to any other read: «¿cuántos…?» is no list of everything, and what a read is
+    filtered by is not what it reads.
+
+    A write of a thing named after its verb brings its reads 3 («borra el cliente Ana»: the read that finds Ana). A
+    question that asks to know and to do nothing puts the reads first (1), a thing's list before its other reads (1),
+    and the reads of what it asks about 3 more («what can customers pay with?»: the payment methods); a how-to question
+    gives the help (``howto``, the project's documentation search) ``HOWTO_POINTS``. Ties go by name: the same
+    question, the same tools."""
+    return _relevant(tools, texts, language, always=always, app_words=app_words, synonyms=synonyms, howto=howto)
+
+
+def _relevant(
+    tools: dict[str, Operation],
+    texts: Iterable[str],
+    language: str,
+    *,
+    always: Iterable[str] = (),
+    app_words: Callable[[str, str], frozenset[str]] = app_words,
+    synonyms: Iterable[Iterable[str]] = (),
+    howto: Iterable[str] = (),
+    asks: Callable[[Operation], frozenset[str]] | None = None,
+) -> list[Operation]:
+    """``relevant``, with what each tool's asks say read by ``asks`` (the QA leaves out the phrase it ranks)."""
+    said = asked(texts, synonyms)
+    concepts, verbs, about = said.concepts, said.verbs, said.about
+    asks = asks or _asks_stems
     writing = bool(verbs - READ_VERBS)
+    switching = not verbs.isdisjoint(SWITCHES)
+    helps = frozenset(howto) if said.howto else frozenset()
     always = tuple(always)
 
     def named(words: frozenset[str]) -> int:
-        return sum(1 for concept in asked if not concept.isdisjoint(words))
+        return sum(1 for concept in concepts if not concept.isdisjoint(words))
+
+    labels = {op.app_label for op in tools.values()} if switching else set()
+    apps_named = any(named(app_words(label, language)) for label in labels)
+    # What a command acts on, when a tool is of it: then the writes of other things are not what it asks.
+    aimed_at = writing and any(
+        not concept.isdisjoint(_stems_of(op.name.split(".")[1].replace("_", " ")))
+        or not concept.isdisjoint(_parts(op.name.split(".")[2])[0])
+        for concept in said.objects
+        for op in tools.values()
+    )
 
     def score(op: Operation) -> int:
         app, entity, action = op.name.split(".")
-        thing = named(_stems_of(entity.replace("_", " ")))
-        points = 4 * named(app_words(app, language)) + 2 * thing + 2 * named(_stems_of(action.replace("_", " ")))
+        named_app, named_entity = app_words(app, language), _stems_of(entity.replace("_", " "))
+        acted_on, doing, qualified = _parts(action)
+        places = thing = 0
+        aimed = found = app_named = False
+        for concept in concepts:
+            is_thing = not concept.isdisjoint(named_entity) or not concept.isdisjoint(acted_on)
+            in_app = not concept.isdisjoint(named_app)
+            thing += is_thing
+            aimed = aimed or (is_thing and concept in said.objects)
+            found = found or (is_thing and concept in said.records)
+            app_named = app_named or in_app
+            places += 2 if is_thing else in_app
+            places += 2 * (not concept.isdisjoint(doing)) + (not concept.isdisjoint(qualified))
+        if not thing and apps_named and not _APP_THING.isdisjoint(named_entity):
+            thing = 1
         takes = named(_taken(op.input))
-        points += named(_stems_of(description(op))) + named(_asks_stems(op)) + takes
-        if not verbs.isdisjoint(action.split("_")):
-            points += 3 + (6 + (action in verbs) if thing else 4 if takes else 0)
-        if reading and not writing and op.kind == "query":
-            points += 1
+        points = places + named(_stems_of(description(op))) + named(asks(op)) + takes
+        acts = action.split("_")
+        matched = verbs.intersection(acts)
+        if matched:
+            if thing:
+                points += 9 + (action in verbs) + 3 * aimed
+            else:
+                writes = matched - READ_VERBS
+                points += 7 if takes and writes else 3 if writes and not aimed_at else 1 if app_named else 0
+        elif switching and takes and not _CHANGES.isdisjoint(acts):
+            points += 7
+        if op.kind == "query":
+            if about and any(not concept.isdisjoint(named_entity) for concept in about):
+                points += 3
+            if writing and found:
+                points += 3
+            if said.reading and not writing:
+                points += 1 + (action == "list" and thing > 0)
+        if op.name in helps:
+            points += HOWTO_POINTS
         return points
 
     first = [tools[name] for name in always if name in tools]
