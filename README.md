@@ -201,12 +201,12 @@ Las mecánicas del asistente que no dependen de la pasarela, las mismas en el Hu
 `catalog(ctx, active_labels=…, not_from_chat=…, approvable=…)` (las herramientas de la persona: operaciones con
 `AI`, de las apps encendidas, con su permiso), `relevant(tools, texts, language, always=…, app_words=…)` (como mucho
 `MAX_TOOLS`, sin modelo ni red: las raíces de las palabras de la pregunta en español o inglés, `stem`/`stems`, con sus
-sinónimos del negocio, `SYNONYMS`, contra la app, el nombre, la descripción y los datos que toma cada herramienta; pesa más la acción
-pedida, `VERBS`, sobre la cosa que se nombra; live#16), `tool_spec`, `card(op, arguments, language, words)` (la tarjeta
-de una escritura) con `confirmed` y `CONFIRM_WORD`, `invalid_arguments` (los datos que la operación rechazaría vuelven
-al modelo antes de dibujar la tarjeta, salvo la escritura peligrosa que no nombra registros, `blocked`; live#17),
-`run_tool` (ejecuta como la persona, resultado cortado en `MAX_RESULT_CHARS`), `preview` (la lectura que nombra
-`AI.preview`) y `rounds`/`MAX_ROUNDS`. Cada proyecto dice los datos con sus palabras (`Words`: momento,
+sinónimos del negocio, `SYNONYMS`, contra la app, el nombre, la descripción y los datos que toma cada herramienta; pesa
+más la acción pedida, `VERBS`, sobre la cosa que se nombra; live#16), `tool_spec`, `card(op, arguments, language,
+words)` (la tarjeta de una escritura) con `confirmed` y `CONFIRM_WORD`, `invalid_arguments` (los datos que la operación
+rechazaría vuelven al modelo antes de dibujar la tarjeta, salvo la escritura peligrosa que no nombra registros,
+`blocked`; live#17), `run_tool` (ejecuta como la persona, resultado cortado en `MAX_RESULT_CHARS`), `preview` (la
+lectura que nombra `AI.preview`) y `rounds`/`MAX_ROUNDS`. Cada proyecto dice los datos con sus palabras (`Words`: momento,
 registro, importe, nombre de la app); `PlainWords` no lee nada (euros con 2 decimales, UTC con los formatos de
 Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda del negocio, `refers`) viven en su
 `base/assistant.py`.
