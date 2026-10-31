@@ -24,7 +24,7 @@ import json
 import re
 import unicodedata
 import uuid
-from collections.abc import Callable, Collection, Iterable
+from collections.abc import Callable, Collection, Iterable, Mapping
 from dataclasses import dataclass
 from functools import cache, lru_cache
 from typing import Any, Protocol
@@ -99,6 +99,27 @@ def preview_of(op: Operation) -> Any:
     return declared.get("preview") if isinstance(declared, dict) else None
 
 
+def asks_of(op: Operation) -> dict[str, tuple[str, ...]]:
+    """What a person would type to ask for ``op``, by language, as its ``ai=`` says it (an ``AI``'s or a ``dict``'s
+    ``asks``): each phrase stripped, an empty or repeated one left out, a lone phrase read as one; a language with none
+    left, anything that is not a mapping of language → phrases and what is no tool (``Operation.ai_spec``: never
+    offered, so nothing asks for it) read as nothing."""
+    spec = op.ai_spec()
+    said = spec.asks if isinstance(spec, AI) else None
+    if not isinstance(said, Mapping):
+        return {}
+    asks: dict[str, tuple[str, ...]] = {}
+    for language, phrases in said.items():
+        if isinstance(phrases, str):
+            phrases = (phrases,)
+        if not isinstance(language, str) or not isinstance(phrases, list | tuple):
+            continue
+        kept = tuple(dict.fromkeys(phrase.strip() for phrase in phrases if isinstance(phrase, str) and phrase.strip()))
+        if kept:
+            asks[language] = kept
+    return asks
+
+
 def is_tool(op: Operation, *, not_from_chat: Collection[str] = frozenset()) -> bool:
     """Whether ``op`` is an assistant tool: its ``ai=`` is one (``Operation.ai_spec``) and the project does not keep it
     out of the chat (``not_from_chat``: emptying the business, a file to download)."""
@@ -128,8 +149,8 @@ def catalog(
 # A turn offers the few tools of what was asked (``relevant``), chosen with no model nor network: the words of the
 # question, cut to their stems (``stem``: «vendí», «vendido» and «vender» are one), each with the words that name the
 # same thing (``SYNONYMS``: «empleado» is the ``staff``'s ``member``), against each tool's app (its names in both
-# languages), the parts of its name and its ``ai=`` description; the action asked (``VERBS``) of the thing named
-# weighs most. The same question always gets the same tools.
+# languages), the parts of its name, its ``ai=`` description and what people say to ask for it (its ``asks``); the
+# action asked (``VERBS``) of the thing named weighs most. The same question always gets the same tools.
 
 #: What a person says (Spanish or English) → the action of the operations that does it: the last part of an
 #: operation's name or one of its words (``bulk_create``, ``set_image``). A phrase counts when its words come in a row.
@@ -343,9 +364,10 @@ def relevant(
 ) -> list[Operation]:
     """The tools of what ``texts`` ask, best first, at most ``MAX_TOOLS``; ``always`` (what is always at hand) first.
     Each thing the question names (``_asked``) counts once per place of the tool it is in: its app (in either
-    language, ``app_words``) 4, the entity or the action of its name 2 each, its description and the data its input
-    takes 1 each. The action asked adds 3, and 6 more when the question also names the tool's entity (the thing asked
-    to be done: «activa la app» is ``base.app.enable``, never an operation of the app named after it), 7 when its
+    language, ``app_words``) 4, the entity or the action of its name 2 each, its description, what people say to ask
+    for it (``asks_of``, in any language) and the data its input takes 1 each. The action asked adds 3, and 6 more
+    when the question also names the tool's entity (the thing asked to be done: «activa la app» is
+    ``base.app.enable``, never an operation of the app named after it), 7 when its
     action is that verb itself (``create``, before ``bulk_create``), 4 when it names only a datum the tool takes
     («cambia el precio»: a write that takes a ``price``). A question that asks to know and to do nothing puts the
     reads first (1). Ties go by name: the same question, the same tools."""
@@ -361,7 +383,7 @@ def relevant(
         thing = named(_stems_of(entity.replace("_", " ")))
         points = 4 * named(app_words(app, language)) + 2 * thing + 2 * named(_stems_of(action.replace("_", " ")))
         takes = named(_taken(op.input))
-        points += named(_stems_of(description(op))) + takes
+        points += named(_stems_of(description(op))) + named(_asks_stems(op)) + takes
         if not verbs.isdisjoint(action.split("_")):
             points += 3 + (6 + (action in verbs) if thing else 4 if takes else 0)
         if reading and not writing and op.kind == "query":
@@ -371,6 +393,13 @@ def relevant(
     first = [tools[name] for name in always if name in tools]
     ranked = sorted((op for op in tools.values() if op.name not in always), key=lambda op: (-score(op), op.name))
     return [*first, *ranked][:MAX_TOOLS]
+
+
+@lru_cache(maxsize=4_096)
+def _asks_stems(op: Operation) -> frozenset[str]:
+    """The stems of every phrase of ``op``'s asks, in every language: read once per operation (by identity; its
+    ``ai=`` does not change once declared), however many turns rank it — the QA ranks once per ask of hundreds."""
+    return _stems_of(" ".join(phrase for phrases in asks_of(op).values() for phrase in phrases))
 
 
 @cache

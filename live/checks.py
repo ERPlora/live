@@ -28,11 +28,17 @@ live stream of the channel re-reads its context, is a list of events that some `
 PLAN §30 (round 2026-10-22b): every operation tells the assistant what it is — a tool, ``ai=AI(description=…,
 risk=…)``, or not one, ``ai=INTERNAL`` — never by omission, with a risk of ``RISKS``; a ``dict`` with its
 ``description`` is still accepted (E017). Like the metadata checks, it looks at every registered operation.
+
+Docs plan 2026-10-31 (the assistant's knowledge and QA): every tool of the apps a project lists in
+``LIVE_ASSISTANT_ASKS_REQUIRED`` says what a person would type to ask for it (``AI.asks``) in English and Spanish, at
+least two distinct phrases each, none its own name nor longer than ``MAX_ASK_CHARS`` (E020). An app is listed once all
+of its tools say them: the Hub's hundreds of tools are not migrated at once.
 """
 
 import re
 import string
 import typing
+from collections.abc import Mapping
 from typing import Any
 
 from django.conf import settings
@@ -42,6 +48,7 @@ from django.utils.functional import Promise
 from pydantic import BaseModel
 
 from live import operations
+from live.assistant import tool_name
 from live.meta import (
     WIDGET_KINDS,
     WIDGET_SIZES,
@@ -158,6 +165,79 @@ def _ai_problem(declared: Any) -> str | None:
     if risk not in operations.RISKS:
         return f"declares risk {risk!r}; it must be one of {', '.join(operations.RISKS)}"
     return None
+
+
+@checks.register("live")
+def check_assistant_asks(app_configs: Any = None, **kwargs: Any) -> list[checks.CheckMessage]:
+    """E020: every tool (``AI``, never ``INTERNAL``) of an app of ``LIVE_ASSISTANT_ASKS_REQUIRED`` says its asks in
+    each language of ``ASK_LANGUAGES``: at least ``MIN_ASKS`` distinct phrases, none empty, its own name (the
+    operation's or the tool's) nor longer than ``MAX_ASK_CHARS``; the setting is a tuple of labels that have
+    operations."""
+    hint = (
+        "Declare in ai=AI(..., asks={'en': (...), 'es': (...)}) what a person would type to the chat to ask for this "
+        "tool: natural and ambiguous, as people say it («créame un producto», «what did I sell today?»), never its "
+        "name. LIVE_ASSISTANT_ASKS_REQUIRED lists the apps whose tools all say them."
+    )
+    listed = getattr(settings, "LIVE_ASSISTANT_ASKS_REQUIRED", ())
+    if not isinstance(listed, list | tuple) or not all(isinstance(label, str) for label in listed):
+        message = f"LIVE_ASSISTANT_ASKS_REQUIRED is {listed!r}; it must be a tuple of app labels."
+        return [checks.Error(message, hint=hint, id="live.E020")]
+    labels = {op.app_label for op in operations.registry.values()}
+    errors = [
+        checks.Error(
+            f"LIVE_ASSISTANT_ASKS_REQUIRED names {label!r}, which has no operation.", hint=hint, id="live.E020"
+        )
+        for label in listed
+        if label not in labels
+    ]
+    for name, op in sorted(operations.registry.items()):
+        if op.app_label in listed and isinstance(op.ai_spec(), operations.AI):
+            errors += [
+                checks.Error(f"Operation {name!r} {problem}.", hint=hint, obj=name, id="live.E020")
+                for problem in _asks_problems(op)
+            ]
+    return errors
+
+
+def _asks_problems(op: operations.Operation) -> list[str]:
+    """Why ``op``'s asks (its ``ai=``'s, as declared) do not tell what a person would type to ask for it."""
+    declared = op.ai
+    asks = declared.asks if isinstance(declared, operations.AI) else declared.get("asks")
+    if not asks:
+        return ["declares no asks"]
+    if not isinstance(asks, Mapping):
+        return [f"declares asks={asks!r}, which is not a mapping of language → phrases"]
+    names = {op.name.casefold(), tool_name(op.name).casefold()}
+    problems: list[str] = []
+    for language in operations.ASK_LANGUAGES:
+        phrases = asks.get(language)
+        if phrases is None:
+            problems.append(f"has no asks in {language!r}")
+            continue
+        if not isinstance(phrases, list | tuple):
+            problems.append(f"asks[{language!r}] must be a tuple of phrases, not {type(phrases).__name__}")
+            continue
+        distinct = set()
+        for phrase in phrases:
+            if not isinstance(phrase, str):
+                problems.append(f"asks[{language!r}] has {phrase!r}, which is not a phrase")
+                continue
+            said = " ".join(phrase.split()).casefold()
+            if not said:
+                problems.append(f"has an empty ask in {language!r}")
+                continue
+            distinct.add(said)
+            if said in names:
+                problems.append(
+                    f"has an ask in {language!r} that is its own name ({op.name!r}): a person never types it"
+                )
+            if len(phrase.strip()) > operations.MAX_ASK_CHARS:
+                limit = operations.MAX_ASK_CHARS
+                problems.append(f"has an ask in {language!r} longer than {limit} characters: {phrase[:40]!r}…")
+        if len(distinct) < operations.MIN_ASKS:
+            counted = f"{len(distinct)} distinct {'ask' if len(distinct) == 1 else 'asks'}"
+            problems.append(f"has {counted} in {language!r}; it needs at least {operations.MIN_ASKS}")
+    return problems
 
 
 @checks.register("live")

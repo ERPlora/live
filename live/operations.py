@@ -20,14 +20,16 @@ validated output; a query to any database inside it, an event or an ``on_commit`
 
 Every operation tells the assistant what it is (PLAN §30: every operation is a tool by default): ``ai=AI(description=…,
 risk="normal"|"high")`` for a tool, ``ai=INTERNAL`` for what is not one, never by omission (``live.E017``). A ``dict``
-declared before ``AI`` existed is still accepted: ``Operation.ai_spec()`` reads it as one of the two.
+declared before ``AI`` existed is still accepted: ``Operation.ai_spec()`` reads it as one of the two. A tool also says
+what a person would type to ask for it (``asks``, by language): the selection of tools weighs it and the assistant's QA
+is derived from it; ``live.E020`` requires it of the apps a project lists in ``LIVE_ASSISTANT_ASKS_REQUIRED``.
 """
 
 import re
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import AbstractContextManager, ContextDecorator, ExitStack, contextmanager, nullcontext
 from contextvars import ContextVar
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cache, partial
 from typing import Any, Literal, Self, TypeVar
 
@@ -67,17 +69,25 @@ _operation_alias: ContextVar[str | None] = ContextVar("live_operation_alias", de
 NOT_A_TOOL = ("Not an assistant tool", "System only")
 #: The risks of a tool: ``normal`` asks a click on its card, ``high`` to type a word (or how many records it touches).
 RISKS = ("normal", "high")
+#: The languages every tool of an app listed in ``LIVE_ASSISTANT_ASKS_REQUIRED`` says its asks in (``live.E020``).
+ASK_LANGUAGES = ("en", "es")
+#: The distinct asks such a tool says at least in each of them, and the length of one at most.
+MIN_ASKS = 2
+MAX_ASK_CHARS = 120
 
 
 @dataclass(frozen=True)
 class AI:
-    """An assistant tool: what it does, told to the model in English (``description``); its ``risk`` (``RISKS``); and,
-    for a dangerous write, the read of its own app that shows what it will do on its card (``preview``:
-    ``{"operation": <a query>, "fields": [<data of its answer>]}``)."""
+    """An assistant tool: what it does, told to the model in English (``description``); its ``risk`` (``RISKS``); for a
+    dangerous write, the read of its own app that shows what it will do on its card (``preview``:
+    ``{"operation": <a query>, "fields": [<data of its answer>]}``); and what a person would type to the chat to ask
+    for it, by language (``asks``: ``{"es": ("créame un producto", …), "en": (…)}``), natural and ambiguous as people
+    say it, never its name."""
 
     description: str
     risk: Literal["normal", "high"] = "normal"
     preview: dict | None = None
+    asks: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
 
 
 class Internal:
@@ -126,7 +136,8 @@ class Operation:
         """What ``ai=`` declares, typed: ``AI`` or ``INTERNAL`` as declared; a ``dict`` read as the rules of the Hub's
         assistant before ``AI`` existed — one without a description, one that says it is no tool (``NOT_A_TOOL``) and
         one on what only the platform runs (no permission, or one no app declares: its reactions and scheduled tasks)
-        are ``INTERNAL``, any other the tool it describes —; ``None`` when it declares nothing (``live.E017``)."""
+        are ``INTERNAL``, any other the tool it describes, with its ``asks`` —; ``None`` when it declares nothing
+        (``live.E017``)."""
         declared = self.ai
         if declared is None or isinstance(declared, AI | Internal):
             return declared
@@ -139,7 +150,8 @@ class Operation:
 
         if self.permission is None or self.permission not in declared_permissions():
             return INTERNAL
-        return AI(description, "high" if declared.get("risk") == "high" else "normal", declared.get("preview"))
+        risk = "high" if declared.get("risk") == "high" else "normal"
+        return AI(description, risk, declared.get("preview"), declared.get("asks") or {})
 
     def __call__(self, ctx: OperationContext, data: Schema) -> Schema:
         if not ctx.has(self.permission):
