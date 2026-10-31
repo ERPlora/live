@@ -469,6 +469,51 @@ async def test_another_stream_of_the_same_scope_goes_on_while_one_waits(make_exe
     assert [f.event for f in await drain(other.queue)] == ["result"]
 
 
+class SleepThen(FakeSleep):
+    """A ``FakeSleep`` that, on its wait number ``at`` (1-based), runs ``then()`` (a coroutine function) first."""
+
+    def __init__(self, at, then):
+        super().__init__()
+        self.at, self.then = at, then
+
+    async def __call__(self, seconds):
+        await super().__call__(seconds)
+        if len(self.waits) == self.at:
+            await self.then()
+
+
+async def test_a_subscription_another_pass_answered_meanwhile_gets_no_busy_error(make_executor):
+    stream = make_stream()
+    busy, other = FakeOp(body=busy_for(100)), FakeOp(rows=[thing(2)])
+    subscribe(stream, busy, "s1")
+    second = subscribe(stream, other, "s2")
+    executor = make_executor()
+    # While this pass waits, an event's pass runs s2 and sends its newer result.
+    executor.sleep = SleepThen(1, lambda: executor._run_subs(stream, [second]))
+
+    await executor.run_all(stream)
+
+    frames = await drain(stream.queue)
+    assert [(f.event, f.data["id"]) for f in frames] == [("result", "s2"), ("error", "s1")]
+    assert other.calls == 1
+
+
+async def test_a_subscription_gone_before_the_last_try_gets_no_error(make_executor):
+    stream = make_stream()
+    subscribe(stream, FakeOp(body=busy_for(100)), "s1")
+    subscribe(stream, FakeOp(rows=[thing(2)]), "s2")
+    executor = make_executor()
+
+    async def unsubscribe_s2():
+        del stream.subs["s2"]
+
+    executor.sleep = SleepThen(executor_module.PASSING_ERROR_RETRIES, unsubscribe_s2)
+
+    await executor.run_all(stream)
+
+    assert [(f.event, f.data["id"]) for f in await drain(stream.queue)] == [("error", "s1")]
+
+
 async def test_the_error_after_the_last_try_lets_the_same_result_through_again(make_executor):
     state = {"busy": False}
 

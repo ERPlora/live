@@ -82,6 +82,9 @@ class Subscription:
     rev: int = 0
     #: Set by a run that lost the right to it (permission revoked, app inactive).
     dropped: bool = False
+    #: How many runs answered it (a frame, or a result that did not change): a pass that waits for a busy scope sends
+    #: its error only to the subscriptions no other pass answered meanwhile.
+    answers: int = 0
 
 
 class Stream:
@@ -227,6 +230,7 @@ class Executor:
         ``PASSING_ERROR_RETRIES`` × :data:`MAX_RETRY_AFTER`."""
         ran = False
         waiting = list(subs)
+        answered_before = {sub.id: sub.answers for sub in waiting}
         for retries_left in range(PASSING_ERROR_RETRIES, -1, -1):
             passing = None
             for index, sub in enumerate(waiting):
@@ -246,7 +250,8 @@ class Executor:
                 return ran
             if not retries_left:
                 for sub in waiting:
-                    if stream.subs.get(sub.id) is sub:
+                    # Not one gone, nor one another pass (an event's) answered while this one waited: it is newer.
+                    if stream.subs.get(sub.id) is sub and sub.answers == answered_before[sub.id]:
                         self._deliver(stream, sub, self._error(sub, passing.error))
                 return ran
             await self.sleep(min(passing.retry_after, MAX_RETRY_AFTER))
@@ -255,6 +260,7 @@ class Executor:
     @staticmethod
     def _deliver(stream: Stream, sub: Subscription, data: bytes | None) -> None:
         """Queue ``sub``'s frame (``None``: its result did not change), and forget it if its error dropped it."""
+        sub.answers += 1
         if sub.dropped and stream.subs.get(sub.id) is sub:
             del stream.subs[sub.id]
         if data is not None:

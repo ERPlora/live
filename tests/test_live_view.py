@@ -181,6 +181,52 @@ async def test_a_slow_opening_pass_keeps_the_stream_alive_with_heartbeats_until_
     assert (result.event, result.data["id"]) == ("result", "list")
 
 
+async def test_a_pass_still_running_when_the_client_leaves_is_cancelled(readers, monkeypatch):
+    monkeypatch.setattr(live_view, "HEARTBEAT_EVERY", 0.05)
+    started, cancelled = asyncio.Event(), asyncio.Event()
+
+    async def endless(stream):
+        started.set()
+        try:
+            await asyncio.sleep(30)
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
+
+    monkeypatch.setattr(executor, "run_all", endless)
+    request = AsyncRequestFactory().get(
+        "/api/live", {"s": encode_subs([LIST])}, headers={"X-Test-User": "ana", "X-Test-Permissions": "testapp.view"}
+    )
+    response = await live_view.live_stream(request)
+    reader = StreamReader(response).start()
+    readers.append(reader)
+    assert (await reader.next()).event == "hello"
+    await asyncio.wait_for(started.wait(), 1)
+
+    await reader.disconnect()
+
+    await asyncio.wait_for(cancelled.wait(), 1)
+
+
+async def test_a_pass_that_fails_ends_the_stream_with_its_error(monkeypatch):
+    """As before passes ran beside the stream: what ``run_all`` raises is not left unheard in its task."""
+    monkeypatch.setattr(live_view, "HEARTBEAT_EVERY", 0.05)
+
+    async def broken(stream):
+        raise RuntimeError("the pass broke")
+
+    monkeypatch.setattr(executor, "run_all", broken)
+    request = AsyncRequestFactory().get(
+        "/api/live", {"s": encode_subs([LIST])}, headers={"X-Test-User": "ana", "X-Test-Permissions": "testapp.view"}
+    )
+    response = await live_view.live_stream(request)
+    frames = aiter(response.streaming_content)
+    assert b"event: hello" in await anext(frames)
+
+    with pytest.raises(RuntimeError, match="the pass broke"):
+        await asyncio.wait_for(anext(frames), 1)
+
+
 async def test_heartbeat_is_15_seconds_by_default():
     assert live_view.HEARTBEAT_EVERY == 15.0
     assert live_view.SAFETY_RERUN_EVERY == 300.0
