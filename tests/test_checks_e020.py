@@ -83,6 +83,20 @@ def test_what_declares_no_asks_reads_none(declared):
     assert asks_of(op(ai=declared)) == {}
 
 
+@pytest.mark.parametrize(
+    ("ai", "permission"),
+    [
+        ({"description": "Not an assistant tool (a PIN is typed on the pad).", "asks": GOOD}, "testapp.manage"),
+        ({"description": "Platform reaction: forget a probe.", "asks": GOOD}, None),
+        ({"description": "Platform reaction: forget a probe.", "asks": GOOD}, "testapp.system"),
+    ],
+)
+def test_a_dictionary_that_is_no_tool_says_no_asks(ai, permission):
+    """What ``ai_spec()`` reads as ``INTERNAL`` is never offered, so nothing asks for it."""
+    assert op(ai=ai, permission=permission).ai_spec() is INTERNAL
+    assert asks_of(op(ai=ai, permission=permission)) == {}
+
+
 # ── live.E020 ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 

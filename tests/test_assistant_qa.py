@@ -8,6 +8,7 @@ run is not in its catalogue at all.
 """
 
 import json
+from collections import Counter
 
 import pytest
 from ninja import Schema
@@ -109,6 +110,29 @@ def test_the_misses_come_sorted_by_tool_and_phrase():
     assert found == misses(tools, language="es", top=1)
 
 
+def test_a_catalogue_of_the_hubs_size_is_ranked_reading_each_tool_once(monkeypatch):
+    """~750 tools: every ask goes through ``relevant``, but what each tool says is read once for all of them."""
+    read = Counter()
+    real = assistant.asks_of
+    monkeypatch.setattr(assistant, "asks_of", lambda op: read.update([op.name]) or real(op))
+    tools = {op.name: op for op in (tool(f"app{i % 28}.thing{i}.create", f"Creates thing {i} of the business.")
+                                    for i in range(730))}
+    asked = [tool(f"zz.item{i}.create", "Creates an item.", asks={"es": (f"créame el item {i}", f"otro item {i}")})
+             for i in range(20)]
+    tools |= {op.name: op for op in asked}
+    found = misses(tools, language="es", top=assistant.MAX_TOOLS)
+    assert {miss.tool_name for miss in found} <= {assistant.tool_name(op.name) for op in asked}
+    assert len(read) == len(tools) and set(read.values()) == {1}
+
+
+@pytest.mark.parametrize("region", ["es-ES", "es_ES", "ES"])
+def test_a_language_with_its_region_is_its_language(region):
+    """``ctx.language`` may say the region (``es-ES``): the asks are by language, so it reads those of ``es``."""
+    assert misses(CATALOGUE, language=region, top=1) == misses(CATALOGUE, language="es", top=1) != []
+    assert uncovered(CATALOGUE, region) == uncovered(CATALOGUE, "es")
+    assert export_catalog(CATALOGUE, region) == export_catalog(CATALOGUE, "es")
+
+
 @pytest.mark.parametrize("top", [0, -1, assistant.MAX_TOOLS + 1])
 def test_a_top_the_turn_never_offers_is_refused(top):
     with pytest.raises(ValueError, match="top"):
@@ -136,7 +160,7 @@ def test_the_catalogue_says_each_tool_as_the_qa_needs_it():
     void = Operation(
         name="sale.order.void",
         kind="command",
-        permission="sale.void",
+        permission="testapp.manage",
         input=Guarded,
         output=Done,
         expose_api=False,
@@ -152,7 +176,7 @@ def test_the_catalogue_says_each_tool_as_the_qa_needs_it():
         "tool_name": "sale__order__void",
         "app_label": "sale",
         "kind": "write",
-        "permission": "sale.void",
+        "permission": "testapp.manage",
         "risk": "high",
         "description": "Voids open checks.",
         "asks": ["anula la cuenta de la mesa 3"],

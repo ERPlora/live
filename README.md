@@ -30,7 +30,7 @@ fase 2: `use_hub`) y `saas-next` el suyo (el usuario); el resto (`live.spa`, `li
   es `INTERNAL`. Una herramienta dice además lo que una persona escribiría en el chat para pedirla: `AI(…, asks={"en":
   (…), "es": (…)})` (frases naturales y ambiguas, como las dice la gente: «créame un producto», «súbele el precio al
   café», «what did I sell today?»; nunca el nombre de la operación); el `dict` lo acepta en su clave `"asks"` y
-  `live.assistant.asks_of(op)` lo lee de las dos formas, limpio. La selección de herramientas las pesa y la QA del
+  `live.assistant.asks_of(op)` lo lee de las dos formas, limpio (nada si `ai_spec()` es `INTERNAL`). La selección de herramientas las pesa y la QA del
   asistente sale de ellas (ver «Asistente»).
   Errores: `{"error": {"code", "message", "fields"?}}`; 422 `invalid_payload` con `fields`. El 404 de
   una ruta inexistente y el 405 de método equivocado (no llegan a ninguna ruta) los convierte al mismo
@@ -231,7 +231,9 @@ asistente), en dos capas:
 1. **Determinista, en cada PR** (sin modelo ni red): `misses(tools, *, language, top=10, app_words=…, always=…)` pasa
    cada `ask` del idioma de cada herramienta del catálogo por el mismo `relevant` de un turno y devuelve, ordenadas por
    herramienta y frase, las `Miss(tool_name, ask, position)` cuya herramienta no sale entre las `top` primeras
-   (`position` desde 1, o `None` si ni se ofrece; `top` entre 1 y `MAX_TOOLS`). `uncovered(tools, language)` lista,
+   (`position` desde 1, o `None` si ni se ofrece; `top` entre 1 y `MAX_TOOLS`). Las tres funciones leen `language`
+   sin región (`base_language`: `es-ES` → `es`). `relevant` lee las `asks` de cada herramienta una vez por operación
+   (caché), no en cada turno. `uncovered(tools, language)` lista,
    ordenadas, las herramientas sin `asks` en ese idioma. Como las `asks` cuentan para su propia herramienta, esta capa
    prueba que las frases de la gente llegan a ella entre cientos, no que el modelo la llame.
 2. **Con el modelo real** (Playwright en el Hub y el SaaS): `export_catalog(tools, language)` da cada herramienta,

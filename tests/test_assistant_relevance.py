@@ -9,6 +9,7 @@ Hub's 700 do.
 """
 
 import time
+from collections import Counter
 
 import pytest
 from ninja import Schema
@@ -182,6 +183,21 @@ def test_what_people_say_to_ask_for_a_tool_names_it_as_its_description_does():
     }
     for asked, language in (("¿Cuánto llevo facturado?", "es"), ("Show my billing", "en")):
         assert [op.name for op in assistant.relevant(tools, [asked], language)] == ["x.b.list", "x.a.list"], asked
+
+
+def test_a_tools_asks_are_read_once_however_many_turns_rank_it(monkeypatch):
+    """The QA ranks once per ask of a catalogue of hundreds: what each tool says is read once, not once per turn."""
+    read = Counter()
+    real = assistant.asks_of
+    monkeypatch.setattr(assistant, "asks_of", lambda op: read.update([op.name]) or real(op))
+    tools = {
+        op.name: op
+        for op in (tool(f"x.thing{i}.create", "Creates a thing.", asks={"es": ("créame una cosa", "otra cosa")})
+                   for i in range(50))
+    }
+    for asked in ("créame una cosa", "¿qué cosas hay?", "borra la cosa"):
+        assistant.relevant(tools, [asked], "es")
+    assert len(read) == 50 and set(read.values()) == {1}
 
 
 def test_the_same_question_is_offered_the_same_tools():

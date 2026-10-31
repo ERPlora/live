@@ -25,6 +25,12 @@ from live.operations import Operation
 KINDS = {"query": "read", "command": "write"}
 
 
+def base_language(language: str) -> str:
+    """The language of ``language`` without its region (``es-ES``, ``es_ES``, ``ES`` → ``es``): the asks are said by
+    language, and a context may name the region."""
+    return language.replace("_", "-").split("-")[0].lower()
+
+
 class Miss(NamedTuple):
     """An ask whose tool is not among the first offered: at ``position`` (from 1), or ``None`` when not offered."""
 
@@ -42,9 +48,11 @@ def misses(
     always: Iterable[str] = (),
 ) -> list[Miss]:
     """The asks in ``language`` of the tools of ``tools`` whose tool a turn does not offer among its first ``top``
-    (``relevant``, with the turn's ``always`` and ``app_words``), by tool name and phrase."""
+    (``relevant``, with the turn's ``always`` and ``app_words``), by tool name and phrase; ``language`` without its
+    region (``base_language``)."""
     if not 1 <= top <= MAX_TOOLS:
         raise ValueError(f"top must be between 1 and {MAX_TOOLS} (what a turn offers at most), not {top}.")
+    language = base_language(language)
     always = tuple(always)
     found: list[Miss] = []
     for op in tools.values():
@@ -58,11 +66,13 @@ def misses(
 
 def uncovered(tools: dict[str, Operation], language: str) -> list[str]:
     """The tool names of ``tools`` that say no ask in ``language``, sorted."""
+    language = base_language(language)
     return sorted(tool_name(op.name) for op in tools.values() if not asks_of(op).get(language))
 
 
 def export_catalog(tools: dict[str, Operation], language: str) -> list[dict]:
     """``tools`` as the real model's QA reads them, by name: JSON-serialisable, each with its asks in ``language``."""
+    language = base_language(language)
     return [
         {
             "name": op.name,

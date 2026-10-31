@@ -102,9 +102,10 @@ def preview_of(op: Operation) -> Any:
 def asks_of(op: Operation) -> dict[str, tuple[str, ...]]:
     """What a person would type to ask for ``op``, by language, as its ``ai=`` says it (an ``AI``'s or a ``dict``'s
     ``asks``): each phrase stripped, an empty or repeated one left out, a lone phrase read as one; a language with none
-    left, and anything that is not a mapping of language → phrases, read as nothing."""
-    declared = op.ai
-    said = declared.asks if isinstance(declared, AI) else declared.get("asks") if isinstance(declared, dict) else None
+    left, anything that is not a mapping of language → phrases and what is no tool (``Operation.ai_spec``: never
+    offered, so nothing asks for it) read as nothing."""
+    spec = op.ai_spec()
+    said = spec.asks if isinstance(spec, AI) else None
     if not isinstance(said, Mapping):
         return {}
     asks: dict[str, tuple[str, ...]] = {}
@@ -382,7 +383,7 @@ def relevant(
         thing = named(_stems_of(entity.replace("_", " ")))
         points = 4 * named(app_words(app, language)) + 2 * thing + 2 * named(_stems_of(action.replace("_", " ")))
         takes = named(_taken(op.input))
-        points += named(_stems_of(description(op))) + named(_stems_of(_asks_text(op))) + takes
+        points += named(_stems_of(description(op))) + named(_asks_stems(op)) + takes
         if not verbs.isdisjoint(action.split("_")):
             points += 3 + (6 + (action in verbs) if thing else 4 if takes else 0)
         if reading and not writing and op.kind == "query":
@@ -394,9 +395,11 @@ def relevant(
     return [*first, *ranked][:MAX_TOOLS]
 
 
-def _asks_text(op: Operation) -> str:
-    """Every phrase of ``op``'s asks, in every language, as one text (its stems are cached by it)."""
-    return " ".join(phrase for phrases in asks_of(op).values() for phrase in phrases)
+@lru_cache(maxsize=4_096)
+def _asks_stems(op: Operation) -> frozenset[str]:
+    """The stems of every phrase of ``op``'s asks, in every language: read once per operation (by identity; its
+    ``ai=`` does not change once declared), however many turns rank it — the QA ranks once per ask of hundreds."""
+    return _stems_of(" ".join(phrase for phrases in asks_of(op).values() for phrase in phrases))
 
 
 @cache
