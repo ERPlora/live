@@ -406,6 +406,11 @@ def is_uuid(value: Any) -> bool:
 #: What a card leaves out: a record it cannot name, an attempt key.
 LEFT_OUT = object()
 
+#: The mark of a datum of a card that is a list whose every item ``said`` put in words — a record by its name (or left
+#: out, none), a moment, a value of a closed list by its label, an amount —, never one as sent: the screen says its items
+#: one after another. A list without it (texts sent as they are, codes nobody names, lines) says how many it carries.
+NAMED = "named"
+
 
 class Words(Protocol):
     """How a project says a card's data in words, for the person (``language``) and the write (``op``) of the card.
@@ -572,6 +577,27 @@ def said(value: Any, prop: dict, defs: dict, name: str, words: Words, inner: boo
     return value
 
 
+def _in_words(value: Any, spoken: Any, prop: dict, defs: dict, name: str) -> bool:
+    """Whether ``said`` put the item ``value`` of a list in words (``spoken``) as its schema ``prop`` declares it — a
+    record (``REFERS`` or an id), a moment, a value of a closed list, an amount —, not as sent (``NAMED``)."""
+    prop = fitting(value, prop, defs)
+    if REFERS in prop or (prop.get("format") == "uuid" and is_uuid(value)):
+        return True
+    declared = prop.get("format") in MOMENTS or "enum" in prop or is_money(name, prop)
+    return declared and spoken != value
+
+
+def _said_in_words(value: list, spoken: list, prop: dict, defs: dict, name: str) -> bool:
+    """Whether ``said`` put every item of the list ``value`` in words (``spoken``, item by item)."""
+    prop = fitting(value, prop, defs)
+    items, prefix = prop.get("items"), prop.get("prefixItems", [])
+    items = items if isinstance(items, dict) else {}
+    return all(
+        _in_words(item, said_item, prefix[i] if i < len(prefix) else items, defs, name)
+        for i, (item, said_item) in enumerate(zip(value, spoken, strict=True))
+    )
+
+
 def field(
     name: str, label: str, prop: dict, defs: dict, value: Any, money: dict | None = None, words: Words | None = None
 ) -> dict | None:
@@ -580,10 +606,10 @@ def field(
     key. An amount carries ``signed`` when its schema declares it so and ``money`` when its currency is given (without
     it, the card paints it in the project's own); with words that price nothing, it is no amount but as sent.
     ``titled`` when ``label`` is the title its app wrote (``own_title``): the screen calls it so over its own word for
-    a datum it knows by its name."""
+    a datum it knows by its name; a list, ``named`` when each of its items is said in words (``NAMED``)."""
     # The title of the property itself, as its caller's ``label``: a ``$ref``'s own is its schema class's name.
     titled = own_title(name, prop.get("title")) is not None
-    value = hidden(value, prop, defs)
+    sent = value = hidden(value, prop, defs)
     if words is not None:
         value = said(value, prop, defs, name, words)
     if value is LEFT_OUT:
@@ -604,6 +630,8 @@ def field(
     shown = {"name": name, "label": label, "kind": kind, "value": value}
     if titled:
         shown["titled"] = True
+    if kind == "list" and words is not None and isinstance(sent, list) and _said_in_words(sent, value, prop, defs, name):
+        shown[NAMED] = True
     if kind == "money" and is_signed(prop):
         shown["signed"] = True
     if kind == "money" and money is not None:

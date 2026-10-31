@@ -10,6 +10,7 @@ the records its reads name) come in through ``Words``. These tests use the packa
 import datetime as dt
 import json
 import uuid
+from typing import Literal
 
 import pytest
 from django.apps import apps
@@ -304,6 +305,61 @@ def test_the_card_says_each_datum_with_the_words_it_is_given(probes):
     assert card["app_name"] == "Things"
     assert (shown["thing"]["value"], shown["day"]["value"]) == ("Table 5", "date:2026-10-30")
     assert shown["lines"]["value"] == [{"label": "a", "amount": "2.50 $"}]
+
+
+class ListsIn(Schema):
+    tags: list[str] = []
+    things: list[uuid.UUID] = []
+    days: list[dt.date] = []
+    sizes: list[Literal["s", "m"]] = []
+    prices_cents: list[int] = []
+    lines: list[LineIn] = []
+
+
+LISTS = {
+    "tags": ["sale.sale.create", "vip"],
+    "things": [str(uuid.uuid4()), str(uuid.uuid4())],
+    "days": ["2026-11-02", "2026-11-09"],
+    "sizes": ["s", "m"],
+    "prices_cents": [150, 1200],
+    "lines": [{"label": "a", "amount": 250}],
+}
+
+
+@pytest.fixture
+def lists(monkeypatch):
+    """A write of every kind of list, and the labels its app gives a closed list: «s» and «m»."""
+    monkeypatch.setattr(assistant, "choice_label", lambda app, entity, name, value: {"s": "Small", "m": "Medium"}.get(value))
+    return op("testapp.probe.lists", ai=CREATE, input=ListsIn)
+
+
+def named(card) -> dict:
+    return {name: shown.get(assistant.NAMED, False) for name, shown in fields(card).items()}
+
+
+def test_a_list_the_card_says_in_words_is_marked_named_one_as_sent_is_not(lists):
+    """FIX-HUB-PRINTING-ASSISTANT-CARD-LEAVES-OUT-ITS-RECORDS: the screen says the items of a list only when the server
+    said each one in words — a record by its name, a moment, a value of a closed list by its label, an amount —; a list
+    of texts sent as they are (codes nobody names: «sale.sale.create») or of lines says how many it carries."""
+    card = assistant.card(lists, LISTS, "en", SpokenWords(lists, "en"))
+    assert named(card) == {"tags": False, "things": True, "days": True, "sizes": True, "prices_cents": True, "lines": False}
+    shown = fields(card)
+    assert shown["things"]["value"] == ["Table 5", "Table 5"]
+    assert shown["sizes"]["value"] == ["Small", "Medium"]
+    assert shown["tags"]["value"] == ["sale.sale.create", "vip"]
+
+
+def test_records_the_card_leaves_out_are_still_said_in_words_never_by_their_id(lists):
+    """No read names them (``PlainWords``): each is none, and the list still says how many, never an id."""
+    shown = fields(assistant.card(lists, {"things": LISTS["things"]}, "en"))
+    assert (shown["things"]["value"], shown["things"].get(assistant.NAMED)) == ([None, None], True)
+
+
+def test_a_list_with_one_item_left_as_sent_is_not_named(lists, monkeypatch):
+    """A value of a closed list its app gives no label, or a moment that is none: as sent, so the list is not named."""
+    monkeypatch.setattr(assistant, "choice_label", lambda app, entity, name, value: {"s": "Small"}.get(value))
+    card = assistant.card(lists, {"sizes": ["s", "m"], "days": ["2026-11-02", "soon"]}, "en")
+    assert named(card) == {"sizes": False, "days": False}
 
 
 # ── A tool, run as the person ─────────────────────────────────────────────────────────────────────────────────────
