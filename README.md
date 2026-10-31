@@ -27,7 +27,11 @@ fase 2: `use_hub`) y `saas-next` el suyo (el usuario); el resto (`live.spa`, `li
   `INTERNAL` (centinela falso) para lo que no lo es. Un `dict` con `description` se sigue aceptando y
   `Operation.ai_spec()` lo lee como uno de los dos: sin descripción, con «Not an assistant tool…»/«System only…» o en
   una operación que solo corre la plataforma (sin permiso o con uno que ninguna app declara, `declared_permissions()`)
-  es `INTERNAL`.
+  es `INTERNAL`. Una herramienta dice además lo que una persona escribiría en el chat para pedirla: `AI(…, asks={"en":
+  (…), "es": (…)})` (frases naturales y ambiguas, como las dice la gente: «créame un producto», «súbele el precio al
+  café», «what did I sell today?»; nunca el nombre de la operación); el `dict` lo acepta en su clave `"asks"` y
+  `live.assistant.asks_of(op)` lo lee de las dos formas, limpio. La selección de herramientas las pesa y la QA del
+  asistente sale de ellas (ver «Asistente»).
   Errores: `{"error": {"code", "message", "fields"?}}`; 422 `invalid_payload` con `fields`. El 404 de
   una ruta inexistente y el 405 de método equivocado (no llegan a ninguna ruta) los convierte al mismo
   sobre `live.api_errors.ApiErrorEnvelopeMiddleware` (en `MIDDLEWARE` tras auth), bajo
@@ -171,6 +175,13 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
     es `normal` ni `high`, o con algo que no es `AI`, `INTERNAL` ni un `dict` (ronda 2026-10-22b, PLAN §30);
   - `live.E019`: `LIVE["session_events"]` no es una lista (o tupla), o nombra algo que no es un evento que declare
     la lista `ALL` de algún `events.py` (`declared_events()`; `"*"` tampoco).
+  - `live.E020`: una herramienta (`AI`, nunca `INTERNAL`) de una app listada en el ajuste de Django
+    `LIVE_ASSISTANT_ASKS_REQUIRED` (tupla de etiquetas; por defecto `()`) sin `asks` en `en` y en `es` con al menos
+    `MIN_ASKS` (2) frases distintas cada uno (sin contar mayúsculas ni espacios), o con una frase vacía, que no es
+    texto, igual a su propio nombre (el de la operación o el de la herramienta) o de más de `MAX_ASK_CHARS` (120)
+    caracteres; o el propio ajuste que no es una tupla de etiquetas o que nombra una app sin operaciones (una errata
+    dejaría pasar todo). Una app se lista cuando todas sus herramientas las dicen: los cientos del Hub no se migran de
+    una vez. `live.E017` no cambia.
 
   Los checks de los hooks necesitan las operaciones y los eventos registrados, cosa que
   `LiveConfig.ready` hace antes de cualquier check. La app de pruebas (`tests/testapp`) es un módulo
@@ -210,6 +221,25 @@ lectura que nombra `AI.preview`) y `rounds`/`MAX_ROUNDS`. Cada proyecto dice los
 registro, importe, nombre de la app); `PlainWords` no lee nada (euros con 2 decimales, UTC con los formatos de
 Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda del negocio, `refers`) viven en su
 `base/assistant.py`.
+
+`relevant` pesa lo que la gente dice para pedir una herramienta (sus `asks`, en cualquier idioma) como su descripción:
+1 por cosa nombrada.
+
+**QA del asistente, derivada de las operaciones** (`live.assistant_qa`; plan 2026-10-31 del conocimiento y la QA del
+asistente), en dos capas:
+
+1. **Determinista, en cada PR** (sin modelo ni red): `misses(tools, *, language, top=10, app_words=…, always=…)` pasa
+   cada `ask` del idioma de cada herramienta del catálogo por el mismo `relevant` de un turno y devuelve, ordenadas por
+   herramienta y frase, las `Miss(tool_name, ask, position)` cuya herramienta no sale entre las `top` primeras
+   (`position` desde 1, o `None` si ni se ofrece; `top` entre 1 y `MAX_TOOLS`). `uncovered(tools, language)` lista,
+   ordenadas, las herramientas sin `asks` en ese idioma. Como las `asks` cuentan para su propia herramienta, esta capa
+   prueba que las frases de la gente llegan a ella entre cientos, no que el modelo la llame.
+2. **Con el modelo real** (Playwright en el Hub y el SaaS): `export_catalog(tools, language)` da cada herramienta,
+   por nombre y serializable a JSON, con `name`, `tool_name`, `app_label`, `kind` (`read`/`write`), `permission`,
+   `risk`, `description`, `asks` (las del idioma) e `input_schema`; de ahí la QA escribe sus propias frases por rol.
+
+El Hub y el SaaS las llaman con su catálogo real (`catalog(ctx, …)`) como cada rol: lo que un rol no puede hacer ni
+está en su catálogo.
 
 ## Slugs reservados
 

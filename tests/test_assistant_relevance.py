@@ -29,7 +29,7 @@ class ReservationIn(Schema):
     table: str | None = None
 
 
-def tool(name: str, description: str, kind: str = "command", input: type[Schema] = NoIn) -> Operation:
+def tool(name: str, description: str, kind: str = "command", input: type[Schema] = NoIn, asks=None) -> Operation:
     return Operation(
         name=name,
         kind=kind,
@@ -37,7 +37,7 @@ def tool(name: str, description: str, kind: str = "command", input: type[Schema]
         input=input,
         output=Done,
         expose_api=False,
-        ai=AI(description=description),
+        ai=AI(description=description, asks=asks or {}),
         fn=lambda ctx, data: {"done": True},
         database=False,
     )
@@ -167,6 +167,21 @@ def test_a_tool_that_names_two_things_asked_ranks_before_one_that_names_one_in_m
     }
     ranked = [op.name for op in assistant.relevant(tools, ["¿Qué empleados hay en cada mesa?"], "es")]
     assert ranked == ["x.b.list", "x.a.list"]
+
+
+def test_what_people_say_to_ask_for_a_tool_names_it_as_its_description_does():
+    """Its asks (``AI.asks``) are words of the tool as its description's are: the phrases people really use, in any
+    language, bring it to what they ask. Without them the two tie, and the first by name would win."""
+    tools = {
+        op.name: op
+        for op in (
+            tool("x.a.list", "Lists the documents of the business.", "query"),
+            tool("x.b.list", "Lists the documents of the business.", "query",
+                 asks={"es": ("¿cuánto he facturado este mes?", "lo facturado"), "en": ("my billing this month",)}),
+        )
+    }
+    for asked, language in (("¿Cuánto llevo facturado?", "es"), ("Show my billing", "en")):
+        assert [op.name for op in assistant.relevant(tools, [asked], language)] == ["x.b.list", "x.a.list"], asked
 
 
 def test_the_same_question_is_offered_the_same_tools():
