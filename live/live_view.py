@@ -98,19 +98,33 @@ class _LiveBody:
             if self._released:
                 return
             await broker.register(stream)
-            await executor.run_all(stream)
+            # A pass (the opening one, a safety re-run) runs beside the stream: while it lasts, a heartbeat goes out
+            # every HEARTBEAT_EVERY, so a slow pass (a hub busy for a moment waits and tries again) never leaves the
+            # client's watchdog in silence; its frames follow, in order, once it ends.
+            running: asyncio.Task | None = asyncio.ensure_future(executor.run_all(stream))
             last_full_run = clock()
-            while True:
-                try:
-                    item = await asyncio.wait_for(stream.queue.get(), HEARTBEAT_EVERY)
-                except TimeoutError:
-                    item = frame(HEARTBEAT)
-                yield item
-                if item == BYE_FRAME:
-                    return
-                if clock() - last_full_run >= SAFETY_RERUN_EVERY:
-                    last_full_run = clock()
-                    await executor.run_all(stream)
+            try:
+                while True:
+                    if running is not None:
+                        done, _ = await asyncio.wait({running}, timeout=HEARTBEAT_EVERY)
+                        if done:
+                            running.result()
+                            running, last_full_run = None, clock()
+                            continue
+                        item = frame(HEARTBEAT)
+                    else:
+                        try:
+                            item = await asyncio.wait_for(stream.queue.get(), HEARTBEAT_EVERY)
+                        except TimeoutError:
+                            item = frame(HEARTBEAT)
+                    yield item
+                    if item == BYE_FRAME:
+                        return
+                    if running is None and clock() - last_full_run >= SAFETY_RERUN_EVERY:
+                        running = asyncio.ensure_future(executor.run_all(stream))
+            finally:
+                if running is not None and not running.done():
+                    running.cancel()
         finally:
             # A disconnect cancels the response task, so the CancelledError lands here: nothing
             # may be yielded any more, only released.

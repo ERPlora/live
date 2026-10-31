@@ -7,7 +7,10 @@ serialised result changed (``blake2b`` hash), with a ``rev`` that grows per subs
 
 Operations run in a small thread pool (``max_workers`` per process) because the ORM is
 synchronous; at most one run per scope at a time, different scopes in parallel. Each thread run
-ends with ``close_old_connections()``, so threads never keep a database connection past its age.
+ends with ``close_old_connections()``, so threads never keep a database connection past its age. A passing error
+(``OperationError.retry_after``: a hub busy for a moment) is its scope's: the pass waits once, outside the scope's turn,
+and goes on from that subscription, up to three more times; only then do the subscriptions still unanswered get its
+error frame. However many subscriptions wait, a pass waits at most three times ``MAX_RETRY_AFTER``.
 A worker thread inherits no active language, so each run activates the stream's
 (``ctx.language``): the operation's texts and the messages of its error frames reach the client
 in it. Nor does it inherit the request's context vars: a builder with ``enter(ctx)`` gets each run
@@ -26,10 +29,11 @@ import json
 import logging
 import time
 import uuid
-from collections.abc import Callable, Iterable
+from collections.abc import Awaitable, Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, field
+from functools import partial
 from hashlib import blake2b
 from typing import Any
 
@@ -50,6 +54,23 @@ QUEUE_MAX = 256
 BYE_FRAME = frame(BYE)
 #: What ``Executor._in_thread`` gives when, once the scope was free, the stream was closed or its subscription gone.
 _SKIPPED = object()
+#: How many more times a pass tries again after a passing error (``OperationError.retry_after``), each after its wait,
+#: before the subscriptions still unanswered get its error frame.
+PASSING_ERROR_RETRIES = 3
+#: The longest wait a passing error may ask for: a pass waits at most ``PASSING_ERROR_RETRIES`` times this.
+MAX_RETRY_AFTER = 5
+
+
+def _still_subscribed(stream: Stream, sub: Subscription) -> bool:
+    return stream.subs.get(sub.id) is sub
+
+
+@dataclass(frozen=True)
+class _Passing:
+    """A run that failed with a passing error: try again after ``retry_after`` seconds, or send ``error``."""
+
+    retry_after: float
+    error: dict
 
 
 @dataclass(eq=False)
@@ -61,6 +82,9 @@ class Subscription:
     rev: int = 0
     #: Set by a run that lost the right to it (permission revoked, app inactive).
     dropped: bool = False
+    #: How many runs answered it (a frame, or a result that did not change): a pass that waits for a busy scope sends
+    #: its error only to the subscriptions no other pass answered meanwhile.
+    answers: int = 0
 
 
 class Stream:
@@ -125,12 +149,14 @@ class Executor:
         debounce: float = 0.15,
         max_debounce: float = 1.0,
         clock: Callable[[], float] = time.monotonic,
+        sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         loop: asyncio.AbstractEventLoop | None = None,
     ) -> None:
         self.max_workers = max_workers
         self.debounce = debounce
         self.max_debounce = max_debounce
         self.clock = clock
+        self.sleep = sleep
         self._loop = loop
         self._pool: ThreadPoolExecutor | None = None
         self._gates: dict[Scope, _Gate] = {}
@@ -196,25 +222,49 @@ class Executor:
             await self._reread(stream)
 
     async def _run_subs(self, stream: Stream, subs: list[Subscription]) -> bool:
-        """Run ``subs`` in order; whether any of them ran (and so re-read the stream's context)."""
+        """Run ``subs`` in order and queue their frames; whether any of them ran (and so re-read the stream's context).
+
+        A passing error is its scope's (its hub busy for a moment): the pass stops at that subscription, waits once,
+        outside the scope's turn, and goes on from it, up to :data:`PASSING_ERROR_RETRIES` more times; then every
+        subscription still unanswered gets that error frame. However many subscriptions wait, a pass waits at most
+        ``PASSING_ERROR_RETRIES`` × :data:`MAX_RETRY_AFTER`."""
         ran = False
-        for sub in subs:
-            if stream.closed:
-                break
-            if stream.subs.get(sub.id) is sub:
-                ran = await self._run(stream, sub) or ran
+        waiting = list(subs)
+        answered_before = {sub.id: sub.answers for sub in waiting}
+        for retries_left in range(PASSING_ERROR_RETRIES, -1, -1):
+            passing = None
+            for index, sub in enumerate(waiting):
+                if stream.closed:
+                    return ran
+                if stream.subs.get(sub.id) is not sub:
+                    continue
+                data = await self._in_thread(stream, partial(_still_subscribed, stream, sub), self._run_one, stream, sub)
+                if data is _SKIPPED:
+                    continue
+                ran = True
+                if isinstance(data, _Passing):
+                    passing, waiting = data, waiting[index:]
+                    break
+                self._deliver(stream, sub, data)
+            if passing is None:
+                return ran
+            if not retries_left:
+                for sub in waiting:
+                    # Not one gone, nor one another pass (an event's) answered while this one waited: it is newer.
+                    if stream.subs.get(sub.id) is sub and sub.answers == answered_before[sub.id]:
+                        self._deliver(stream, sub, self._error(sub, passing.error))
+                return ran
+            await self.sleep(min(passing.retry_after, MAX_RETRY_AFTER))
         return ran
 
-    async def _run(self, stream: Stream, sub: Subscription) -> bool:
-        """Run ``sub`` once and queue its frame; whether it reached a thread (its refresh re-read the context)."""
-        data = await self._in_thread(stream, lambda: stream.subs.get(sub.id) is sub, self._run_one, stream, sub)
-        if data is _SKIPPED:
-            return False
+    @staticmethod
+    def _deliver(stream: Stream, sub: Subscription, data: bytes | None) -> None:
+        """Queue ``sub``'s frame (``None``: its result did not change), and forget it if its error dropped it."""
+        sub.answers += 1
         if sub.dropped and stream.subs.get(sub.id) is sub:
             del stream.subs[sub.id]
         if data is not None:
             stream.put(data)
-        return True
 
     async def _reread(self, stream: Stream) -> None:
         data = await self._in_thread(stream, lambda: True, self._reread_one, stream)
@@ -268,6 +318,12 @@ class Executor:
                     builder.refresh(stream.ctx)
         except Unauthorized:
             return BYE_FRAME
+        except OperationError as exc:
+            if exc.retry_after is None:
+                logger.exception("Re-reading the context of live stream %s failed.", stream.id)
+            else:
+                # Its scope is busy for a moment: expected, and the next run re-reads it.
+                logger.warning("Re-reading the context of live stream %s found its scope busy: %s", stream.id, exc)
         except Exception:
             logger.exception("Re-reading the context of live stream %s failed.", stream.id)
         finally:
@@ -286,6 +342,8 @@ class Executor:
             sub.dropped = True
             return self._error(sub, exc.envelope()["error"])
         except OperationError as exc:
+            if exc.retry_after is not None:
+                return _Passing(exc.retry_after, exc.envelope()["error"])
             return self._error(sub, exc.envelope()["error"])
         except Exception:
             logger.exception("Live query %s failed (stream %s, subscription %s).", sub.op.name, stream.id, sub.id)
