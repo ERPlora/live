@@ -12,7 +12,8 @@ the Hub's assistant and the SaaS's panel use the same ones, each with its own to
   closed list by the label its app's models give it); a secret hidden; an attempt key left out. ``risk="high"`` asks to
   type a word in the person's language (``CONFIRM_WORD``) or, over records named by ``ids``, how many; such a write
   that names no record is not done from the chat (``blocked``). Such a write may show what it will do (``preview``): a
-  read of its own app its ``ai=`` names, run as the person before the card.
+  read of its own app its ``ai=`` names, run as the person before the card. A card is drawn only for data its operation
+  takes (``invalid_arguments``): what it would refuse goes back to the model, which asks again with it corrected.
 - **Words** (``Words``): the project says a moment, a record and an amount its own way (the Hub: at its business's
   hour, by the read a schema marks, in its business's currency); ``PlainWords`` reads nothing — amounts in euros with
   two decimals, moments at UTC as Django's formats of the language write them, a record left out.
@@ -25,7 +26,7 @@ import unicodedata
 import uuid
 from collections.abc import Callable, Collection, Iterable
 from dataclasses import dataclass
-from functools import cache
+from functools import cache, lru_cache
 from typing import Any, Protocol
 
 import pydantic
@@ -123,40 +124,186 @@ def catalog(
 
 
 # ── By relevance ─────────────────────────────────────────────────────────────────────────────────────────────────
+#
+# A turn offers the few tools of what was asked (``relevant``), chosen with no model nor network: the words of the
+# question, cut to their stems (``stem``: «vendí», «vendido» and «vender» are one), each with the words that name the
+# same thing (``SYNONYMS``: «empleado» is the ``staff``'s ``member``), against each tool's app (its names in both
+# languages), the parts of its name and its ``ai=`` description; the action asked (``VERBS``) of the thing named
+# weighs most. The same question always gets the same tools.
 
-#: What a person says (Spanish or English) → the verbs of the operations' names that do it.
+#: What a person says (Spanish or English) → the action of the operations that does it: the last part of an
+#: operation's name or one of its words (``bulk_create``, ``set_image``). A phrase counts when its words come in a row.
 VERBS = {
-    "create": ("crea", "crear", "creame", "alta", "añade", "añadir", "anade", "nuevo", "nueva", "add", "create", "new"),
-    "update": ("cambia", "cambiar", "modifica", "actualiza", "edita", "pon", "update", "change", "edit", "set"),
-    "delete": ("borra", "borrar", "elimina", "quita", "delete", "remove"),
-    "list": ("lista", "listar", "muestra", "ver", "dime", "cuantos", "cuantas", "cuales", "busca", "list", "show", "find",
-             "search", "how", "which"),
+    "create": ("crea", "crear", "creame", "alta", "anade", "anadir", "agrega", "agregar", "registra", "registrar",
+               "nuevo", "nueva", "add", "create", "new", "register"),
+    "update": ("cambia", "cambiar", "modifica", "modificar", "actualiza", "actualizar", "edita", "editar", "pon",
+               "ponle", "poner", "update", "change", "edit", "set"),
+    "change": ("cambia", "cambiar", "change"),
+    "rename": ("renombra", "renombrar", "rename"),
+    "set": ("pon", "ponle", "poner", "asigna", "asignar", "set", "assign"),
+    "delete": ("borra", "borrar", "elimina", "eliminar", "quita", "quitar", "delete", "remove"),
+    "remove": ("quita", "quitar", "remove"),
+    "list": ("lista", "listar", "muestra", "muestrame", "ensena", "ensename", "ver", "dime", "cuantos", "cuantas",
+             "cuales", "busca", "buscar", "list", "show", "find", "search", "how", "which"),
     "get": ("dame", "datos", "detalle", "get", "detail"),
     "complete": ("cobra", "cobrar", "charge", "pay"),
-    "void": ("anula", "anular", "void", "cancel"),
+    "void": ("anula", "anular", "void"),
+    "cancel": ("cancela", "cancelar", "anula", "anular", "cancel"),
     "close": ("cierra", "cerrar", "close"),
     "open": ("abre", "abrir", "open"),
+    "enable": ("activa", "activar", "activame", "enciende", "encender", "habilita", "habilitar", "enable", "activate",
+               "turn on", "switch on"),
+    "disable": ("desactiva", "desactivar", "apaga", "apagar", "deshabilita", "deshabilitar", "disable", "deactivate",
+                "turn off", "switch off"),
+    "invite": ("invita", "invitar", "invite"),
+    "print": ("imprime", "imprimir", "print"),
+    "refund": ("devuelve", "devolver", "reembolsa", "reembolsar", "refund"),
 }
+#: The actions that only read: a question that asks for none of the others asks to know, not to do.
+READ_VERBS = frozenset({"list", "get"})
+#: The words that ask to know (with those of ``READ_VERBS``): its reads come before the writes of what it names.
+QUESTION_WORDS = frozenset(
+    {"que", "cual", "cuales", "cuanto", "cuanta", "cuantos", "cuantas", "quien", "quienes", "donde", "cuando", "what",
+     "which", "who", "where", "when", "how"}
+)
+#: Words that name nothing by themselves (articles, pronouns, question words, the commonest verbs; Spanish and
+#: English): no word of a tool.
+STOP_WORDS = frozenset(
+    {
+        "que", "como", "cual", "cuales", "cuanto", "cuanta", "cuantos", "cuantas", "quien", "quienes", "donde",
+        "cuando", "con", "sin", "por", "para", "del", "los", "las", "una", "uno", "unos", "unas", "mis", "tus", "sus",
+        "nuestro", "nuestra", "este", "esta", "esto", "estos", "estas", "ese", "esa", "eso", "esos", "esas", "aqui",
+        "alli", "hay", "tengo", "tiene", "tienen", "tienes", "tenemos", "hace", "hago", "hice", "son", "soy", "fue",
+        "era", "muy", "mas", "pero", "porque", "todo", "toda", "todos", "todas", "puedo", "puede", "quiero", "favor",
+        "algo",
+        "the", "and", "for", "with", "what", "which", "who", "whom", "where", "when", "how", "this", "that", "these",
+        "those", "its", "his", "her", "our", "your", "you", "are", "was", "were", "has", "have", "had", "did", "does",
+        "can", "could", "would", "will", "one", "all", "any", "from", "into", "not", "but", "much", "many", "please",
+        "there", "here", "some", "about", "want", "need",
+    }
+)
+#: Words of one thing of a business, as people say it in Spanish or English and as the operations name it: one of
+#: them asked asks for all. Only what stems cannot join («empleado» and ``staff``, «vendí» and ``sale``, «hoy» and
+#: «today»).
+SYNONYMS = (
+    ("empleado", "empleada", "trabajador", "trabajadora", "trabajar", "personal", "equipo", "cajero", "cajera",
+     "camarero", "camarera", "dependiente", "dependienta", "profesional", "peluquero", "peluquera", "estilista",
+     "employee", "worker", "staff", "member", "team", "cashier", "waiter", "waitress", "professional", "stylist"),
+    ("venta", "vender", "vendido", "recaudacion", "sale", "sell", "sold", "revenue", "takings"),
+    ("hoy", "today"),
+    ("ayer", "yesterday"),
+    ("semana", "week"),
+    ("mes", "meses", "mensual", "month", "monthly"),
+    ("cliente", "customer", "client"),
+    ("producto", "articulo", "product"),
+    ("existencias", "stock", "inventario", "inventory"),
+    ("caja", "arqueo", "cajon", "till", "drawer", "cash"),
+    ("mesa", "table"),
+    ("reserva", "reservation", "booking"),
+    ("cita", "appointment"),
+    ("factura", "invoice"),
+    ("pago", "pagar", "payment", "pay"),
+    ("negocio", "empresa", "business", "company"),
+    ("plan", "suscripcion", "subscription"),
+    ("sesion", "session"),
+    ("app", "aplicacion", "modulo", "module"),
+    ("precio", "tarifa", "price"),
+    ("iva", "impuesto", "tax", "vat"),
+    ("categoria", "familia", "category"),
+    ("descuento", "discount"),
+    ("proveedor", "supplier"),
+    ("comanda", "pedido", "order"),
+    ("cocina", "kitchen"),
+    ("turno", "horario", "shift", "schedule"),
+    ("rol", "role"),
+    ("direccion", "address"),
+    ("nombre", "name"),
+    ("clave", "key"),
+    ("telefono", "movil", "phone"),
+    ("foto", "imagen", "photo", "image", "picture"),
+    ("impresora", "imprimir", "printer", "print"),
+    ("bono", "voucher"),
+    ("menu", "combo"),
+    ("ticket", "tique", "recibo", "receipt"),
+)
 _WORD = re.compile(r"[a-z0-9]+")
+#: Endings of a Spanish verb that end in «s» («vendimos»): cut before a plural «s» is.
+_VERB_S_ENDINGS = ("amos", "emos", "imos")
+#: Endings cut once a plural «s» is, longest first: Spanish and English tenses, participles and gender.
+_ENDINGS = ("ieron", "iendo", "ando", "aron", "aste", "iste", "ado", "ido", "ada", "ida", "aba", "ing", "ar", "er",
+            "ir", "ed", "a", "e", "i", "o")
+#: The verbs said in two words.
+_PHRASES = tuple(form for forms in VERBS.values() for form in forms if " " in form)
 
 
 def _plain(text: str) -> str:
     return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().lower()
 
 
+@lru_cache(maxsize=65_536)
+def stem(word: str) -> str:
+    """``word`` (plain: lowercase, no accents) cut to its stem, Spanish or English: a plural «s» and one ending of a
+    verb or a gender off, then five letters at most («vendí», «vendido», «vendimos» → «vend»; «clientes», «client» →
+    «clien»). The root keeps four letters, three for a plural («apps» → «app»; «mesa» is never «mes»)."""
+    for ending in _VERB_S_ENDINGS:
+        if word.endswith(ending) and len(word) - len(ending) >= 4:
+            return word[: -len(ending)][:5]
+    if word.endswith("s") and len(word) >= 4:
+        word = word[:-1]
+    for ending in _ENDINGS:
+        if word.endswith(ending) and len(word) - len(ending) >= 4:
+            word = word[: -len(ending)]
+            break
+    return word[:5]
+
+
 def stems(text: str) -> set[str]:
-    """The words of ``text`` without accents, lowercase, cut to five letters (a cheap stem that joins «servicio» and
-    «service», «clientes» and «client»); shorter than three letters, none."""
-    return {word[:5] for word in _WORD.findall(_plain(text)) if len(word) >= 3}
+    """The words of ``text`` that may name something, as their stems (``stem``): without accents, lowercase, of three
+    letters or more and none that names nothing by itself (``STOP_WORDS``)."""
+    return {stem(word) for word in _WORD.findall(_plain(text)) if len(word) >= 3 and word not in STOP_WORDS}
 
 
-def _asked(texts: Iterable[str]) -> tuple[set[str], set[str]]:
-    """The stems of what was asked and the verbs (``VERBS``) it names."""
-    words: set[str] = set()
+@lru_cache(maxsize=16_384)
+def _stems_of(text: str) -> frozenset[str]:
+    return frozenset(stems(text))
+
+
+@cache
+def _synonyms() -> dict[str, frozenset[str]]:
+    """Each stem of ``SYNONYMS`` → the stems of every group it is in."""
+    index: dict[str, set[str]] = {}
+    for group in SYNONYMS:
+        said = {stem(word) for word in group}
+        for one in said:
+            index.setdefault(one, set()).update(said)
+    return {one: frozenset(group) for one, group in index.items()}
+
+
+@lru_cache(maxsize=65_536)
+def _concept(word: str) -> frozenset[str]:
+    """What the plain ``word`` names: its stem and those of its synonyms."""
+    one = stem(word)
+    return _synonyms().get(one, frozenset()) | {one}
+
+
+def _asked(texts: Iterable[str]) -> tuple[set[frozenset[str]], set[str], bool]:
+    """What ``texts`` ask: what each of their words names (``_concept``; a word of a verb's phrase names nothing), the
+    actions they ask for (``VERBS``) and whether they ask to know (``QUESTION_WORDS``, ``READ_VERBS``)."""
+    said: set[str] = set()
+    phrases: set[str] = set()
+    naming: list[str] = []
     for text in texts:
-        words |= set(_WORD.findall(_plain(text)))
-    verbs = {verb for verb, said in VERBS.items() if words & set(said)}
-    return {word[:5] for word in words if len(word) >= 3}, verbs
+        words = _WORD.findall(_plain(text))
+        joined = f" {' '.join(words)} "
+        found = {phrase for phrase in _PHRASES if f" {phrase} " in joined}
+        verbal = {word for phrase in found for word in phrase.split()}
+        phrases |= found
+        said.update(words)
+        naming += [word for word in words if word not in verbal]
+    verbs = {verb for verb, forms in VERBS.items() if any(form in phrases or form in said for form in forms)}
+    reading = bool(said & QUESTION_WORDS) or any(said & set(VERBS[verb]) for verb in READ_VERBS)
+    concepts = {_concept(word) for word in naming if len(word) >= 3 and word not in STOP_WORDS}
+    return concepts, verbs, reading
 
 
 @cache
@@ -182,18 +329,29 @@ def relevant(
     always: Iterable[str] = (),
     app_words: Callable[[str, str], frozenset[str]] = app_words,
 ) -> list[Operation]:
-    """The tools of what ``texts`` ask, best first, at most ``MAX_TOOLS``: the app named (in either language,
-    ``app_words``) weighs most, then the verb asked of the operation's own action, then the words of its description;
-    ``always`` (what is always at hand) first."""
-    asked, verbs = _asked(texts)
+    """The tools of what ``texts`` ask, best first, at most ``MAX_TOOLS``; ``always`` (what is always at hand) first.
+    Each thing the question names (``_asked``) counts once per place of the tool it is in: its app (in either
+    language, ``app_words``) 4, the entity or the action of its name 2 each, its description 1. The action asked
+    adds 3, and 6 more when the question also names the tool's entity (the thing asked to be done: «activa la app»
+    is ``base.app.enable``, never an operation of the app named after it), 7 when its action is that verb itself
+    (``create``, before ``bulk_create``). A question that asks to know and to do nothing puts the reads first (1).
+    Ties go by name: the same question, the same tools."""
+    asked, verbs, reading = _asked(texts)
+    writing = bool(verbs - READ_VERBS)
     always = tuple(always)
+
+    def named(words: frozenset[str]) -> int:
+        return sum(1 for concept in asked if not concept.isdisjoint(words))
 
     def score(op: Operation) -> int:
         app, entity, action = op.name.split(".")
-        points = 4 * len(asked & app_words(app, language))
-        points += 3 * (action in verbs or any(action.startswith(verb) for verb in verbs))
-        points += 2 * len(asked & stems(entity.replace("_", " ")))
-        points += len(asked & stems(description(op)))
+        thing = named(_stems_of(entity.replace("_", " ")))
+        points = 4 * named(app_words(app, language)) + 2 * thing + 2 * named(_stems_of(action.replace("_", " ")))
+        points += named(_stems_of(description(op)))
+        if not verbs.isdisjoint(action.split("_")):
+            points += 3 + (6 + (action in verbs) if thing else 0)
+        if reading and not writing and op.kind == "query":
+            points += 1
         return points
 
     first = [tools[name] for name in always if name in tools]
@@ -639,6 +797,20 @@ def field(
     return shown
 
 
+def _over_records(op: Operation) -> bool:
+    """Whether ``op`` is a dangerous write over the records its ``ids`` name."""
+    schema = input_schema(op)
+    ids = resolved(schema.get("properties", {}).get("ids", {}), schema.get("$defs", {}))
+    return risk(op) == "high" and ids.get("type") == "array"
+
+
+def blocked(op: Operation, arguments: dict) -> bool:
+    """Whether ``arguments`` ask the dangerous write ``op`` over records (``ids``) and name none: not done from the
+    chat, whatever else they say (its card says so; the model is never asked to name records for it)."""
+    ids = arguments.get("ids")
+    return _over_records(op) and not (isinstance(ids, list) and ids)
+
+
 def card(op: Operation, arguments: dict, language: str, words: Words | None = None) -> dict:
     """What the person sees before ``op`` runs with ``arguments``: where it happens (``Words.app_name``), its action,
     each datum it sends by its name in ``language`` (``label``) and in ``words`` (``said``; ``PlainWords`` without
@@ -648,14 +820,8 @@ def card(op: Operation, arguments: dict, language: str, words: Words | None = No
     defs = schema.get("$defs", {})
     props = schema.get("properties", {})
     level = risk(op)
-    count: int | None = None
-    blocked = False
-    if level == "high" and resolved(props.get("ids", {}), defs).get("type") == "array":
-        ids = arguments.get("ids")
-        if isinstance(ids, list) and ids:
-            count = len(ids)
-        else:
-            blocked = True
+    refused = blocked(op, arguments)
+    count = len(arguments["ids"]) if _over_records(op) and not refused else None
     words = (words if words is not None else PlainWords(op, language)).within(arguments, props, defs)
     with translation.override(language):
         shown = [
@@ -676,7 +842,7 @@ def card(op: Operation, arguments: dict, language: str, words: Words | None = No
         "fields": fields,
         "count": count,
         "confirm_word": word if level == "high" else "",
-        "blocked": blocked,
+        "blocked": refused,
     }
 
 
@@ -707,14 +873,37 @@ def error_content(code: str, message: str, fields: dict | None = None) -> str:
     return json.dumps({"error": error}, ensure_ascii=False)
 
 
+#: What the model hears of data its operation refuses: which, and that it may ask again with them corrected.
+NOT_FITTING = "Some data does not fit: nothing was done. Correct it and call the tool again."
+
+
+def _validated(op: Operation, data: dict) -> tuple[ToolOutcome | None, Any]:
+    """``data`` as ``op``'s input takes it: ``(None, the input)``, or ``(invalid_payload, None)`` with each field's
+    message, as the operation's own validation says it (the values a closed list takes, the countries served…)."""
+    try:
+        return None, op.input.model_validate(data)
+    except pydantic.ValidationError as exc:
+        fields = {".".join(str(part) for part in error["loc"]) or "__all__": error["msg"] for error in exc.errors()}
+        return ToolOutcome("error", "invalid_payload", error_content("invalid_payload", NOT_FITTING, fields)), None
+
+
+def invalid_arguments(op: Operation, arguments: dict) -> ToolOutcome | None:
+    """Why ``op``'s input refuses the model's ``arguments`` (``invalid_payload``, field by field), or ``None`` when it
+    takes them. Asked before a write's card is drawn: the person never confirms data its operation will refuse; the
+    model hears which, as the tool's result, and asks again with them corrected — one card, one yes. A dangerous
+    write that names no record is not refused here: its card says it is not done from the chat (``blocked``)."""
+    if blocked(op, arguments):
+        return None
+    failure, _ = _validated(op, arguments)
+    return failure
+
+
 def run(ctx: OperationContext, op: Operation, data: dict) -> tuple[ToolOutcome | None, Any]:
     """``op`` run with ``data`` for ``ctx``'s person, by its own operation: ``(None, its result)``, or why it did not
     run (``(outcome, None)``)."""
-    try:
-        validated = op.input.model_validate(data)
-    except pydantic.ValidationError as exc:
-        fields = {".".join(str(part) for part in error["loc"]) or "__all__": error["msg"] for error in exc.errors()}
-        return ToolOutcome("error", "invalid_payload", error_content("invalid_payload", "Some data does not fit.", fields)), None
+    failure, validated = _validated(op, data)
+    if failure is not None:
+        return failure, None
     try:
         return None, op(ctx, validated)
     except (PermissionDenied, AppInactive, Unauthorized) as exc:
