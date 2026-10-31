@@ -93,6 +93,19 @@ def test_code_and_status_can_be_overridden_per_instance():
     assert OperationError.code == "error"
 
 
+def test_an_error_is_final_unless_it_says_when_to_try_again():
+    class Busy(OperationError):
+        status = 503
+        code = "busy"
+        retry_after = 1
+
+    assert OperationError("Not found.").retry_after is None
+    assert Busy("Busy.").retry_after == 1
+    assert OperationError("Busy.", status=503, retry_after=0.5).retry_after == 0.5
+    # The envelope says nothing of it: the client hears the status and the code.
+    assert Busy("Busy.").envelope() == {"error": {"code": "busy", "message": "Busy."}}
+
+
 def test_envelope_fields_are_a_copy():
     fields = {"name": "Field required"}
     envelope = InvalidPayload("Invalid payload.", fields=fields).envelope()

@@ -7,7 +7,9 @@ serialised result changed (``blake2b`` hash), with a ``rev`` that grows per subs
 
 Operations run in a small thread pool (``max_workers`` per process) because the ORM is
 synchronous; at most one run per scope at a time, different scopes in parallel. Each thread run
-ends with ``close_old_connections()``, so threads never keep a database connection past its age.
+ends with ``close_old_connections()``, so threads never keep a database connection past its age. A run that fails
+with a passing error (``OperationError.retry_after``: a hub busy for a moment) is tried again after that wait, up to
+three more times, outside the scope's turn; only then is its error frame sent.
 A worker thread inherits no active language, so each run activates the stream's
 (``ctx.language``): the operation's texts and the messages of its error frames reach the client
 in it. Nor does it inherit the request's context vars: a builder with ``enter(ctx)`` gets each run
@@ -50,6 +52,17 @@ QUEUE_MAX = 256
 BYE_FRAME = frame(BYE)
 #: What ``Executor._in_thread`` gives when, once the scope was free, the stream was closed or its subscription gone.
 _SKIPPED = object()
+#: How many more times a run that failed with a passing error (``OperationError.retry_after``) is tried, each after its
+#: wait, before its error frame is sent.
+PASSING_ERROR_RETRIES = 3
+
+
+@dataclass(frozen=True)
+class _Passing:
+    """A run that failed with a passing error: try again after ``retry_after`` seconds, or send ``error``."""
+
+    retry_after: float
+    error: dict
 
 
 @dataclass(eq=False)
@@ -206,10 +219,20 @@ class Executor:
         return ran
 
     async def _run(self, stream: Stream, sub: Subscription) -> bool:
-        """Run ``sub`` once and queue its frame; whether it reached a thread (its refresh re-read the context)."""
-        data = await self._in_thread(stream, lambda: stream.subs.get(sub.id) is sub, self._run_one, stream, sub)
-        if data is _SKIPPED:
-            return False
+        """Run ``sub`` and queue its frame; whether it reached a thread (its refresh re-read the context). A passing
+        error is tried again after its wait, up to :data:`PASSING_ERROR_RETRIES` more times, before its frame."""
+        ran = False
+        for retries_left in range(PASSING_ERROR_RETRIES, -1, -1):
+            data = await self._in_thread(stream, lambda: stream.subs.get(sub.id) is sub, self._run_one, stream, sub)
+            if data is _SKIPPED:
+                return ran
+            ran = True
+            if not isinstance(data, _Passing):
+                break
+            if not retries_left:
+                data = self._error(sub, data.error)
+                break
+            await asyncio.sleep(data.retry_after)
         if sub.dropped and stream.subs.get(sub.id) is sub:
             del stream.subs[sub.id]
         if data is not None:
@@ -286,6 +309,8 @@ class Executor:
             sub.dropped = True
             return self._error(sub, exc.envelope()["error"])
         except OperationError as exc:
+            if exc.retry_after is not None:
+                return _Passing(exc.retry_after, exc.envelope()["error"])
             return self._error(sub, exc.envelope()["error"])
         except Exception:
             logger.exception("Live query %s failed (stream %s, subscription %s).", sub.op.name, stream.id, sub.id)

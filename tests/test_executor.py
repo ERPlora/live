@@ -11,7 +11,7 @@ import pytest
 from django.utils.translation import gettext, gettext_lazy
 from live import executor as executor_module
 from live.context import OperationContext, Scope
-from live.errors import AppInactive, NotFound, PermissionDenied, Unauthorized
+from live.errors import AppInactive, NotFound, OperationError, PermissionDenied, Unauthorized
 from live.executor import BYE_FRAME, QUEUE_MAX, Executor, Stream, Subscription
 from live.operations import registry
 from live.sse import MAX_RESULT_BYTES
@@ -278,6 +278,109 @@ async def test_another_operation_error_keeps_the_subscription(make_executor):
     await executor.run_all(stream)
     (frame,) = await drain(stream.queue)
     assert (frame.event, frame.data["rev"]) == ("result", 1)
+
+
+def busy_for(failures: int, *, retry_after: float = 0.05):
+    """A query body that fails ``failures`` times with a passing error (``retry_after``), then answers."""
+    state = {"left": failures}
+
+    def body(ctx, params):
+        if state["left"]:
+            state["left"] -= 1
+            raise OperationError("Busy for a moment.", code="busy", status=503, retry_after=retry_after)
+        return ThingListOut(rows=[thing(1)])
+
+    return body
+
+
+async def test_a_passing_error_is_tried_again_after_its_wait_and_only_the_result_is_sent(make_executor):
+    executor = make_executor()
+    stream = make_stream()
+    op = FakeOp(body=busy_for(2))
+    subscribe(stream, op)
+
+    started = time.monotonic()
+    await executor.run_all(stream)
+
+    frames = await drain(stream.queue)
+    assert [(f.event, f.data.get("rev")) for f in frames] == [("result", 1)]
+    assert op.calls == 3
+    assert time.monotonic() - started >= 2 * 0.05
+
+
+async def test_a_passing_error_that_lasts_is_sent_after_three_more_tries(make_executor):
+    executor = make_executor()
+    stream = make_stream()
+    op = FakeOp(body=busy_for(10))
+    subscribe(stream, op)
+
+    await executor.run_all(stream)
+
+    (frame,) = await drain(stream.queue)
+    assert frame.event == "error"
+    assert frame.data["error"] == {"code": "busy", "message": "Busy for a moment."}
+    assert op.calls == 1 + executor_module.PASSING_ERROR_RETRIES == 4
+    assert "s1" in stream.subs
+
+
+async def test_a_passing_error_that_clears_sends_nothing_when_the_result_did_not_change(make_executor):
+    state = {"busy": False}
+
+    def body(ctx, params):
+        if state["busy"]:
+            state["busy"] = False
+            raise OperationError("Busy for a moment.", code="busy", status=503, retry_after=0.05)
+        return ThingListOut(rows=[thing(1)])
+
+    executor = make_executor()
+    stream = make_stream()
+    subscribe(stream, FakeOp(body=body))
+    await executor.run_all(stream)
+    state["busy"] = True
+    await executor.run_all(stream)
+
+    # The client never saw the error: the same result is no news.
+    assert [(f.event, f.data.get("rev")) for f in await drain(stream.queue)] == [("result", 1)]
+
+
+async def test_a_run_whose_retry_is_skipped_still_ran(make_executor):
+    """Its first try reached a thread and so re-read the stream's context (``_flush`` needs no re-read alone)."""
+    executor = make_executor()
+    stream = make_stream()
+    sub = subscribe(stream, FakeOp(body=busy_for(10, retry_after=0.3)))
+    asyncio.get_running_loop().call_later(0.1, stream.subs.clear)
+
+    assert await executor._run(stream, sub) is True
+    assert await drain(stream.queue) == []
+
+
+async def test_a_final_error_is_never_tried_again(make_executor):
+    def body(ctx, params):
+        raise NotFound("Thing not found.")
+
+    executor = make_executor()
+    stream = make_stream()
+    op = FakeOp(body=body)
+    subscribe(stream, op)
+
+    await executor.run_all(stream)
+
+    (frame,) = await drain(stream.queue)
+    assert frame.data["error"]["code"] == "not_found"
+    assert op.calls == 1
+
+
+async def test_a_stream_closed_while_waiting_to_try_again_runs_nothing_more(make_executor):
+    executor = make_executor()
+    stream = make_stream()
+    op = FakeOp(body=busy_for(10, retry_after=0.3))
+    subscribe(stream, op)
+    asyncio.get_running_loop().call_later(0.1, stream.close)
+
+    await executor.run_all(stream)
+
+    assert op.calls == 1
+    assert [frame.event for frame in await drain(stream.queue)] == ["bye"]
 
 
 async def test_a_result_after_an_error_is_sent_even_if_it_equals_the_one_before(make_executor):

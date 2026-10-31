@@ -16,6 +16,9 @@ class OperationError(Exception):
 
     status: int = 400
     code: str = "error"
+    #: Seconds after which the same call may succeed (a passing failure, such as a hub busy for a moment), or ``None``
+    #: for a final one; the live executor tries a re-run again after it (``live.executor``).
+    retry_after: float | None = None
 
     def __init__(
         self,
@@ -24,6 +27,7 @@ class OperationError(Exception):
         code: str | None = None,
         status: int | None = None,
         fields: dict[str, str] | None = None,
+        retry_after: float | None = None,
     ) -> None:
         super().__init__(message)
         self.message = message
@@ -31,6 +35,8 @@ class OperationError(Exception):
             self.code = code
         if status is not None:
             self.status = status
+        if retry_after is not None:
+            self.retry_after = retry_after
         self.fields = dict(fields) if fields else None
 
     def envelope(self) -> dict:
