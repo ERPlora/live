@@ -5,8 +5,13 @@ and kills its whole process group at exit (SIGTERM, then SIGKILL after 5 s). The
 never starts another one; `--novite` skips it.
 """
 
+import contextlib
+import functools
+import os
 import signal
 import subprocess
+import sys
+import time
 
 import pytest
 from daphne.management.commands.runserver import Command as DaphneCommand
@@ -209,21 +214,68 @@ class TestCommand:
             assert get_commands()["runserver"] == "live"
 
 
+# The leader of the real process groups below: it sets SIGTERM to ignored (`ignore-term`) or to its default, starts a
+# child in its group (which inherits that), prints the child's pid once both are set up, and sleeps. It never exits
+# on its own when its child dies, so its exit status is the signal that reached it. A `sh -c "sleep 60 & wait"` leader
+# is not: killpg signals the members one at a time, on macOS the child can die before the signal reaches the shell,
+# and the shell then leaves its `wait` and exits 0 on its own (live#15: 14 of 20 runs under load).
+LEADER = """
+import signal, subprocess, sys, time
+signal.signal(signal.SIGTERM, signal.SIG_IGN if sys.argv[1] == "ignore-term" else signal.SIG_DFL)
+child = subprocess.Popen(["sleep", "60"])
+print(child.pid, flush=True)
+time.sleep(60)
+"""
+
+
+def _dies(pid: int, within: float = 5.0) -> bool:
+    """Whether ``pid`` is gone or a zombie within ``within`` seconds (an orphan is reaped by init, not by us)."""
+    deadline = time.monotonic() + within
+    while True:
+        state = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True).stdout.strip()
+        if not state or state.startswith("Z"):
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.05)
+
+
+@pytest.fixture
+def real_group():
+    """Start ``LEADER`` the way Vite is started and return it with its child's pid once both are ready."""
+    started = []
+
+    def start(sigterm: str) -> tuple[subprocess.Popen, int]:
+        process = runserver.start_vite(
+            {"command": [sys.executable, "-c", LEADER, sigterm]},
+            popen=functools.partial(subprocess.Popen, stdout=subprocess.PIPE, text=True),
+        )
+        started.append(process)
+        return process, int(process.stdout.readline())
+
+    yield start
+    for process in started:  # whatever a failed test left alive
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(process.pid, signal.SIGKILL)
+        process.wait()
+        process.stdout.close()
+
+
 class TestRealProcessGroup:
     """The same functions against the OS: the whole group dies, not only the leader."""
 
-    def test_sigterm_stops_a_real_process_group(self):
-        process = runserver.start_vite({"command": ["sh", "-c", "sleep 60 & wait"]})
+    def test_sigterm_stops_a_real_process_group(self, real_group):
+        process, child = real_group("default-term")
 
         runserver.stop_vite(process, timeout=5.0)
 
         assert process.returncode == -signal.SIGTERM
+        assert _dies(child)
 
-    def test_sigkill_stops_a_group_that_ignores_sigterm(self):
-        process = runserver.start_vite({"command": ["sh", "-c", "trap '' TERM; sleep 60 & wait"]})
-        import time
+    def test_sigkill_stops_a_group_that_ignores_sigterm(self, real_group):
+        process, child = real_group("ignore-term")
 
-        time.sleep(0.2)  # let the shell install its trap
         runserver.stop_vite(process, timeout=0.5)
 
         assert process.returncode == -signal.SIGKILL
+        assert _dies(child)
