@@ -362,6 +362,19 @@ def test_a_list_with_one_item_left_as_sent_is_not_named(lists, monkeypatch):
     assert named(card) == {"sizes": False, "days": False}
 
 
+class PairsIn(Schema):
+    two_things: tuple[uuid.UUID, uuid.UUID] | None = None
+    thing_and_tag: tuple[uuid.UUID, str] | None = None
+
+
+def test_a_list_of_fixed_places_is_named_by_the_schema_of_each_place():
+    """A list whose schema declares each place (``prefixItems``): two records are said in words; a record and a text sent
+    as it is are not."""
+    pairs = op("testapp.probe.pairs", ai=CREATE, input=PairsIn)
+    card = assistant.card(pairs, {"two_things": LISTS["things"], "thing_and_tag": [LISTS["things"][0], "vip"]}, "en")
+    assert named(card) == {"two_things": True, "thing_and_tag": False}
+
+
 # ── A tool, run as the person ─────────────────────────────────────────────────────────────────────────────────────
 
 
