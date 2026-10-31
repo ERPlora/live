@@ -375,6 +375,51 @@ def test_a_list_of_fixed_places_is_named_by_the_schema_of_each_place():
     assert named(card) == {"two_things": True, "thing_and_tag": False}
 
 
+# ── Arguments its operation would refuse never reach a card ─────────────────────────────────────────────────────
+
+
+class PlaceIn(Schema):
+    name: str
+    country: Literal["ES", "FR"] = Field(description="ISO 3166-1 alpha-2 code of the country.")
+
+
+def test_arguments_the_operation_refuses_are_told_back_to_the_model_field_by_field():
+    """QA 2026-10-31 (A2.12): a card said «country: España», the person typed the word, and the write was refused;
+    the model asked again and the person confirmed twice. The model hears the refusal before any card is drawn."""
+    outcome = assistant.invalid_arguments(op("testapp.probe.place", input=PlaceIn), {"name": "QA", "country": "España"})
+    assert (outcome.outcome, outcome.code) == ("error", "invalid_payload")
+    error = json.loads(outcome.content)["error"]
+    assert set(error["fields"]) == {"country"}
+    assert "'ES'" in error["fields"]["country"]  # the values it takes, for the model to send one
+    assert "nothing was done" in error["message"] and "again" in error["message"]
+
+
+def test_arguments_that_fit_are_not_refused():
+    place = op("testapp.probe.place", input=PlaceIn)
+    assert assistant.invalid_arguments(place, {"name": "QA", "country": "ES"}) is None
+
+
+class SomeIdsIn(Schema):
+    ids: list[str] = Field(min_length=1)
+
+
+@pytest.mark.parametrize("arguments", [{"ids": []}, {}])
+def test_a_dangerous_write_that_names_no_record_is_not_refused_its_card_says_it_is_not_from_the_chat(arguments):
+    """No record named is the card's own refusal (``blocked``, «not from the chat»), whatever else its input says: the
+    model is never taught to name records for a dangerous write over many."""
+    delete = op("testapp.probe.delete", input=SomeIdsIn, ai=AI(description="Deletes things.", risk="high"))
+    assert assistant.invalid_arguments(delete, arguments) is None
+    assert assistant.card(delete, arguments, "en")["blocked"] is True
+    # Named, data it refuses are the model's to correct, as any other write's.
+    assert assistant.invalid_arguments(delete, {"ids": [3]}).code == "invalid_payload"
+
+
+def test_a_tool_tells_the_model_the_values_a_field_takes_and_what_it_is():
+    country = assistant.tool_spec(op("testapp.probe.place", input=PlaceIn))["parameters"]["properties"]["country"]
+    assert country["enum"] == ["ES", "FR"]
+    assert country["description"] == "ISO 3166-1 alpha-2 code of the country."
+
+
 # ── A tool, run as the person ─────────────────────────────────────────────────────────────────────────────────────
 
 
