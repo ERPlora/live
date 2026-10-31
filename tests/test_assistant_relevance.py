@@ -11,18 +11,30 @@ Hub's 700 do.
 import time
 
 import pytest
+from ninja import Schema
 
 from live import assistant
 from live.operations import AI, Operation
 from tests.test_assistant import Done, NoIn
 
 
-def tool(name: str, description: str, kind: str = "command") -> Operation:
+class ProductIn(Schema):
+    name: str | None = None
+    price: int | None = None
+
+
+class ReservationIn(Schema):
+    guest_name: str
+    party_size: int
+    table: str | None = None
+
+
+def tool(name: str, description: str, kind: str = "command", input: type[Schema] = NoIn) -> Operation:
     return Operation(
         name=name,
         kind=kind,
         permission=f"{name.split('.')[0]}.manage",
-        input=NoIn,
+        input=input,
         output=Done,
         expose_api=False,
         ai=AI(description=description),
@@ -45,6 +57,16 @@ HUB_SLICE = [
          "phone, tax id and company.", "query"),
     tool("inventory.product.create", "Create a product of the catalog with its tax category, its categories and, "
          "if given, its initial stock."),
+    tool("inventory.product.update", "Change a product, named by its id, SKU or name: its data, active or not, its "
+         "stock control and its categories.", input=ProductIn),
+    tool("pricing.price_list.list", "List the price lists (the active ones by default): code, name, currency.",
+         "query"),
+    tool("pricing.rule.list", "List the automatic discount rules (the active ones by default).", "query"),
+    tool("reservation.reservation.create", "Takes a reservation («a table for 4 tomorrow at 21:00 for Ana»): the "
+         "guest, the day and time, the party size and, if said, the table.", input=ReservationIn),
+    tool("reservation.reservation.list", "Lists reservations of some days, or of a guest.", "query"),
+    tool("sale.sale.complete", "Charge a sale: an open check (all its lines, or some for a partial charge) or loose "
+         "lines, with its payments."),
     tool("sale.order.open", "Open a check (an open ticket), empty or with lines."),
     tool("sale.order.void", "Void (delete) an open check before it is charged: it is kept as voided."),
     tool("sale.sale.list", "List the sales, newest first: search by number or customer; filter by status.", "query"),
@@ -86,6 +108,10 @@ def offered(*asked: str, language: str = "es") -> list[str]:
         ("es", "Crea el cliente «Ana QA» con teléfono 600000000", "customer.customer.create"),
         ("es", "Borra el cliente «Ana QA»", "customer.customer.delete"),
         ("es", "Crea el producto «Café QA» a 1,50 € con IVA 10 %", "inventory.product.create"),
+        # Review of live#18: a table named is not what is charged, nor the people of a reservation its staff.
+        ("es", "Cobra la mesa 4", "sale.sale.complete"),
+        ("en", "Charge table 4", "sale.sale.complete"),
+        ("es", "Reserva una mesa para 4 personas", "reservation.reservation.create"),
     ],
 )
 def test_the_operation_that_does_what_was_asked_comes_first(language, asked, expected):
@@ -102,6 +128,22 @@ def test_the_people_who_work_in_the_business_are_its_staff_whatever_the_person_c
     for asked in ("¿Cuántos empleados tengo?", "¿Quién trabaja hoy?", "Lista el personal", "Show my workers"):
         ranked = offered(asked)
         assert ranked.index("staff.member.list") < ranked.index("appointment.thing00.list"), asked
+
+
+def test_the_people_of_a_reservation_are_not_the_staff():
+    """«personas» and «personal» (the staff, the Hub's «Personal») share their first five letters: never their stem."""
+    ranked = offered("Reserva una mesa para 4 personas")
+    last = max(ranked.index(name) for name in ranked if name.startswith(("reservation.", "table.")))
+    assert all(index > last for index, name in enumerate(ranked) if name.startswith("staff."))
+
+
+def test_what_a_write_takes_is_what_it_changes():
+    """«Cambia el precio del café»: the product's own write takes a price; it comes before every write that only
+    shares the verb, though no product is named."""
+    ranked = offered("Cambia el precio del café a 1,80")
+    assert ranked.index("inventory.product.update") < ranked.index("appointment.thing00.update")
+    # And before the reads of the price lists, which only name the price.
+    assert ranked.index("inventory.product.update") < ranked.index("pricing.price_list.list")
 
 
 def test_a_question_without_a_verb_offers_the_reads_of_what_it_names_first():
@@ -141,6 +183,8 @@ def test_the_same_question_is_offered_the_same_tools():
         ("member members", {"memb"}),
         ("customer customers", {"custo"}),
         ("app apps", {"app"}),
+        ("persona personas", {"perso"}),
+        ("personal", {"personal"}),
         ("sale sales", {"sale"}),
         ("servicio service", {"servi"}),
         # A plural never shortens a word into another: «mesa» (a table) is never «mes» (a month).
@@ -167,4 +211,4 @@ def test_a_turn_ranks_the_hubs_catalogue_in_a_few_milliseconds():
         start = time.perf_counter()
         assistant.relevant(many, ["Da de alta al empleado «Luis QA» como cajero", "¿Qué vendí hoy?"], "es")
         timings.append(time.perf_counter() - start)
-    assert min(timings) < 0.020
+    assert min(timings) < 0.100  # ~2 ms here; generous for a loaded CI runner

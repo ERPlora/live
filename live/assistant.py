@@ -189,7 +189,8 @@ SYNONYMS = (
     ("empleado", "empleada", "trabajador", "trabajadora", "trabajar", "personal", "equipo", "cajero", "cajera",
      "camarero", "camarera", "dependiente", "dependienta", "profesional", "peluquero", "peluquera", "estilista",
      "employee", "worker", "staff", "member", "team", "cashier", "waiter", "waitress", "professional", "stylist"),
-    ("venta", "vender", "vendido", "recaudacion", "sale", "sell", "sold", "revenue", "takings"),
+    ("venta", "vender", "vendido", "cobrar", "cobro", "recaudacion", "sale", "sell", "sold", "charge", "revenue",
+     "takings"),
     ("hoy", "today"),
     ("ayer", "yesterday"),
     ("semana", "week"),
@@ -227,6 +228,8 @@ SYNONYMS = (
     ("ticket", "tique", "recibo", "receipt"),
 )
 _WORD = re.compile(r"[a-z0-9]+")
+#: Words kept whole: cut, they would be another word's stem («personal», the staff, is not «persona»).
+_WHOLE = frozenset({"personal"})
 #: Endings of a Spanish verb that end in «s» («vendimos»): cut before a plural «s» is.
 _VERB_S_ENDINGS = ("amos", "emos", "imos")
 #: Endings cut once a plural «s» is, longest first: Spanish and English tenses, participles and gender.
@@ -244,7 +247,10 @@ def _plain(text: str) -> str:
 def stem(word: str) -> str:
     """``word`` (plain: lowercase, no accents) cut to its stem, Spanish or English: a plural «s» and one ending of a
     verb or a gender off, then five letters at most («vendí», «vendido», «vendimos» → «vend»; «clientes», «client» →
-    «clien»). The root keeps four letters, three for a plural («apps» → «app»; «mesa» is never «mes»)."""
+    «clien»). The root keeps four letters, three for a plural («apps» → «app»; «mesa» is never «mes»); a word of
+    ``_WHOLE`` stays whole."""
+    if word in _WHOLE:
+        return word
     for ending in _VERB_S_ENDINGS:
         if word.endswith(ending) and len(word) - len(ending) >= 4:
             return word[: -len(ending)][:5]
@@ -266,6 +272,12 @@ def stems(text: str) -> set[str]:
 @lru_cache(maxsize=16_384)
 def _stems_of(text: str) -> frozenset[str]:
     return frozenset(stems(text))
+
+
+@lru_cache(maxsize=4_096)
+def _taken(schema: type) -> frozenset[str]:
+    """The stems of the data an operation's input ``schema`` takes, by their names (``price``, ``party_size``)."""
+    return frozenset(stems(" ".join(name.replace("_", " ") for name in getattr(schema, "model_fields", {}))))
 
 
 @cache
@@ -331,11 +343,12 @@ def relevant(
 ) -> list[Operation]:
     """The tools of what ``texts`` ask, best first, at most ``MAX_TOOLS``; ``always`` (what is always at hand) first.
     Each thing the question names (``_asked``) counts once per place of the tool it is in: its app (in either
-    language, ``app_words``) 4, the entity or the action of its name 2 each, its description 1. The action asked
-    adds 3, and 6 more when the question also names the tool's entity (the thing asked to be done: «activa la app»
-    is ``base.app.enable``, never an operation of the app named after it), 7 when its action is that verb itself
-    (``create``, before ``bulk_create``). A question that asks to know and to do nothing puts the reads first (1).
-    Ties go by name: the same question, the same tools."""
+    language, ``app_words``) 4, the entity or the action of its name 2 each, its description and the data its input
+    takes 1 each. The action asked adds 3, and 6 more when the question also names the tool's entity (the thing asked
+    to be done: «activa la app» is ``base.app.enable``, never an operation of the app named after it), 7 when its
+    action is that verb itself (``create``, before ``bulk_create``), 4 when it names only a datum the tool takes
+    («cambia el precio»: a write that takes a ``price``). A question that asks to know and to do nothing puts the
+    reads first (1). Ties go by name: the same question, the same tools."""
     asked, verbs, reading = _asked(texts)
     writing = bool(verbs - READ_VERBS)
     always = tuple(always)
@@ -347,9 +360,10 @@ def relevant(
         app, entity, action = op.name.split(".")
         thing = named(_stems_of(entity.replace("_", " ")))
         points = 4 * named(app_words(app, language)) + 2 * thing + 2 * named(_stems_of(action.replace("_", " ")))
-        points += named(_stems_of(description(op)))
+        takes = named(_taken(op.input))
+        points += named(_stems_of(description(op))) + takes
         if not verbs.isdisjoint(action.split("_")):
-            points += 3 + (6 + (action in verbs) if thing else 0)
+            points += 3 + (6 + (action in verbs) if thing else 4 if takes else 0)
         if reading and not writing and op.kind == "query":
             points += 1
         return points
