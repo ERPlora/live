@@ -16,8 +16,9 @@ class OperationError(Exception):
 
     status: int = 400
     code: str = "error"
-    #: Seconds after which the same call may succeed (a passing failure, such as a hub busy for a moment), or ``None``
-    #: for a final one; the live executor tries a re-run again after it (``live.executor``).
+    #: For a passing failure that ran nothing (such as a hub busy for a moment, refused before any statement): the
+    #: seconds after which the same call may succeed. ``None`` for any other failure, and always for one that may have
+    #: done something. The live executor tries the query again after it (``live.executor``).
     retry_after: float | None = None
 
     def __init__(

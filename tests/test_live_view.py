@@ -1,5 +1,6 @@
 """``/api/live``: one SSE stream per tab, its frames, its errors and its scope isolation (plan §4.1)."""
 
+import asyncio
 import json
 import re
 
@@ -142,7 +143,9 @@ async def test_retry_3000_is_sent_once(client, readers, monkeypatch):
     _, reader = await open_stream(client, readers, [LIST])
     frames = [await reader.next() for _ in range(4)]
 
-    assert [f.event for f in frames] == ["hello", "result", "heartbeat", "heartbeat"]
+    # A heartbeat may come before the result: it goes out while the opening pass runs, too.
+    assert frames[0].event == "hello"
+    assert sorted(f.event for f in frames[1:]) == ["heartbeat", "heartbeat", "result"]
     assert frames[0].retry == 3000
     assert [f.retry for f in frames[1:]] == [None, None, None]
     assert sum(f.raw.count(b"retry:") for f in frames) == 1
@@ -156,6 +159,26 @@ async def test_heartbeat_after_idle_with_an_injected_clock(client, readers, monk
 
     assert heartbeat.event == "heartbeat"
     assert heartbeat.data == {}
+
+
+async def test_a_slow_opening_pass_keeps_the_stream_alive_with_heartbeats_until_its_results(client, readers, monkeypatch):
+    """A pass may take a while (a hub busy for a moment waits and tries again): the client's watchdog hears a heartbeat
+    every HEARTBEAT_EVERY meanwhile, never silence until the pass ends."""
+    monkeypatch.setattr(live_view, "HEARTBEAT_EVERY", 0.1)
+    real = executor.run_all
+
+    async def slow(stream):
+        await asyncio.sleep(0.5)
+        await real(stream)
+
+    monkeypatch.setattr(executor, "run_all", slow)
+
+    _, reader = await open_stream(client, readers, [LIST])
+    first, second = await reader.next(timeout=0.3), await reader.next(timeout=0.3)
+    result = await reader.next_data_frame()
+
+    assert (first.event, second.event) == ("hello", "heartbeat")
+    assert (result.event, result.data["id"]) == ("result", "list")
 
 
 async def test_heartbeat_is_15_seconds_by_default():
