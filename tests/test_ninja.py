@@ -19,7 +19,7 @@ from django.test import RequestFactory
 from django.urls import path
 from django.utils import translation
 from live.context import OperationContext, Scope
-from live.errors import Conflict, LiveMisuse
+from live.errors import Conflict, LiveMisuse, OperationError
 from live.ninja import (
     bind,
     ensure_api_parity,
@@ -305,6 +305,15 @@ def test_operation_error_uses_the_single_envelope(client):
 
     assert response.status_code == 409
     assert response.json() == {"error": {"code": "demo.x", "message": "Already done."}}
+
+
+def test_an_operation_error_a_route_answers_has_reached_its_client(client, monkeypatch):
+    told = []
+    monkeypatch.setattr(OperationError, "reached_client", lambda self: told.append(self.code))
+
+    client.get("/api/probe/conflict")
+
+    assert told == ["demo.x"]
 
 
 def test_permission_denied_is_403_envelope(client):
