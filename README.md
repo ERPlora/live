@@ -210,10 +210,10 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
 
 Las mecánicas del asistente que no dependen de la pasarela, las mismas en el Hub y en el panel del SaaS:
 `catalog(ctx, active_labels=…, not_from_chat=…, approvable=…)` (las herramientas de la persona: operaciones con
-`AI`, de las apps encendidas, con su permiso), `relevant(tools, texts, language, always=…, app_words=…)` (como mucho
-`MAX_TOOLS`, sin modelo ni red: las raíces de las palabras de la pregunta en español o inglés, `stem`/`stems`, con sus
-sinónimos del negocio, `SYNONYMS`, contra la app, el nombre, la descripción y los datos que toma cada herramienta; pesa
-más la acción pedida, `VERBS`, sobre la cosa que se nombra; live#16), `tool_spec`, `card(op, arguments, language,
+`AI`, de las apps encendidas, con su permiso), `relevant(tools, texts, language, always=…, app_words=…, synonyms=…,
+howto=…)` (como mucho `MAX_TOOLS`, sin modelo ni red: las raíces de las palabras de la pregunta en español o inglés,
+`stem`/`stems`, con sus sinónimos del negocio, `SYNONYMS`, contra la app, el nombre, la descripción y los datos que toma
+cada herramienta; pesa más la acción pedida, `VERBS`, sobre la cosa que se nombra; live#16; detalle abajo), `tool_spec`, `card(op, arguments, language,
 words)` (la tarjeta de una escritura) con `confirmed` y `CONFIRM_WORD`, `invalid_arguments` (los datos que la operación
 rechazaría vuelven al modelo antes de dibujar la tarjeta, salvo la escritura peligrosa que no nombra registros,
 `blocked`; live#17), `run_tool` (ejecuta como la persona, resultado cortado en `MAX_RESULT_CHARS`), `preview` (la
@@ -225,17 +225,67 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
 `relevant` pesa lo que la gente dice para pedir una herramienta (sus `asks`, en cualquier idioma) como su descripción:
 1 por cosa nombrada.
 
+**Cómo lee una frase** (`asked(texts, synonyms)` → `Asked`; todo determinista y en milisegundos con ~750 herramientas):
+
+- **Raíces** (`stem`): un imperativo con sus pronombres es su verbo («cóbrale», «súbele», «dime», «descárgame» →
+  «cobra», «sube», «di», «descarga»); un verbo guarda raíz de tres letras («sube», «subir» → «sub»); un verbo inglés
+  pierde la consonante doblada con su final («tagged» → «tag»). Las palabras de dos cosas no comparten raíz: «tablet» no
+  es «table», «compartido» no es «company», «peluquería» no es «peluquero», «carta» no es «cart», «contrato» y
+  «contraseña» no son «control», «recibo» no es «recibir», «registro» no es «register», «settings» no es «set», y «ficha»
+  (la del cliente) no es «fichar» salvo al empezar una orden («ficha la entrada de Ana»; igual «reserva una mesa»).
+- **Verbos** (`VERBS`): una frase de varias palabras cuenta seguida y sus palabras no piden otra cosa («get rid of» es
+  borrar, nunca `get`; «set up» configura, nunca `set`; «add up» y «¿cuadran?» comprueban, no añaden; «cambia el
+  nombre» y «ponle de nombre» renombran). «Ponle», «añade», «apunta» y «mete» añaden (`add`); «exporta», «descarga»,
+  «download» exportan; «importa», «súbeme», «upload» importan; «borremos todos sus datos» y «erase» borran del todo
+  (`erase`); «empieza» y «start» abren; «ponme la app», «instala» encienden; «how many» y «cuántos» cuentan (`count`, `list`, `stats`). «How», «which»,
+  «cómo» y «cuál» ya no son el verbo «listar». Un verbo no nombra cosas salvo por sus sinónimos («cobra» nombra la
+  venta; «show me», «dame», «dime», «give me», «tell me» no nombran nada).
+- **Preguntas**: una pregunta (palabra interrogativa con tilde, que empieza por una o por un auxiliar inglés, o con sus
+  signos) pide saber aunque nombre un verbo («do I need a customer to charge?»): sus lecturas van primero y lo que nombra
+  ese verbo es de lo que pregunta (`Asked.about`: «what can customers pay with?» → las formas de pago). Nunca es pregunta
+  una frase que es una orden: tras saludos y palabras de petición empieza por un verbo que hace algo («hola, ¿puedes
+  cobrar la mesa 4?», «hey charge table 4?», «cobra la mesa 4 y dime cuánto es», «do a refund»). Un «que» sin tilde solo
+  pregunta con signos («dice que sí», «anula el ticket, que me equivoqué» no preguntan). «Can you…?» y «¿puedes…?» son
+  peticiones: piden hacer. El texto se normaliza (NFC) antes de buscar las tildes.
+- **Cómo se hace**: «how do I…», «¿cómo se…?», «¿cómo invito…?», también tras «dime», «explícame» o «tell me»
+  («tell me how to…»), dan `HOWTO_POINTS` a las herramientas de `howto=`, la
+  búsqueda en la documentación de cada proyecto (Hub `base.docs.search`, SaaS `assistant.docs.search`): llega por ser
+  una pregunta de cómo se hace, no solo por estar en `ALWAYS`.
+- **Pesos**: una cosa nombrada vale 2 en la entidad de la herramienta o en lo que su acción toca (`create_folder` toca
+  una carpeta; lo que va tras `for`/`by`/`from` solo dice para qué, 1), y 1 si solo nombra su app: el nombre de una app
+  desempata, nunca ahoga lo pedido («customers» ya no da puntos a toda la app de clientes). Si la pregunta no nombra la
+  cosa de ninguna herramienta, la app nombrada por su nombre es la cosa de sus herramientas («¿qué hay en la cocina?»,
+  «abre la caja con 100 €»); al lado de una cosa nombrada («el registro de eventos») solo desempata. La acción pedida sobre la
+  cosa nombrada suma 9, y 3 más si esa cosa es lo primero que nombra la orden desde su verbo (`Asked.objects`: «crea la
+  carpeta Facturas» crea una carpeta, no una factura); una escritura de otra cosa no suma si alguna herramienta hace
+  eso a lo que la orden toca («reserva una mesa» no trae las altas de la plantilla; «create a 10% discount» sí trae las
+  altas, porque ninguna herramienta crea un descuento); una lectura sin cosa nombrada suma 1 solo si se nombra su app
+  (los «cuántos» no levantan todas las listas), y un dato por el que filtra no es lo que lee. Encender o apagar algo
+  que una escritura toma la cambia («turn off the alerts» → `accounts.preferences.update`); una escritura de una cosa
+  nombrada tras el verbo trae la lectura que la encuentra («borra el cliente Ana»).
+- **Sinónimos del proyecto** (`synonyms=`): `SYNONYMS` guarda solo lo que una palabra significa en cualquier negocio.
+  Lo que significa solo en un proyecto lo pasa ese proyecto en cada turno y en su QA, nunca se fija en `live`: «cuenta»
+  es la cuenta de una mesa en el Hub (`(("cuenta", "check", "tab", "order"),)`) y la cuenta de la persona en el SaaS
+  (`(("cuenta", "account"),)`). Un grupo admite frases («foto de perfil»).
+
 **QA del asistente, derivada de las operaciones** (`live.assistant_qa`; plan 2026-10-31 del conocimiento y la QA del
 asistente), en dos capas:
 
-1. **Determinista, en cada PR** (sin modelo ni red): `misses(tools, *, language, top=10, app_words=…, always=…)` pasa
-   cada `ask` del idioma de cada herramienta del catálogo por el mismo `relevant` de un turno y devuelve, ordenadas por
+1. **Determinista, en cada PR** (sin modelo ni red): `misses(tools, *, language, top=10, app_words=…, always=…,
+   synonyms=…, howto=…, own_asks=True)` pasa cada `ask` del idioma de cada herramienta del catálogo por el mismo
+   `relevant` de un turno (con las `always`, `app_words`, `synonyms` y `howto` del proyecto) y devuelve, ordenadas por
    herramienta y frase, las `Miss(tool_name, ask, position)` cuya herramienta no sale entre las `top` primeras
-   (`position` desde 1, o `None` si ni se ofrece; `top` entre 1 y `MAX_TOOLS`). Las tres funciones leen `language`
-   sin región (`base_language`: `es-ES` → `es`). `relevant` lee las `asks` de cada herramienta una vez por operación
-   (caché), no en cada turno. `uncovered(tools, language)` lista,
-   ordenadas, las herramientas sin `asks` en ese idioma. Como las `asks` cuentan para su propia herramienta, esta capa
-   prueba que las frases de la gente llegan a ella entre cientos, no que el modelo la llame.
+   (`position` desde 1, o `None` si ni se ofrece; `top` entre 1 y `MAX_TOOLS`). Las funciones leen `language` sin región
+   (`base_language`: `es-ES` → `es`). `relevant` lee las `asks` de cada herramienta una vez por operación (caché), no en
+   cada turno. `uncovered(tools, language)` lista, ordenadas, las herramientas sin `asks` en ese idioma.
+   Con `own_asks=True` la frase cuenta para su propia herramienta, así que llega diga lo que diga (cambiar las `asks`
+   de una herramienta por palabras sin relación sigue pasando). **Los tests por app usan `own_asks=False`**: cada frase
+   se ordena sin ella misma (la herramienta conserva sus otras `asks` y su descripción, como encontraría la frase nueva
+   de una persona), así se mide que las frases generalizan. `report(tools, language, top=10, *, app_words=…,
+   always=…, synonyms=…, howto=…)` da, por herramienta y ordenado, un `Reach(tool_name, asks, own, unseen, own_within,
+   unseen_within)`: la posición de cada frase con su propia frase y sin ella, y cuántas entran en las `top` primeras de
+   cada modo, para el resumen de cobertura del test. Esta capa prueba que las frases de la gente llegan a la
+   herramienta entre cientos, no que el modelo la llame.
 2. **Con el modelo real** (Playwright en el Hub y el SaaS): `export_catalog(tools, language)` da cada herramienta,
    por nombre y serializable a JSON, con `name`, `tool_name`, `app_label`, `kind` (`read`/`write`), `permission`,
    `risk`, `description`, `asks` (las del idioma) e `input_schema`; de ahí la QA escribe sus propias frases por rol.
