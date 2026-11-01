@@ -9,6 +9,7 @@ Hub's 700 do.
 """
 
 import time
+import unicodedata
 from collections import Counter
 
 import pytest
@@ -711,7 +712,10 @@ APPS = [
 ]
 
 
-@pytest.mark.parametrize("asked", ["activa los clientes", "enciéndeme clientes", "quiero el módulo de clientes"])
+@pytest.mark.parametrize(
+    "asked", ["activa los clientes", "enciéndeme clientes", "quiero el módulo de clientes", "ponme la app de clientes",
+              "instala la app de clientes"],
+)
 def test_an_app_turned_on_by_its_name_is_turned_on(asked):
     assert ranked(APPS, asked, app_words=app_names)[0] == "base.app.enable"
 
@@ -735,3 +739,100 @@ def test_a_turn_ranks_a_catalogue_of_750_tools_with_every_kind_of_question():
             assistant.relevant(many, [one], "es", howto=["app0.thing0.get"], synonyms=(("cuenta", "check"),))
         timings.append((time.perf_counter() - start) / len(asked))
     assert min(timings) < 0.100
+
+
+# ── Review of live#22: what a question is, an app named by its own name ─────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("asked", "language"),
+    [
+        ("hola puedes cobrar la mesa 4?", "es"),
+        ("hey charge table 4?", "en"),
+        ("Cobra la mesa 4 y dime cuánto es", "es"),
+        ("charge table 4 and tell me how much it is", "en"),
+        ("Do a charge for table 4", "en"),
+    ],
+)
+def test_a_command_with_a_question_mark_or_a_question_after_it_still_does(asked, language):
+    """A greeting or a request before the verb, a «?» at the end, a question after the command: the verb is asked."""
+    assert offered(asked, language=language)[0] == "sale.sale.complete"
+    assert assistant.asked([asked]).verbs >= {"complete"}
+
+
+def test_a_question_whose_verb_comes_later_still_asks_to_know():
+    assert "complete" not in assistant.asked(["¿hace falta poner cliente para cobrar?"]).verbs
+    assert "complete" not in assistant.asked(["do I need a customer to charge?"]).verbs
+
+
+@pytest.mark.parametrize(
+    ("asked", "language"),
+    [("dime cómo invito a alguien a mi negocio", "es"), ("tell me how to invite someone to my business", "en"),
+     ("explícame cómo se cierra la caja", "es")],
+)
+def test_a_how_to_question_after_a_word_that_asks_is_one(asked, language):
+    assert assistant.asked([asked]).howto
+
+
+def test_initials_are_no_command():
+    """«Iniciales» (initials) is no «inicia» with «les»: no verb asked."""
+    assert assistant.asked(["las iniciales de Ana"]).verbs == frozenset()
+    assert assistant.asked(["inicia la caja"]).verbs >= {"open"}
+
+
+def test_a_question_written_with_decomposed_accents_is_one():
+    decomposed = unicodedata.normalize("NFD", "Marta dice qué")
+    assert decomposed != "Marta dice qué"
+    assert assistant.asked([decomposed]).reading
+
+
+@pytest.mark.parametrize(
+    ("asked", "app"),
+    [("¿qué hay en la cocina?", "kitchen"), ("ver la cocina", "kitchen"), ("¿cómo va la caja?", "cash_register"),
+     ("ver caja", "cash_register")],
+)
+def test_an_app_named_by_its_own_name_brings_its_tools_before_a_mention(asked, app):
+    """«Cocina» names the kitchen app, whose entities are tickets and stations; «caja» the cash register, of sessions:
+    a tool of another app (first by name) that only mentions the word in its description comes after them."""
+    tools = [
+        tool("bar.drink.list", "Lists the drinks, each sent to the kitchen with its till price.", "query"),
+        tool("bar.drink.fire", "Sends a drink to the kitchen and charges it at the till."),
+        tool("kitchen.ticket.list", "Lists the open tickets.", "query"),
+        tool("kitchen.station.list", "Lists the stations.", "query"),
+        tool("cash_register.session.list", "Lists the sessions.", "query"),
+        tool("cash_register.session.open", "Opens a session."),
+    ]
+    names = {"kitchen": "kitchen cocina", "cash_register": "cash register caja", "bar": "bar"}
+    words = lambda label, language: frozenset(assistant.stems(names[label]))  # noqa: E731
+    assert ranked(tools, asked, app_words=words)[0].startswith(f"{app}."), ranked(tools, asked, app_words=words)
+
+
+def test_an_app_name_beside_a_thing_named_is_no_thing():
+    """«Enséñame el registro de eventos»: the events are the thing; «registro» also names the attendance app (its
+    «Registro horario»), which only breaks ties then."""
+    tools = [*(tool(f"attendance.{entity}.list", "Lists them.", "query")
+               for entity in ("correction", "person", "presence")),
+             tool("base.event.list", "Lists the events of the business.", "query")]
+    words = lambda label, language: frozenset(  # noqa: E731
+        assistant.stems({"attendance": "attendance registro horario", "base": "base"}[label]))
+    assert ranked(tools, "enséñame el registro de eventos", app_words=words)[0] == "base.event.list"
+
+
+def test_a_command_on_an_app_named_by_its_name_is_of_that_app():
+    """«Abre la caja con 100 €» opens the till's session; «abre la cocina» opens no other app's thing."""
+    tools = [tool("bar.drink.open", "Opens a drink order sent to the kitchen."),
+             tool("cash_register.session.open", "Opens a session with its float."),
+             tool("cash_register.session.list", "Lists the sessions.", "query"),
+             tool("kitchen.ticket.list", "Lists the open tickets.", "query")]
+    names = {"kitchen": "kitchen cocina", "cash_register": "cash register caja", "bar": "bar"}
+    words = lambda label, language: frozenset(assistant.stems(names[label]))  # noqa: E731
+    assert ranked(tools, "abre la caja con 100 €", app_words=words)[0] == "cash_register.session.open"
+    assert ranked(tools, "abre la cocina", app_words=words)[0] == "kitchen.ticket.list"
+
+
+def test_a_command_whose_thing_has_no_such_action_still_brings_the_others():
+    """«Create a 10% discount»: the discount is set on checks, never created there; the discount rules are created."""
+    tools = [*(tool(f"aaa.order.{action}", "A check of the till.") for action in ("set_discount", "set_line_discount")),
+             tool("pricing.rule.create", "Creates an automatic discount rule.", asks={"en": ("new happy hour rule",)}),
+             *(tool(f"app{i}.thing.create", "Creates a thing.") for i in range(12))]
+    assert ranked(tools, "create a 10% discount", "en")[0] == "pricing.rule.create"

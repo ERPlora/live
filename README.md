@@ -237,22 +237,29 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   borrar, nunca `get`; «set up» configura, nunca `set`; «add up» y «¿cuadran?» comprueban, no añaden; «cambia el
   nombre» y «ponle de nombre» renombran). «Ponle», «añade», «apunta» y «mete» añaden (`add`); «exporta», «descarga»,
   «download» exportan; «importa», «súbeme», «upload» importan; «borremos todos sus datos» y «erase» borran del todo
-  (`erase`); «empieza» y «start» abren; «how many» y «cuántos» cuentan (`count`, `list`, `stats`). «How», «which»,
+  (`erase`); «empieza» y «start» abren; «ponme la app», «instala» encienden; «how many» y «cuántos» cuentan (`count`, `list`, `stats`). «How», «which»,
   «cómo» y «cuál» ya no son el verbo «listar». Un verbo no nombra cosas salvo por sus sinónimos («cobra» nombra la
   venta; «show me», «dame», «dime», «give me», «tell me» no nombran nada).
 - **Preguntas**: una pregunta (palabra interrogativa con tilde, que empieza por una o por un auxiliar inglés, o con sus
-  signos sin empezar por una orden) pide saber aunque nombre un verbo («do I need a customer to charge?»): sus lecturas
-  van primero y lo que nombra ese verbo es de lo que pregunta (`Asked.about`: «what can customers pay with?» → las formas
-  de pago). Un «que» sin tilde solo pregunta con signos («dice que sí», «anula el ticket, que me equivoqué» no
-  preguntan). «Can you…?» y «¿puedes…?» son peticiones: piden hacer.
-- **Cómo se hace**: «how do I…», «¿cómo se…?», «¿cómo invito…?» dan `HOWTO_POINTS` a las herramientas de `howto=`, la
+  signos) pide saber aunque nombre un verbo («do I need a customer to charge?»): sus lecturas van primero y lo que nombra
+  ese verbo es de lo que pregunta (`Asked.about`: «what can customers pay with?» → las formas de pago). Nunca es pregunta
+  una frase que es una orden: tras saludos y palabras de petición empieza por un verbo que hace algo («hola, ¿puedes
+  cobrar la mesa 4?», «hey charge table 4?», «cobra la mesa 4 y dime cuánto es», «do a refund»). Un «que» sin tilde solo
+  pregunta con signos («dice que sí», «anula el ticket, que me equivoqué» no preguntan). «Can you…?» y «¿puedes…?» son
+  peticiones: piden hacer. El texto se normaliza (NFC) antes de buscar las tildes.
+- **Cómo se hace**: «how do I…», «¿cómo se…?», «¿cómo invito…?», también tras «dime», «explícame» o «tell me»
+  («tell me how to…»), dan `HOWTO_POINTS` a las herramientas de `howto=`, la
   búsqueda en la documentación de cada proyecto (Hub `base.docs.search`, SaaS `assistant.docs.search`): llega por ser
   una pregunta de cómo se hace, no solo por estar en `ALWAYS`.
 - **Pesos**: una cosa nombrada vale 2 en la entidad de la herramienta o en lo que su acción toca (`create_folder` toca
   una carpeta; lo que va tras `for`/`by`/`from` solo dice para qué, 1), y 1 si solo nombra su app: el nombre de una app
-  desempata, nunca ahoga lo pedido («customers» ya no da puntos a toda la app de clientes). La acción pedida sobre la
+  desempata, nunca ahoga lo pedido («customers» ya no da puntos a toda la app de clientes). Si la pregunta no nombra la
+  cosa de ninguna herramienta, la app nombrada por su nombre es la cosa de sus herramientas («¿qué hay en la cocina?»,
+  «abre la caja con 100 €»); al lado de una cosa nombrada («el registro de eventos») solo desempata. La acción pedida sobre la
   cosa nombrada suma 9, y 3 más si esa cosa es lo primero que nombra la orden desde su verbo (`Asked.objects`: «crea la
-  carpeta Facturas» crea una carpeta, no una factura); una lectura sin cosa nombrada suma 1 solo si se nombra su app
+  carpeta Facturas» crea una carpeta, no una factura); una escritura de otra cosa no suma si alguna herramienta hace
+  eso a lo que la orden toca («reserva una mesa» no trae las altas de la plantilla; «create a 10% discount» sí trae las
+  altas, porque ninguna herramienta crea un descuento); una lectura sin cosa nombrada suma 1 solo si se nombra su app
   (los «cuántos» no levantan todas las listas), y un dato por el que filtra no es lo que lee. Encender o apagar algo
   que una escritura toma la cambia («turn off the alerts» → `accounts.preferences.update`); una escritura de una cosa
   nombrada tras el verbo trae la lectura que la encuentra («borra el cliente Ana»).

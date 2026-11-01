@@ -198,7 +198,8 @@ VERBS = {
     "open": ("abre", "abrir", "empieza", "inicia", "open", "start", "begin"),
     "start": ("empieza", "inicia", "start", "begin"),
     "enable": ("activa", "activar", "activame", "enciende", "encender", "habilita", "habilitar", "enable", "activate",
-               "turn on", "switch on", "quiero el modulo", "quiero la app", "quiero la aplicacion"),
+               "turn on", "switch on", "quiero el modulo", "quiero la app", "quiero la aplicacion", "pon la app",
+               "ponme la app", "pon el modulo", "ponme el modulo", "instala", "instalar", "install"),
     "disable": ("desactiva", "desactivar", "apaga", "apagar", "deshabilita", "deshabilitar", "disable", "deactivate",
                 "turn off", "switch off"),
     "invite": ("invita", "invitar", "invite"),
@@ -223,6 +224,8 @@ _IRREGULAR = {"haz": "hac", "di": "dec"}
 #: lone «se» are left out: an English verb ends in them («create») and an assistant is not asked to do it to itself.
 _ENCLITICS = ("selos", "selas", "melos", "melas", "noslo", "nosla", "selo", "sela", "melo", "mela", "les", "los",
               "las", "nos", "le", "lo", "la", "me")
+#: Words that end like a command with its pronouns and are none: «iniciales» (initials) is no «inicia» + «les».
+_NOT_COMMANDS = frozenset({"iniciales"})
 #: The words that ask something at the start of a sentence; with an accent («qué», «cómo») anywhere.
 QUESTION_WORDS = frozenset(
     {"que", "cual", "cuales", "cuanto", "cuanta", "cuantos", "cuantas", "quien", "quienes", "como", "what", "which",
@@ -232,6 +235,12 @@ _INTERROGATIVE = re.compile(r"\b(?:qué|cuál|cuáles|cuánt[oa]s?|quién(?:es)?
 #: The English words a yes/no question starts with.
 _AUXILIARIES = frozenset({"do", "does", "did", "is", "are", "was", "were", "can", "could", "should", "will", "would",
                           "have", "has", "am", "must", "may", "shall"})
+#: Words a sentence may start with before what it says: greetings and fillers («hola, ¿puedes…?», «hey, delete…»).
+_GREETINGS = frozenset({"hola", "hey", "hi", "hello", "oye", "vale", "ok", "okay", "bueno", "venga", "porfa", "buenas"})
+#: Words before a how-to question that only ask for it («dime cómo…», «tell me how to…»).
+_HOW_TO_LEADS = frozenset({"dime", "explicame", "ensename", "sabes", "tell", "explain", "show", "me", "us", "please"})
+#: Articles an English command puts between «do» and what it does («do a refund»).
+_ARTICLES = frozenset({"a", "an", "the", "un", "una", "el", "la"})
 #: How a question that asks to do starts («can you charge table 4?»): a request, not a question.
 _REQUESTS = frozenset({("can", "you"), ("could", "you"), ("would", "you"), ("will", "you"), ("me", "puedes"),
                        ("me", "podrias"), ("nos", "puedes"), ("please",), ("puedes",), ("podrias",), ("por", "favor")})
@@ -374,7 +383,9 @@ def _plain(text: str) -> str:
 
 def _unclitic(word: str) -> str | None:
     """The command ``word`` without the pronouns at its end («cobrale» → «cobra», «dime» → «di»), when what is left is
-    a verb; else ``None``."""
+    a verb and the word is not another (``_NOT_COMMANDS``: «iniciales»); else ``None``."""
+    if word in _NOT_COMMANDS:
+        return None
     for clitic in _ENCLITICS:
         if word.endswith(clitic) and len(word) > len(clitic):
             rest = word[: -len(clitic)]
@@ -512,14 +523,41 @@ def _verbs_of(word: str) -> frozenset[str]:
     return found or frozenset()
 
 
-def _starts(sentences: list[list[str]], openings: Collection[tuple[str, ...]]) -> bool:
-    return any(tuple(words[: len(opening)]) == opening for words in sentences for opening in openings)
+def _opening(words: list[str]) -> tuple[list[str], bool]:
+    """A sentence from the first word that says something — greetings (``_GREETINGS``) and the words of a request
+    (``_REQUESTS``: «puedes», «can you») off — and whether it is a request."""
+    at, request = 0, False
+    while at < len(words):
+        if words[at] in _GREETINGS:
+            at += 1
+            continue
+        said = next((len(one) for one in (tuple(words[at : at + 2]), (words[at],)) if one in _REQUESTS), 0)
+        if not said:
+            break
+        at, request = at + said, True
+    return words[at:], request
+
+
+def _commands(words: list[str]) -> bool:
+    """Whether a sentence (``_opening``) is a command: it starts with a verb that does something («cobra la mesa 4»,
+    «delete customer Ana»), or with «do» and what it does («do a refund»)."""
+    if not words:
+        return False
+    if words[0] == "do":
+        words = [word for word in words[1:3] if word not in _ARTICLES][:1]
+    return bool(words) and bool(_verbs_of(words[0]) - READ_VERBS)
 
 
 def _how_to(sentences: list[list[str]]) -> str | None:
-    """Whether a sentence asks how something is done (``_HOW_TO``): the word that says what is done after «cómo»
-    («invito»), «-» when none; ``None`` when no sentence asks so."""
-    for words in sentences:
+    """Whether a sentence asks how something is done (``_HOW_TO``), after the words that only ask for it («dime cómo…»):
+    the word that says what is done after «cómo» («invito»), «-» when none; ``None`` when no sentence asks so."""
+    for said in sentences:
+        lead = 0
+        while lead < min(len(said), 3) and said[lead] in _HOW_TO_LEADS | _GREETINGS:
+            lead += 1
+        words = said[lead:]
+        if not words:
+            continue
         after = [word for word in words[1:] if word not in _CLITICS]
         if words[0] in _HOW_TO and after:
             if after[0] in _HOW_TO[words[0]]:
@@ -530,18 +568,19 @@ def _how_to(sentences: list[list[str]]) -> str | None:
 
 
 def _is_question(text: str, sentences: list[list[str]]) -> bool:
-    """Whether ``text`` is a question: a question word with its accent, a text that starts with one or with the
-    auxiliary of a yes/no question, or its marks («?», «¿») with no sentence that starts with a command («crea un
-    cliente, ¿vale?»). An unaccented «que» asks only with the marks: inside a sentence («dice que sí»), after a command
+    """Whether ``text`` is a question: never when a sentence is a command (``_commands``, after its greetings and the
+    words of a request: «hola, ¿puedes cobrar la mesa 4?», «cobra la mesa 4 y dime cuánto es», «do a refund»); else a
+    question word with its accent, a text that starts with one or with the auxiliary of a yes/no question, or its
+    marks («?», «¿»). An unaccented «que» asks only with the marks: inside a sentence («dice que sí»), after a command
     («anula el ticket, que me equivoqué») or at the start of a wish («que no se pueda cobrar sin cliente») it is
     none."""
-    if _INTERROGATIVE.search(text.lower()):
+    if any(_commands(_opening(words)[0]) for words in sentences):
+        return False
+    if _INTERROGATIVE.search(unicodedata.normalize("NFC", text).lower()):
         return True
     marked = "?" in text or "¿" in text
     first = sentences[0][0] if sentences else ""
-    if first in _AUXILIARIES or (first in QUESTION_WORDS and (first != "que" or marked)):
-        return True
-    return marked and not any(_verbs_of(words[0]) - READ_VERBS for words in sentences)
+    return first in _AUXILIARIES or (first in QUESTION_WORDS and first != "que") or marked
 
 
 def _objects(
@@ -609,7 +648,7 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
         acted, named_after = _objects(sentences, acting, verbal, extra)
         objects |= acted
         records |= named_after
-        question = _is_question(text, sentences) and not _starts(sentences, _REQUESTS)
+        question = _is_question(text, sentences) and not any(_opening(words)[1] for words in sentences)
         if question and not doing:
             asked_about = said - READ_VERBS
             about |= {_concept(word, extra) for word, of in acting.items() if of & asked_about}
@@ -651,6 +690,19 @@ _APP_THING = frozenset(stem(word) for word in ("app", "aplicacion", "modulo", "m
 _QUALIFIERS = frozenset({"for", "by", "from", "to", "of", "in", "with"})
 
 
+@lru_cache(maxsize=4_096)
+def _acts(op: Operation) -> frozenset[str]:
+    """The words of ``op``'s action (``create_folder`` → «create», «folder»)."""
+    return frozenset(op.name.split(".")[2].split("_"))
+
+
+@lru_cache(maxsize=4_096)
+def _things(op: Operation) -> frozenset[str]:
+    """The stems of what ``op`` is of: its entity and what its action acts on (``_parts``)."""
+    _, entity, action = op.name.split(".")
+    return _stems_of(entity.replace("_", " ")) | _parts(action)[0]
+
+
 @lru_cache(maxsize=8_192)
 def _parts(action: str) -> tuple[frozenset[str], frozenset[str], frozenset[str]]:
     """The stems of what an operation's ``action`` acts on — its words before a qualifier (``_QUALIFIERS``) that are no
@@ -677,7 +729,9 @@ def relevant(
 
     Each thing the question names (``asked``, with the project's ``synonyms``) counts 2 when it names the tool's entity
     or what its action acts on (``_parts``: ``create_folder`` acts on a folder), else 1 when it names only the tool's
-    app (in either language, ``app_words``: an app's name breaks ties, it never drowns the thing asked); 2 more when it
+    app (in either language, ``app_words``: an app's name breaks ties, it never drowns the thing asked) — unless the
+    question names no tool's thing at all: then the app named by its own name is the thing of its tools («la cocina»:
+    its tickets and stations; «abre la caja»: the till's session); 2 more when it
     names the action itself, 1 when it names what the action says it is for (``list_for_customer``), and 1 for each of
     its description, what people say to ask for it (``asks_of``, in any language) and the data its input takes.
 
@@ -687,7 +741,8 @@ def relevant(
     ``base.app.enable``, never an operation of the app named after it, and so is «activa los clientes», an app named
     by its name. Of no thing named, it adds 7 to a write that takes a datum the question names («cambia el precio»: a
     write that takes a ``price``; «turn off the alerts»: a write that takes them, as turning on or off changes it), 3 to
-    any other write unless what the command acts on is a tool's thing («reserva una mesa»: no write of the staff), 1 to
+    any other write unless a tool does that to what the command acts on, or it is an app named by its name («reserva
+    una mesa»: no write of the staff; «abre la cocina»: no other app's open), 1 to
     a read of the app named and nothing to any other read: «¿cuántos…?» is no list of everything, and what a read is
     filtered by is not what it reads.
 
@@ -722,14 +777,26 @@ def _relevant(
     def named(words: frozenset[str]) -> int:
         return sum(1 for concept in concepts if not concept.isdisjoint(words))
 
-    labels = {op.app_label for op in tools.values()} if switching else set()
-    apps_named = any(named(app_words(label, language)) for label in labels)
-    # What a command acts on, when a tool is of it: then the writes of other things are not what it asks.
+    # The things the catalogue's tools are of. A question that names none of them but an app by its name («la cocina»:
+    # the kitchen app, of tickets and stations) makes that app the thing; beside a thing named («el registro de
+    # eventos») the app's name only breaks ties.
+    things = frozenset().union(*(_things(op) for op in tools.values())) if concepts else frozenset()
+    every_app = {op.app_label for op in tools.values()} if concepts else set()
+    names_a_thing = any(not concept.isdisjoint(things) for concept in concepts)
+    by_app = set() if names_a_thing else {
+        concept for concept in concepts if any(not concept.isdisjoint(app_words(label, language)) for label in every_app)
+    }
+    apps_named = switching and any(named(app_words(label, language)) for label in every_app)
+    # What a command acts on, when a tool does that to it or it is an app named by its name: then the writes of other
+    # things are not what it asks («reserva una mesa» is no staff's create; «create a 10% discount» has no tool that
+    # creates a discount, so the creates stay).
     aimed_at = writing and any(
-        not concept.isdisjoint(_stems_of(op.name.split(".")[1].replace("_", " ")))
-        or not concept.isdisjoint(_parts(op.name.split(".")[2])[0])
+        concept in by_app
+        or any(
+            not concept.isdisjoint(_things(op)) and not verbs.isdisjoint(_acts(op))
+            for op in tools.values()
+        )
         for concept in said.objects
-        for op in tools.values()
     )
 
     def score(op: Operation) -> int:
@@ -739,8 +806,12 @@ def _relevant(
         places = thing = 0
         aimed = found = app_named = False
         for concept in concepts:
-            is_thing = not concept.isdisjoint(named_entity) or not concept.isdisjoint(acted_on)
             in_app = not concept.isdisjoint(named_app)
+            is_thing = (
+                not concept.isdisjoint(named_entity)
+                or not concept.isdisjoint(acted_on)
+                or (in_app and concept in by_app)
+            )
             thing += is_thing
             aimed = aimed or (is_thing and concept in said.objects)
             found = found or (is_thing and concept in said.records)
