@@ -323,6 +323,59 @@ async def test_a_passing_error_that_lasts_is_sent_after_three_more_tries(make_ex
     assert "s1" in stream.subs
 
 
+@pytest.fixture
+def reached_the_client(monkeypatch):
+    """What ``OperationError.reached_client`` heard: the codes of the failures a client got."""
+    told = []
+    monkeypatch.setattr(OperationError, "reached_client", lambda self: told.append(self.code))
+    return told
+
+
+async def test_a_try_the_executor_makes_again_never_reaches_the_client(make_executor, reached_the_client):
+    stream = make_stream()
+    subscribe(stream, FakeOp(body=busy_for(2)))
+
+    await make_executor().run_all(stream)
+
+    assert reached_the_client == []
+
+
+async def test_a_passing_error_that_lasts_reaches_the_client_once_a_pass(make_executor, reached_the_client):
+    """Every subscription left waiting gets its frame: one failure of the pass, however many there are."""
+    stream = make_stream()
+    subscribe(stream, FakeOp(body=busy_for(10)), "s1")
+    subscribe(stream, FakeOp(body=busy_for(10)), "s2")
+
+    await make_executor().run_all(stream)
+
+    assert [frame.event for frame in await drain(stream.queue)] == ["error", "error"]
+    assert reached_the_client == ["busy"]
+
+
+async def test_an_error_that_is_not_passing_reaches_the_client_at_once(make_executor, reached_the_client):
+    def body(ctx, params):
+        raise OperationError("Refused.", code="refused", status=409)
+
+    stream = make_stream()
+    subscribe(stream, FakeOp(body=body))
+
+    await make_executor().run_all(stream)
+
+    assert reached_the_client == ["refused"]
+
+
+async def test_a_permission_lost_reaches_the_client_too(make_executor, reached_the_client):
+    def body(ctx, params):
+        raise PermissionDenied("Not any more.")
+
+    stream = make_stream()
+    subscribe(stream, FakeOp(body=body))
+
+    await make_executor().run_all(stream)
+
+    assert reached_the_client == ["permission_denied"]
+
+
 async def test_a_passing_error_that_clears_sends_nothing_when_the_result_did_not_change(make_executor):
     state = {"busy": False}
 

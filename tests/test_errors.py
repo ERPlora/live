@@ -23,6 +23,10 @@ def test_base_error_defaults_to_400_and_generic_code():
     assert str(error) == "Something went wrong."
 
 
+def test_reaching_a_client_does_nothing_by_default():
+    assert OperationError("Something went wrong.").reached_client() is None
+
+
 def test_envelope_has_code_and_message_only_when_there_are_no_fields():
     envelope = PermissionDenied("Permission 'demo.manage' is required.").envelope()
 

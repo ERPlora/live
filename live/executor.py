@@ -67,10 +67,11 @@ def _still_subscribed(stream: Stream, sub: Subscription) -> bool:
 
 @dataclass(frozen=True)
 class _Passing:
-    """A run that failed with a passing error: try again after ``retry_after`` seconds, or send ``error``."""
+    """A run that failed with a passing error: try again after ``retry_after`` seconds, or send ``failure``'s ``error``."""
 
     retry_after: float
     error: dict
+    failure: OperationError
 
 
 @dataclass(eq=False)
@@ -249,10 +250,14 @@ class Executor:
             if passing is None:
                 return ran
             if not retries_left:
+                delivered = False
                 for sub in waiting:
                     # Not one gone, nor one another pass (an event's) answered while this one waited: it is newer.
                     if stream.subs.get(sub.id) is sub and sub.answers == answered_before[sub.id]:
                         self._deliver(stream, sub, self._error(sub, passing.error))
+                        delivered = True
+                if delivered:
+                    passing.failure.reached_client()
                 return ran
             await self.sleep(min(passing.retry_after, MAX_RETRY_AFTER))
         return ran
@@ -340,10 +345,12 @@ class Executor:
             return BYE_FRAME
         except (PermissionDenied, AppInactive) as exc:
             sub.dropped = True
+            exc.reached_client()
             return self._error(sub, exc.envelope()["error"])
         except OperationError as exc:
             if exc.retry_after is not None:
-                return _Passing(exc.retry_after, exc.envelope()["error"])
+                return _Passing(exc.retry_after, exc.envelope()["error"], exc)
+            exc.reached_client()
             return self._error(sub, exc.envelope()["error"])
         except Exception:
             logger.exception("Live query %s failed (stream %s, subscription %s).", sub.op.name, stream.id, sub.id)

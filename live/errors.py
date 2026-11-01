@@ -46,6 +46,11 @@ class OperationError(Exception):
             error["fields"] = dict(self.fields)
         return {"error": error}
 
+    def reached_client(self) -> None:
+        """This failure is what a client got: a route's envelope, or a live stream's error frame. Never called for a try
+        the live executor makes again (``live.executor``), so a project counts here what somebody really saw. Nothing by
+        default."""
+
 
 class Unauthorized(OperationError):
     status = 401
