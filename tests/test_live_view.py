@@ -11,6 +11,7 @@ from django.db import connection
 from django.http import Http404
 from django.test import AsyncRequestFactory
 from live import live_view
+from live.errors import OperationError
 from live.broker import broker
 from live.context import OperationContext, Scope
 from live.executor import executor
@@ -319,6 +320,20 @@ async def test_bad_s_param_is_400(client, s, code):
     assert not response.streaming
     assert json.loads(response.content)["error"]["code"] == code
     assert broker.channel_count() == 0
+
+
+async def test_a_stream_refused_at_the_door_has_reached_its_client(client, monkeypatch):
+    def refused(self, request):
+        raise OperationError("Busy for a moment.", code="busy", status=503)
+
+    told = []
+    monkeypatch.setattr(LiveTestContextBuilder, "from_request", refused)
+    monkeypatch.setattr(OperationError, "reached_client", lambda self: told.append(self.code))
+
+    response = await client.get("/api/live", {"s": encode_subs([LIST])}, headers=headers_for())
+
+    assert response.status_code == 503
+    assert told == ["busy"]
 
 
 async def test_a_host_that_is_no_scope_is_a_404_envelope(client, monkeypatch):

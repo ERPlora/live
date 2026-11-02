@@ -50,6 +50,7 @@ async def live_stream(request) -> StreamingHttpResponse | JsonResponse:
     try:
         ctx = await sync_to_async(get_builder().from_request)(request)
     except OperationError as exc:
+        exc.reached_client()
         return JsonResponse(exc.envelope(), status=exc.status)
     except Http404:
         # The builder rejects the Host (hub-next: not a hub's slug), as the ninja routes answer it.

@@ -222,6 +222,7 @@ def install_error_handlers(api: NinjaAPI) -> None:
     """Answer every failure of ``api`` with the error envelope (in DEBUG, a crash still raises)."""
 
     def operation_error(request: Any, exc: OperationError) -> Any:
+        exc.reached_client()
         return api.create_response(request, exc.envelope(), status=exc.status)
 
     def invalid_payload(request: Any, exc: ValidationError) -> Any:
