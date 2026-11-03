@@ -226,3 +226,17 @@ msgstr "eventos de la bandeja de salida"
 msgctxt "assistant"
 msgid "CONFIRM"
 msgstr "CONFIRMAR"
+
+#: executor.py
+msgid ""
+"This information could not be loaded. Try again in a few seconds, and tell "
+"an administrator if it keeps happening."
+msgstr ""
+"No se pudo cargar esta información. Vuelve a intentarlo en unos segundos y "
+"avisa a un administrador si sigue pasando."
+
+#: executor.py
+msgid ""
+"There is too much to show at once. Narrow it down with a search or a filter."
+msgstr ""
+"Hay demasiado para mostrar de una vez. Acótalo con una búsqueda o un filtro."
