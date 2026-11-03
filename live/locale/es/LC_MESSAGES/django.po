@@ -67,8 +67,8 @@ msgid "Permission “%(permission)s” is required."
 msgstr "Se necesita el permiso «%(permission)s»."
 
 #: ninja.py
-msgid "Invalid payload"
-msgstr "Los datos enviados no son válidos."
+msgid "Check the highlighted details."
+msgstr "Revisa los datos marcados."
 
 #: ninja.py
 msgid "Internal error"

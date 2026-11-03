@@ -241,10 +241,14 @@ def install_error_handlers(api: NinjaAPI) -> None:
         return api.create_response(request, exc.envelope(), status=exc.status)
 
     def invalid_payload(request: Any, exc: ValidationError) -> Any:
-        return operation_error(
-            request,
-            InvalidPayload(gettext("Invalid payload"), fields=_fields(exc.errors)),
+        fields = _fields(exc.errors)
+        # A refusal of the whole form highlights nothing: its reason is the notice itself.
+        message = (
+            fields[NON_FIELD_ERRORS]
+            if set(fields) == {NON_FIELD_ERRORS}
+            else gettext("Check the highlighted details.")
         )
+        return operation_error(request, InvalidPayload(message, fields=fields))
 
     def not_found(request: Any, exc: Http404) -> Any:
         return operation_error(request, NotFound(gettext("Not found")))
@@ -318,7 +322,9 @@ def _field_message(error: dict) -> str:
     kind = error.get("type")
     ctx = error.get("ctx") or {}
     if kind in _VALIDATOR_ERRORS:
-        return str(ctx.get("error") or "") or str(_ENTER_A_VALID_VALUE)
+        # A validator's exception is in ``ctx``; a custom error that reuses the type has only its ``msg``.
+        reason = str(ctx["error"]) if "error" in ctx else error.get("msg")
+        return reason or str(_ENTER_A_VALID_VALUE)
     message = FIELD_MESSAGES.get(kind)
     if message is not None:
         try:
