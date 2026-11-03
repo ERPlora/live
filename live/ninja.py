@@ -177,18 +177,33 @@ def bind(
     path: str,
     *,
     method: str | None = None,
-    status: int = 200,
+    status: int | tuple[int, ...] = 200,
     **options: Any,
 ) -> Callable:
     """Route decorator whose method, response and ``operation_id`` come from the operation.
 
     A query is served by GET; a command by POST unless ``method`` says otherwise. The route body
     stays explicit: it still calls ``run_operation``.
+
+    ``status`` is the success code, or several of them when the route answers with more than one
+    (``(200, 202)``: done now, or accepted and finished later); each one is documented with the
+    operation's output, and the route picks one by returning ``ninja.Status(code, output)`` (a bare
+    output is 200). Only 2xx codes: a failure always answers with the error envelope.
     """
     op = get(op_name)
+    statuses = (status,) if isinstance(status, int) else tuple(status)
+    if not statuses or not all(200 <= code < 300 for code in statuses):
+        raise LiveMisuse(
+            f"bind({op_name!r}): status must be one or more 2xx codes, not {status!r};"
+            " a failure answers with the error envelope."
+        )
     method = (method or ("GET" if op.kind == "query" else "POST")).upper()
     return router.api_operation(
-        [method], path, response={status: op.output}, operation_id=op.name, **options
+        [method],
+        path,
+        response=dict.fromkeys(statuses, op.output),
+        operation_id=op.name,
+        **options,
     )
 
 
