@@ -362,6 +362,60 @@ def test_a_list_with_one_item_left_as_sent_is_not_named(lists, monkeypatch):
     assert named(card) == {"sizes": False, "days": False}
 
 
+class RectifyIn(Schema):
+    rectification_type: Literal["R1", "R4"] | None = Field(None, json_schema_extra={"choices_of": "invoice_type"})
+    payment: Literal["cash", "card"] = Field("cash", json_schema_extra={"choices_of": "sale.method"})
+    reasons: list[Literal["R1", "R4"]] = Field([], json_schema_extra={"choices_of": "invoice_type"})
+    unmarked: Literal["R1", "R4"] | None = None
+
+
+#: The labels the models of each app give their fields: «invoice_type» of the card's own app, «method» of «sale».
+MODEL_CHOICES = {
+    ("testapp", "invoice_type"): {"R1": "Error founded in law (R1)", "R4": "Other causes (R4)"},
+    ("sale", "method"): {"cash": "Cash", "card": "Card"},
+}
+
+
+@pytest.fixture
+def rectify(monkeypatch):
+    monkeypatch.setattr(
+        assistant, "choice_label", lambda app, entity, name, value: MODEL_CHOICES.get((app, name), {}).get(value)
+    )
+    return op("testapp.probe.rectify", ai=CREATE, input=RectifyIn)
+
+
+def test_a_closed_list_marked_with_another_field_is_said_by_that_fields_labels(rectify):
+    """live#26: a datum whose values are those of a field under another name («rectification_type» of
+    ``invoice_type``) or of an app it requires («sale.method») says its value by that field's labels, optional or in a
+    list as well; one without the mark keeps looking for a field of its own name (none here: as sent)."""
+    arguments = {"rectification_type": "R4", "payment": "card", "reasons": ["R1", "R4"], "unmarked": "R4"}
+    card = assistant.card(rectify, arguments, "en", SpokenWords(rectify, "en"))
+    shown = fields(card)
+    assert shown["rectification_type"]["value"] == "Other causes (R4)"
+    assert shown["payment"]["value"] == "Card"
+    assert (shown["reasons"]["value"], shown["reasons"].get(assistant.NAMED)) == (
+        ["Error founded in law (R1)", "Other causes (R4)"],
+        True,
+    )
+    assert shown["unmarked"]["value"] == "R4"
+
+
+@pytest.mark.parametrize(
+    ("prop", "expected"),
+    [
+        ({"choices_of": "invoice_type"}, ("invoice", "invoice_type")),
+        ({"choices_of": "sale.method"}, ("sale", "method")),
+        ({}, ("invoice", "rectification_type")),
+        ({"choices_of": ""}, ("invoice", "rectification_type")),
+        ({"choices_of": ["invoice_type"]}, ("invoice", "rectification_type")),
+    ],
+)
+def test_choices_of_says_whose_labels_name_a_datum(prop, expected):
+    """The app and the field whose ``choices`` name the datum: what its mark says, else its own name in its own app
+    (what a project's own guard of unlabelled lists asks too)."""
+    assert assistant.choices_of("invoice", "rectification_type", prop) == expected
+
+
 class PairsIn(Schema):
     two_things: tuple[uuid.UUID, uuid.UUID] | None = None
     thing_and_tag: tuple[uuid.UUID, str] | None = None

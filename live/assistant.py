@@ -965,6 +965,22 @@ def choice_label(app_label: str, entity: str, name: str, value: Any) -> Any:
     return None
 
 
+#: The mark of a datum whose values are those of a field of the models under another name
+#: (``json_schema_extra={"choices_of": "<field>"}``, a field of its own app, or ``"<app>.<field>"``, one of an app it
+#: requires): the card names each value by that field's ``choices`` (``choice_label``), the ones its screens show.
+CHOICES_OF = "choices_of"
+
+
+def choices_of(app_label: str, name: str, prop: dict) -> tuple[str, str]:
+    """The app and the field of its models whose ``choices`` name the values of the datum ``name`` of an operation of
+    ``app_label``: the ones its schema ``prop`` marks (``CHOICES_OF``), else its own name in its own app."""
+    declared = prop.get(CHOICES_OF)
+    if not isinstance(declared, str) or not declared:
+        return app_label, name
+    app, _, field_name = declared.rpartition(".")
+    return app or app_label, field_name
+
+
 def own_title(name: str, title: str | None) -> str | None:
     """The title the schema gives the datum ``name`` itself — not the one pydantic makes up from its name —, in the
     active language: as a catalog translates it, or as written when the person reads the code's language; else
@@ -1191,7 +1207,8 @@ def fitting(value: Any, prop: dict, defs: dict, depth: int = 0) -> dict:
 
 def said(value: Any, prop: dict, defs: dict, name: str, words: Words, inner: bool = False) -> Any:
     """``value`` in words as its schema ``prop`` declares it, at any depth: a moment as the person's language writes it
-    (``Words.moment``), a value of a closed list by the label its app's models give it (``choice_label``), a record by
+    (``Words.moment``), a value of a closed list by the label its app's models give it (``choice_label``; of the field
+    its schema marks, ``CHOICES_OF``), a record by
     its name (``Words.reference``) or else ``LEFT_OUT`` — left out of an object, none in a list (which still says how
     many it carries), as an attempt key (``ATTEMPT_KEY``) is, even empty; an amount (``MONEY``) inside an object or a
     list as the screen writes one on top (``Words.amount``), in the words of the object it is in (``Words.within``);
@@ -1209,7 +1226,8 @@ def said(value: Any, prop: dict, defs: dict, name: str, words: Words, inner: boo
         spoken = words.moment(value, prop["format"])
         return value if spoken is None else spoken
     if "enum" in prop and isinstance(value, str | int) and not isinstance(value, bool):
-        choice = choice_label(words.op.app_label, words.op.name.split(".")[1], name, value)
+        app_label, field_name = choices_of(words.op.app_label, name, prop)
+        choice = choice_label(app_label, words.op.name.split(".")[1], field_name, value)
         return value if choice is None else str(choice)
     if isinstance(value, dict):
         props = prop.get("properties", {})
@@ -1224,6 +1242,8 @@ def said(value: Any, prop: dict, defs: dict, name: str, words: Words, inner: boo
     if isinstance(value, list):
         items, prefix = prop.get("items"), prop.get("prefixItems", [])
         items = items if isinstance(items, dict) else {}
+        if CHOICES_OF in prop:  # a list's mark names the values of its items, as its name does
+            items, prefix = {CHOICES_OF: prop[CHOICES_OF], **items}, [{CHOICES_OF: prop[CHOICES_OF], **p} for p in prefix]
         spoken_list = [
             said(item, prefix[i] if i < len(prefix) else items, defs, name, words, inner=True) for i, item in enumerate(value)
         ]
