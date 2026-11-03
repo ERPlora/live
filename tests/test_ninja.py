@@ -30,8 +30,9 @@ from live.ninja import (
     run_operation_sync,
 )
 from live.operations import Operation, UnknownOperation, operation, registry
-from ninja import Field, NinjaAPI, Query, Router, Schema
+from ninja import Field, NinjaAPI, Query, Router, Schema, Status
 from ninja.errors import HttpError
+from ninja.testing import TestClient
 from pydantic import HttpUrl, field_validator
 from pydantic_core import PydanticCustomError
 
@@ -794,6 +795,45 @@ def test_bind_takes_method_response_and_operation_id_from_the_operation():
 def test_bind_rejects_an_unknown_operation():
     with pytest.raises(UnknownOperation):
         bind(Router(), "testapp.thing.nope", "/nope")
+
+
+def test_bind_declares_every_success_status_with_the_operation_output():
+    router = Router()
+
+    @bind(router, "testapp.thing.create", "/things", status=(200, 202))
+    def bound_create(request, data: ThingIn):
+        raise AssertionError("never called")
+
+    bound = api_with(("", router))
+    responses = bound.get_openapi_schema(path_prefix="")["paths"]["/things"]["post"]["responses"]
+    assert set(responses) == {200, 202}
+    assert {
+        status: response["content"]["application/json"]["schema"]["$ref"]
+        for status, response in responses.items()
+    } == {200: "#/components/schemas/ThingOut", 202: "#/components/schemas/ThingOut"}
+    assert ensure_api_parity(bound) == []
+
+
+def test_a_route_bound_with_two_statuses_answers_with_the_one_it_returns():
+    router = Router()
+
+    @bind(router, "testapp.thing.create", "/things", status=(200, 202))
+    def bound_create(request, data: ThingIn):
+        thing = ThingOut(id=7, name=data.name)
+        return Status(202, thing) if data.name == "later" else thing
+
+    client = TestClient(router)
+    now = client.post("/things", json={"name": "now"})
+    later = client.post("/things", json={"name": "later"})
+
+    assert (now.status_code, now.json()) == (200, {"id": 7, "name": "now"})
+    assert (later.status_code, later.json()) == (202, {"id": 7, "name": "later"})
+
+
+@pytest.mark.parametrize("status", [(), (200, 404), 500, (201, 302)])
+def test_bind_refuses_statuses_that_are_not_all_successes(status):
+    with pytest.raises(LiveMisuse, match="testapp.thing.create"):
+        bind(Router(), "testapp.thing.create", "/things", status=status)
 
 
 # --- OpenAPI ------------------------------------------------------------------------------------
