@@ -729,6 +729,62 @@ async def test_error_frames_are_built_in_the_context_language(make_executor):
     assert en_frame.data["error"] == {"code": "not_found", "message": "Thing not found."}
 
 
+async def test_an_unexpected_failure_tells_the_person_what_to_do_in_their_language(make_executor):
+    def boom(ctx, params):
+        raise RuntimeError("database exploded")
+
+    executor = make_executor()
+    spanish = make_stream(SCOPE_A, language="es")
+    english = make_stream(SCOPE_B, language="en")
+    subscribe(spanish, FakeOp(body=boom))
+    subscribe(english, FakeOp(body=boom))
+
+    await executor.run_all(spanish)
+    await executor.run_all(english)
+
+    (es_frame,) = await drain(spanish.queue)
+    (en_frame,) = await drain(english.queue)
+    assert es_frame.data["error"] == {
+        "code": "internal_error",
+        "message": "No se pudo cargar esta información. Vuelve a intentarlo en unos segundos"
+        " y avisa a un administrador si sigue pasando.",
+    }
+    assert en_frame.data["error"] == {
+        "code": "internal_error",
+        "message": "This information could not be loaded. Try again in a few seconds,"
+        " and tell an administrator if it keeps happening.",
+    }
+
+
+async def test_a_result_too_large_tells_the_person_what_to_do_in_their_language(make_executor, caplog):
+    big = [thing(i, "x" * 1000) for i in range(300)]
+    executor = make_executor()
+    spanish = make_stream(SCOPE_A, language="es")
+    english = make_stream(SCOPE_B, language="en")
+    subscribe(spanish, FakeOp(rows=big))
+    subscribe(english, FakeOp(rows=big))
+
+    await executor.run_all(spanish)
+    await executor.run_all(english)
+
+    (es_frame,) = await drain(spanish.queue)
+    (en_frame,) = await drain(english.queue)
+    assert es_frame.data["error"] == {
+        "code": "result_too_large",
+        "message": "Hay demasiado para mostrar de una vez. Acótalo con una búsqueda o un filtro.",
+    }
+    assert en_frame.data["error"] == {
+        "code": "result_too_large",
+        "message": "There is too much to show at once. Narrow it down with a search or a filter.",
+    }
+    # The size and the limit stay for whoever debugs it, in the log.
+    assert any(
+        "testapp.thing.list" in r.getMessage() and str(MAX_RESULT_BYTES) in r.getMessage()
+        for r in caplog.records
+        if r.levelname == "WARNING"
+    )
+
+
 async def test_a_closed_stream_runs_nothing(make_executor):
     executor = make_executor()
     stream = make_stream()

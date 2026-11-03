@@ -38,7 +38,7 @@ from hashlib import blake2b
 from typing import Any
 
 from django.db import close_old_connections
-from django.utils.translation import override
+from django.utils.translation import gettext, override
 from ninja import Schema
 
 from live.context import OperationContext, Scope, get_builder
@@ -354,16 +354,24 @@ class Executor:
             return self._error(sub, exc.envelope()["error"])
         except Exception:
             logger.exception("Live query %s failed (stream %s, subscription %s).", sub.op.name, stream.id, sub.id)
-            return self._error(sub, {"code": "internal_error", "message": "The live query failed."})
+            message = gettext(
+                "This information could not be loaded. Try again in a few seconds, and tell an administrator if it"
+                " keeps happening."
+            )
+            return self._error(sub, {"code": "internal_error", "message": message})
         body = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode()
         digest = blake2b(body, digest_size=16).hexdigest()
         if digest == sub.last_hash:
             return None
         sub.last_hash = digest
         if len(body) > MAX_RESULT_BYTES:
+            logger.warning(
+                "Live query %s answered %d bytes, over the limit of %d (stream %s, subscription %s).",
+                sub.op.name, len(body), MAX_RESULT_BYTES, stream.id, sub.id,
+            )
             return frame(ERROR, {"id": sub.id, "error": {
                 "code": "result_too_large",
-                "message": f"The result exceeds {MAX_RESULT_BYTES} bytes; ask for fewer rows.",
+                "message": gettext("There is too much to show at once. Narrow it down with a search or a filter."),
             }})
         sub.rev += 1
         return frame(RESULT, {"id": sub.id, "data": data, "rev": sub.rev})
