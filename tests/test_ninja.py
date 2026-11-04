@@ -33,7 +33,7 @@ from live.operations import Operation, UnknownOperation, operation, registry
 from ninja import Field, NinjaAPI, Query, Router, Schema, Status
 from ninja.errors import HttpError
 from ninja.testing import TestClient
-from pydantic import HttpUrl, field_validator
+from pydantic import HttpUrl, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 
 from tests.testapp import api as testapp_api
@@ -89,6 +89,9 @@ class StrictIn(Schema):
     when: datetime | None = None
     at: time | None = None
     cap: int = 0
+    nif: str = ""
+    start: int = 0
+    end: int = 0
 
     @field_validator("code")
     @classmethod
@@ -105,9 +108,28 @@ class StrictIn(Schema):
             raise PydanticCustomError("greater_than", "Keep it at zero.")
         return value
 
+    @field_validator("nif")
+    @classmethod
+    def nif_is_known(cls, value: str) -> str:
+        if value:
+            # A validator's refusal raised as a custom error: it has no ctx["error"].
+            raise PydanticCustomError("value_error", "That tax ID is not valid.")
+        return value
+
+    @model_validator(mode="after")
+    def end_after_start(self):
+        if self.end < self.start:
+            raise ValueError("The end cannot be before the start.")
+        return self
+
 
 @probe.post("/strict")
 def validate_strictly(request, data: StrictIn):
+    return {"ok": True}
+
+
+@probe.post("/strict/{slot}")
+def validate_strictly_in_a_slot(request, slot: int, data: StrictIn):
     return {"ok": True}
 
 
@@ -272,7 +294,7 @@ def test_invalid_payload_is_422_with_fields_per_field(client):
     assert response.status_code == 422
     error = response.json()["error"]
     assert error["code"] == "invalid_payload"
-    assert error["message"] == "Invalid payload"
+    assert error["message"] == "Check the highlighted details."
     assert set(error["fields"]) == {"name"}
     assert error["fields"]["name"]
     assert not Thing.objects.exists()
@@ -460,14 +482,14 @@ def test_field_errors_speak_the_request_language(
     assert in_english.json() == {
         "error": {
             "code": "invalid_payload",
-            "message": "Invalid payload",
+            "message": "Check the highlighted details.",
             "fields": {field: english},
         }
     }
     assert in_spanish.json() == {
         "error": {
             "code": "invalid_payload",
-            "message": "Los datos enviados no son válidos.",
+            "message": "Revisa los datos marcados.",
             "fields": {field: spanish},
         }
     }
@@ -483,7 +505,7 @@ def test_invalid_payload_follows_the_language_cookie(client, settings):
         )
 
     assert response.status_code == 422
-    assert response.json()["error"]["message"] == "Los datos enviados no son válidos."
+    assert response.json()["error"]["message"] == "Revisa los datos marcados."
     assert response.json()["error"]["fields"] == {
         "name": "Debe tener al menos 1 carácter."
     }
@@ -498,6 +520,44 @@ def test_a_validator_message_reaches_the_client_without_pydantic_prefix(client):
 
     assert response.status_code == 422
     assert response.json()["error"]["fields"] == {"code": "Unknown code."}
+
+
+def test_a_custom_value_error_keeps_its_own_words(client):
+    response = client.post(
+        "/api/probe/strict",
+        {"name": "a", "nif": "B12345678"},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["fields"] == {"nif": "That tax ID is not valid."}
+
+
+def test_a_refusal_of_the_whole_form_says_its_reason_on_top(client):
+    response = client.post(
+        "/api/probe/strict",
+        {"name": "a", "start": 2, "end": 1},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["fields"] == {"__all__": "The end cannot be before the start."}
+    assert error["message"] == "The end cannot be before the start."
+
+
+def test_a_refusal_of_the_whole_form_keeps_its_reason_on_top_beside_a_highlighted_field(client):
+    response = client.post(
+        "/api/probe/strict/first",
+        {"name": "a", "start": 2, "end": 1},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert set(error["fields"]) == {"slot", "__all__"}
+    # Nothing marks the whole form's reason but the notice on top.
+    assert error["message"] == "The end cannot be before the start."
 
 
 def test_an_unmapped_error_keeps_the_pydantic_message(client):
@@ -659,7 +719,7 @@ def test_parity_uses_the_mounted_path_and_skips_allowed_routes():
     assert not any("/api/things" in problem for problem in mounted)
     allowed = [
         f"/api/probe/{name}"
-        for name in ("conflict", "missing", "http-error/{status}", "boom", "strict")
+        for name in ("conflict", "missing", "http-error/{status}", "boom", "strict", "strict/{slot}")
     ]
     assert ensure_api_parity(api, allow=allowed) == []
 
