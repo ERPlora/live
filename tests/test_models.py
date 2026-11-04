@@ -72,9 +72,9 @@ def test_payload_accepts_uuids_and_decimals():
     assert OutboxEvent.objects.get().payload == {"id": str(key), "total": "12.50"}
 
 
-def test_meta_declares_the_scope_index_and_ordering():
+def test_meta_declares_the_scope_and_pending_indexes_and_ordering():
     meta = OutboxEvent._meta
 
-    assert [index.fields for index in meta.indexes] == [["scope_kind", "scope_key", "created_at"]]
+    assert [index.fields for index in meta.indexes] == [["scope_kind", "scope_key", "created_at"], ["created_at", "id"]]
     assert meta.ordering == ["created_at", "id"]
     assert meta.db_table == "live_outboxevent"

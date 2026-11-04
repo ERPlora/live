@@ -49,7 +49,9 @@ fase 2: `use_hub`) y `saas-next` el suyo (el usuario); el resto (`live.spa`, `li
   llamada).
 - **Eventos**: `record_event(ctx, "<app>.<entidad>.<hecho>", payload)` solo dentro de un command, en su
   transacción (`live_outboxevent`); tras el COMMIT, `pg_notify(<canal del ámbito>, {"events": […]})` en
-  la BD de control. `live.py` de cada app: `live("<consulta>", on=[eventos])`. En el admin de Django
+  la BD de control. `live.py` de cada app: `live("<consulta>", on=[eventos])`. `delivered_at` lo marca el relevo
+  del proyecto que lo tenga; su camino a lo pendiente es el índice parcial `base_outbox_pending`, que declara `live`
+  con el nombre con el que el Hub ya lo tenía desplegado (`live/0003` no lo crea si lo encuentra). En el admin de Django
   (`live.admin`, solo lectura) la sección se llama «Live»/«Tiempo real» y el modelo «outbox events»/«eventos de
   la bandeja de salida», traducidos por `live/locale/es` (`tests/test_admin.py`).
 - **`/api/live`** (SSE, una conexión por pestaña): `GET /api/live?s=<base64url JSON [{id, op, params}]>`

@@ -24,7 +24,7 @@ class OutboxEvent(UUIDModel):
     """A fact recorded by a command in its own transaction (``<app>.<entity>.<fact>``).
 
     The row commits or rolls back with the command; the live notification goes out after the
-    COMMIT. ``delivered_at`` is for the relay of phase 2.
+    COMMIT. ``delivered_at`` is for a project's relay: when it took the event.
     """
 
     scope_kind = models.CharField(max_length=32)
@@ -39,7 +39,16 @@ class OutboxEvent(UUIDModel):
     delivered_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        indexes = [models.Index(fields=["scope_kind", "scope_key", "created_at"])]
+        indexes = [
+            models.Index(fields=["scope_kind", "scope_key", "created_at"]),
+            # A relay's way to the events it has not taken yet: a handful of rows, so a tick never reads the whole
+            # outbox. The name is the one it was deployed with (the Hub's ``base`` made it first, hub#704).
+            models.Index(
+                fields=["created_at", "id"],
+                condition=models.Q(delivered_at__isnull=True),
+                name="base_outbox_pending",
+            ),
+        ]
         ordering = ["created_at", "id"]
         # «Bandeja de salida» is Spanish for an outbox (mail clients say so).
         verbose_name = _("outbox event")
