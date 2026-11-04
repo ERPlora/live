@@ -242,12 +242,9 @@ def install_error_handlers(api: NinjaAPI) -> None:
 
     def invalid_payload(request: Any, exc: ValidationError) -> Any:
         fields = _fields(exc.errors)
-        # A refusal of the whole form highlights nothing: its reason is the notice itself.
-        message = (
-            fields[NON_FIELD_ERRORS]
-            if set(fields) == {NON_FIELD_ERRORS}
-            else gettext("Check the highlighted details.")
-        )
+        # A refusal of the whole form highlights no field: its reason is the notice itself, also
+        # beside a highlighted field.
+        message = fields.get(NON_FIELD_ERRORS) or gettext("Check the highlighted details.")
         return operation_error(request, InvalidPayload(message, fields=fields))
 
     def not_found(request: Any, exc: Http404) -> Any:

@@ -128,6 +128,11 @@ def validate_strictly(request, data: StrictIn):
     return {"ok": True}
 
 
+@probe.post("/strict/{slot}")
+def validate_strictly_in_a_slot(request, slot: int, data: StrictIn):
+    return {"ok": True}
+
+
 api = NinjaAPI(urls_namespace="live-test-ninja")
 install_error_handlers(api)
 api.add_router("", testapp_api.router)
@@ -541,6 +546,20 @@ def test_a_refusal_of_the_whole_form_says_its_reason_on_top(client):
     assert error["message"] == "The end cannot be before the start."
 
 
+def test_a_refusal_of_the_whole_form_keeps_its_reason_on_top_beside_a_highlighted_field(client):
+    response = client.post(
+        "/api/probe/strict/first",
+        {"name": "a", "start": 2, "end": 1},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert set(error["fields"]) == {"slot", "__all__"}
+    # Nothing marks the whole form's reason but the notice on top.
+    assert error["message"] == "The end cannot be before the start."
+
+
 def test_an_unmapped_error_keeps_the_pydantic_message(client):
     response = client.post(
         "/api/probe/strict",
@@ -700,7 +719,7 @@ def test_parity_uses_the_mounted_path_and_skips_allowed_routes():
     assert not any("/api/things" in problem for problem in mounted)
     allowed = [
         f"/api/probe/{name}"
-        for name in ("conflict", "missing", "http-error/{status}", "boom", "strict")
+        for name in ("conflict", "missing", "http-error/{status}", "boom", "strict", "strict/{slot}")
     ]
     assert ensure_api_parity(api, allow=allowed) == []
 
