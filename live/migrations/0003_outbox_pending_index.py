@@ -3,7 +3,9 @@
 The Hub's ``base/0006`` made it, by hand, on every database deployed so far: there this migration finds it, leaves it as
 it is and only writes it down in the state. A database without one gets it here. It looks in the catalog first, because
 ``CREATE INDEX … IF NOT EXISTS`` takes its SHARE lock and asks to own the table before it looks, and every deployed
-database goes through this in a deploy, with its outbox in use.
+database goes through this in a deploy, with its outbox in use. The SQL names its model for a project's database router
+(the Hub's): without one, a router has only the app to go by, and the outbox may live where the rest of ``live`` does
+not.
 """
 
 from django.db import migrations, models
@@ -28,7 +30,9 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.SeparateDatabaseAndState(
-            database_operations=[migrations.RunSQL(CREATE_IF_MISSING, f"DROP INDEX IF EXISTS {NAME}")],
+            database_operations=[
+                migrations.RunSQL(CREATE_IF_MISSING, f"DROP INDEX IF EXISTS {NAME}", hints={"model_name": "outboxevent"}),
+            ],
             state_operations=[
                 migrations.AddIndex(
                     model_name='outboxevent',

@@ -12,6 +12,7 @@ from django.core.management import call_command
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 from django.db.models import Q
+from django.test import override_settings
 from live.models import OutboxEvent
 
 NAME = "base_outbox_pending"
@@ -108,6 +109,24 @@ def test_going_back_when_it_is_already_gone_is_no_error():
     migrate(BEFORE)
 
     assert partial_indexes() == []
+
+
+class DecidesByTheModel:
+    """A project's router, as the Hub's: an app's tables may live apart from its one outbox, so what an operation does
+    with the outbox it must say so, by naming the model. One that names none is not about the outbox."""
+
+    def allow_migrate(self, db, app_label, model_name=None, **hints):
+        return model_name == "outboxevent"
+
+
+@pytest.mark.django_db
+def test_a_router_that_decides_by_the_model_lets_it_through_both_ways():
+    with override_settings(DATABASE_ROUTERS=[DecidesByTheModel()]):
+        migrate(BEFORE)
+        assert partial_indexes() == []
+
+        migrate(AFTER)
+        assert [definition for _oid, definition in partial_indexes()] == [DEFINITION]
 
 
 @pytest.mark.django_db(transaction=True)
