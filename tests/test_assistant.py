@@ -561,7 +561,7 @@ def test_an_id_written_where_the_name_goes_is_never_said(said_lines):
     assert said_things(said_lines, mixed, SpokenWords(said_lines, "en"))[1] is False
 
 
-@pytest.mark.parametrize("blank", ["   ", "\t", "\n", " \t\r\n ", " "])
+@pytest.mark.parametrize("blank", ["   ", "\t", "\n", " \t\r\n ", "\xa0"])
 def test_a_name_in_blank_names_nothing(said_lines, blank):
     """hub#879: a model that writes the name as blanks (``{"service": "   "}``) and the card said «Servicios:» with
     nothing after it. Blanks say nothing, as an empty name does: the screen says how many the list carries. Beside its
