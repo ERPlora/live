@@ -453,12 +453,21 @@ class MisnamedIn(Schema):
     note: str | None = None
     thing: str | None = Field(None, json_schema_extra={"name_of": "note"})
     other: str | None = Field(None, json_schema_extra={"name_of": "missing"})
+    loose: str | None = Field(None, json_schema_extra={"name_of": ["note"]})
+
+
+class BareIdRefIn(Schema):
+    """A line whose record is an id its app did not mark (``format: uuid`` alone)."""
+
+    place_id: uuid.UUID | None = None
+    place: str | None = Field(None, json_schema_extra={"name_of": "place_id"})
 
 
 class SaidLinesIn(Schema):
     things: list[SaidThingRefIn] = []
     codes: list[CodeRefIn] = []
     misnamed: list[MisnamedIn] = []
+    places: list[BareIdRefIn] = []
 
 
 @pytest.fixture
@@ -522,6 +531,34 @@ def test_a_mark_that_names_no_record_of_its_line_leaves_nothing_out(said_lines, 
     which one names the line, only its app knows — the screen says how many it carries."""
     shown = fields(assistant.card(said_lines, {"misnamed": [line]}, "en", SpokenWords(said_lines, "en")))["misnamed"]
     assert (shown["value"], shown.get(assistant.NAMED, False)) == ([line], False)
+
+
+def test_a_mark_that_is_not_the_name_of_a_datum_is_no_mark(said_lines):
+    """A mark that is no text (a list, by mistake) marks nothing: its text is one as sent, never said one by one
+    (hub#504), alone or beside another datum."""
+    for line in ({"loose": "Mesa 4"}, {"loose": "Mesa 4", "note": "ventana"}):
+        shown = fields(assistant.card(said_lines, {"misnamed": [line]}, "en", SpokenWords(said_lines, "en")))["misnamed"]
+        assert (shown["value"], shown.get(assistant.NAMED, False)) == ([line], False)
+
+
+def test_a_name_beside_a_record_its_app_did_not_mark_is_left_out_too(said_lines):
+    """A datum the schema says is an id is a record without a mark (``REFERS``'s own rule): the name beside it is left
+    out as well, and one that is no id is no record — both data are said as sent."""
+    line = {"place_id": str(uuid.uuid4()), "place": "Mesa 4"}
+    shown = fields(assistant.card(said_lines, {"places": [line]}, "en", SpokenWords(said_lines, "en")))["places"]
+    assert (shown["value"], shown.get(assistant.NAMED)) == ([{"place_id": "Table 5"}], True)
+    no_id = {"place_id": "T4", "place": "Mesa 4"}
+    shown = fields(assistant.card(said_lines, {"places": [no_id]}, "en", SpokenWords(said_lines, "en")))["places"]
+    assert (shown["value"], shown.get(assistant.NAMED, False)) == ([no_id], False)
+
+
+def test_an_id_written_where_the_name_goes_is_never_said(said_lines):
+    """A model that writes the record's id in the datum of its name (``{"service": "<id>"}``): an id is no name a
+    person says, and a card never says a record by its id — the screen says how many the list carries."""
+    one = str(uuid.uuid4())
+    assert said_things(said_lines, [{"thing": one}], SpokenWords(said_lines, "en")) == ([{"thing": one}], False)
+    mixed = [{"thing": "Mesa 4"}, {"thing": one, "thing_id": None}]
+    assert said_things(said_lines, mixed, SpokenWords(said_lines, "en"))[1] is False
 
 
 class RectifyIn(Schema):

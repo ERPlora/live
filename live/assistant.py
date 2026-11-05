@@ -1077,7 +1077,9 @@ def is_uuid(value: Any) -> bool:
 #: its id, when the id is not known (``json_schema_extra={"name_of": "<that datum>"}``: a booking's service, «Tinte»,
 #: beside ``service_id``; hub#860). It is a name, never a code: a line that carries only it is said by it. Beside its
 #: record the write takes the id and ignores the name, so the card says the record and leaves the name out. A text
-#: without it is sent as it is and never said one by one (a code nobody names: hub#504).
+#: without it is sent as it is and never said one by one (a code nobody names: hub#504), and so is an id written
+#: where the name goes. It marks a text of an object a write sends (a line of a list); on a write's own data it
+#: does nothing: each of them shows under its own label.
 NAME_OF = "name_of"
 
 
@@ -1308,7 +1310,7 @@ def _in_words(value: Any, spoken: Any, prop: dict, defs: dict, name: str) -> boo
         key, item = next(iter(carried.items()))
         inner = spoken.get(key) if isinstance(spoken, dict) else None
         if key in props and _name_of(props[key], defs) is not None:
-            return isinstance(item, str)
+            return isinstance(item, str) and not is_uuid(item)  # an id is no name: a card never says one
         return key in props and _in_words(item, inner, props[key], defs, key)
     declared = prop.get("format") in MOMENTS or "enum" in prop or is_money(name, prop)
     return declared and spoken != value
