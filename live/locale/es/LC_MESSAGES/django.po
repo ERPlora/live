@@ -252,3 +252,11 @@ msgid ""
 msgstr ""
 "Se ha perdido la conexión mientras se guardaba. Comprueba si se ha guardado "
 "antes de volver a intentarlo."
+
+#: live/database_cut.py
+msgid ""
+"It was saved, but the connection was lost before the answer arrived. Reload "
+"the page in a few seconds to see it."
+msgstr ""
+"Se ha guardado, pero la conexión se ha perdido antes de llegar la respuesta. "
+"Recarga la página en unos segundos para verlo."

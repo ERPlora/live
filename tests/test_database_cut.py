@@ -19,14 +19,14 @@ from contextlib import nullcontext
 import psycopg
 import pytest
 from asgiref.sync import sync_to_async
-from django.db import OperationalError, connections
+from django.db import OperationalError, connections, transaction
 from django.http import HttpResponse, HttpResponseServerError
 from django.test import AsyncClient, Client
 from django.urls import path
 from django.utils import translation
 from live.context import OperationContext, Scope
 from live.database_cut import DatabaseCut, current_cut, marked
-from live.errors import LiveMisuse
+from live.errors import Conflict, LiveMisuse
 from live.executor import Executor, Stream, Subscription
 from live.live_view import live_stream
 from live.ninja import install_error_handlers, run_operation, run_operation_sync
@@ -42,6 +42,7 @@ pytestmark = pytest.mark.django_db(databases=["default", "other"], transaction=T
 MIDDLEWARE = ["live.database_cut.DatabaseCutMiddleware", "tests.test_database_cut.ReadsBeforeTheView"]
 UNAVAILABLE = "database_unavailable"
 UNKNOWN = "database_outcome_unknown"
+APPLIED = "database_answer_lost"
 WAIT_SECONDS = 2
 
 #: How many times each named piece ran in this test.
@@ -79,7 +80,17 @@ READ = _declare("read", "query")
 WRITE = _declare("write", "command")
 REPEATABLE = _declare("repeatable", "command", repeatable=True)
 THIRD_PARTY = _declare("thirdparty", "command", database=False)
-OPERATIONS = (READ, WRITE, REPEATABLE, THIRD_PARTY)
+
+
+def _outer_body(ctx, data):
+    """A command that runs another one inside it, as one that records its event through another operation."""
+    WRITE(ctx, Empty())
+    return {"rows": scripted("outer") or 0}
+
+
+_outer_body.__module__ = "tests.fakeapp.services"
+OUTER = operation("cuttest.probe.outer", kind="command", permission=None, input=Empty, output=Answer, ai=INTERNAL)(_outer_body)
+OPERATIONS = (READ, WRITE, REPEATABLE, THIRD_PARTY, OUTER)
 
 
 # --- The project's side -----------------------------------------------------------------------------------------------
@@ -175,6 +186,36 @@ def after_third_party(request):
 def after_write(request):
     run_operation_sync(request, WRITE.name)
     return {"rows": scripted("raw")}
+
+
+@router.post("/after-repeatable", response=Answer)
+def after_repeatable(request):
+    run_operation_sync(request, REPEATABLE.name)
+    return {"rows": scripted("raw")}
+
+
+@router.post("/after-nested", response=Answer)
+def after_nested(request):
+    run_operation_sync(request, OUTER.name)
+    return {"rows": scripted("raw")}
+
+
+@router.post("/after-two-writes", response=Answer)
+def after_two_writes(request):
+    """The second write may fail: the route goes on, as one that tells apart what it can do without it."""
+    run_operation_sync(request, WRITE.name)
+    try:
+        run_operation_sync(request, WRITE.name)
+    except Conflict:
+        pass
+    return {"rows": scripted("raw")}
+
+
+@router.post("/after-write-in-its-transaction", response=Answer)
+def after_write_in_its_transaction(request):
+    with transaction.atomic():
+        run_operation_sync(request, WRITE.name)
+        return {"rows": scripted("raw")}
 
 
 @router.post("/write", response=Answer)
@@ -562,10 +603,6 @@ def test_a_route_read_outside_its_operation_waits_too(client):
 
 def test_a_post_cut_while_reading_who_asks_is_applied_once(client):
     """The first read of a route on the panel. It writes only through its operation, and that one has not started."""
-
-    def inserts(attempt):
-        return Thing.objects.create(name="once") and 1
-
     script["auth"] = cut_once
     script["write"] = inserts
 
@@ -587,31 +624,106 @@ def test_a_route_with_no_command_started_repeats_while_it_can(client):
     assert runs["raw"] > 1
 
 
-def test_a_route_cut_after_its_command_committed_is_not_repeated(client):
-    def inserts(attempt):
-        return Thing.objects.create(name="once") and 1
+def inserts(attempt: int) -> int:
+    return Thing.objects.create(name="once") and 1
 
+
+def test_a_route_cut_after_its_command_committed_says_it_was_saved(client):
+    """A route writes only through its operation: once its one command committed, what the cut stopped is the answer."""
     script["write"] = inserts
     script["raw"] = always_cut
 
     response = client.post("/api/after-write")
 
     assert response.status_code == 503, response.content
-    assert code_of(response) == UNKNOWN
+    assert code_of(response) == APPLIED
+    assert response.json()["error"]["message"] == DatabaseCut(repeatable=False, applied=True).message
+    assert int(response["Retry-After"]) > 0
     assert (runs["write"], runs["raw"]) == (1, 1)
     assert things_in_the_database() == 1
 
 
-def test_a_route_cut_after_a_call_to_a_third_party_is_not_repeated(client):
-    """A command with no database has no transaction to undo what it did on the network."""
+def test_a_route_cut_after_a_call_to_a_third_party_says_it_was_done(client):
+    """A command with no database has no transaction to undo what it did on the network: it answered, so it was done."""
     script["thirdparty"] = lambda attempt: 1
     script["raw"] = always_cut
 
     response = client.post("/api/after-third-party")
 
     assert response.status_code == 503, response.content
-    assert code_of(response) == UNKNOWN
+    assert code_of(response) == APPLIED
     assert (runs["thirdparty"], runs["raw"]) == (1, 1)
+
+
+def test_a_route_cut_after_its_command_was_tried_again_says_it_was_saved(client):
+    """The try a cut rolled back left nothing: the command was applied once, by the try after it."""
+    script["repeatable"] = insert_then_cut_once
+    script["raw"] = always_cut
+
+    response = client.post("/api/after-repeatable")
+
+    assert response.status_code == 503, response.content
+    assert code_of(response) == APPLIED
+    assert (runs["repeatable"], runs["raw"]) == (2, 1)
+    assert things_in_the_database() == 1
+
+
+def test_a_route_cut_after_a_command_that_ran_another_one_says_it_was_saved(client):
+    """The one inside commits with the outer one: the route still ran one command."""
+    script["write"] = inserts
+    script["outer"] = lambda attempt: 1
+    script["raw"] = always_cut
+
+    response = client.post("/api/after-nested")
+
+    assert response.status_code == 503, response.content
+    assert code_of(response) == APPLIED
+    assert (runs["write"], runs["outer"], runs["raw"]) == (1, 1, 1)
+    assert things_in_the_database() == 1
+
+
+def test_a_route_cut_after_two_commands_does_not_say_what_was_saved(client):
+    """With a second command that failed, the first one alone was applied: the person checks."""
+
+    def inserts_then_refuses(attempt):
+        if attempt == 2:
+            raise Conflict("refused", code="cuttest.refused")
+        return inserts(attempt)
+
+    script["write"] = inserts_then_refuses
+    script["raw"] = always_cut
+
+    response = client.post("/api/after-two-writes")
+
+    assert response.status_code == 503, response.content
+    assert code_of(response) == UNKNOWN
+    assert (runs["write"], runs["raw"]) == (2, 1)
+    assert things_in_the_database() == 1
+
+
+def test_a_route_cut_after_two_commands_applied_does_not_say_it_was_saved_either(client):
+    """One route, one operation: more than one, and the answer cannot tell what the person asked for."""
+    script["write"] = inserts
+    script["raw"] = always_cut
+
+    response = client.post("/api/after-two-writes")
+
+    assert response.status_code == 503, response.content
+    assert code_of(response) == UNKNOWN
+    assert things_in_the_database() == 2
+
+
+def test_a_route_cut_inside_the_transaction_its_command_ran_in_does_not_say_it_was_saved(client):
+    """A command inside someone else's transaction commits with it: the cut rolled it back, and only a cut at the
+    right moment could tell."""
+    script["write"] = inserts
+    script["raw"] = always_cut
+
+    response = client.post("/api/after-write-in-its-transaction")
+
+    assert response.status_code == 503, response.content
+    assert code_of(response) == UNKNOWN
+    assert things_in_the_database() == 0
 
 
 def test_a_cut_of_what_answers_at_once_does_not_wait(client):
@@ -650,11 +762,8 @@ def test_a_post_cut_inside_its_view_is_never_repeated(client):
 
 
 def test_a_get_that_ran_a_command_is_never_repeated(client):
-    """A GET is safe to repeat only while it writes nothing: the command already committed stays once."""
-
-    def inserts(attempt):
-        return Thing.objects.create(name="once") and 1
-
+    """A GET is safe to repeat only while it writes nothing: the command already committed stays once. A page may write
+    outside its operations, so it never says it was saved."""
     script["write"] = inserts
     script["page"] = always_cut
 
@@ -927,17 +1036,31 @@ def test_a_live_stream_whose_context_runs_an_operation_answers_503_with_retry_af
 # --- What the person reads --------------------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("repeatable", [True, False])
-def test_the_message_is_translated(repeatable):
+@pytest.mark.parametrize("outcome", [{"repeatable": True}, {"repeatable": False}, {"repeatable": False, "applied": True}])
+def test_the_message_is_translated(outcome):
     with translation.override("en"):
-        english = DatabaseCut(repeatable=repeatable).message
+        english = DatabaseCut(**outcome).message
     with translation.override("es"):
-        spanish = DatabaseCut(repeatable=repeatable).message
+        spanish = DatabaseCut(**outcome).message
 
     assert english and spanish and english != spanish
+
+
+def test_each_outcome_says_its_own_thing():
+    """Nothing applied, applied with its answer lost, or nobody can know: three codes, three messages."""
+    outcomes = [DatabaseCut(repeatable=True), DatabaseCut(repeatable=False), DatabaseCut(repeatable=False, applied=True)]
+
+    assert [cut.code for cut in outcomes] == [UNAVAILABLE, UNKNOWN, APPLIED]
+    assert len({cut.message for cut in outcomes}) == 3
+
+
+def test_applied_is_never_repeatable():
+    with pytest.raises(LiveMisuse):
+        DatabaseCut(repeatable=True, applied=True)
 
 
 def test_only_what_ran_nothing_says_when_to_try_again_to_the_live_executor():
     """``OperationError.retry_after``: always ``None`` for a failure that may have done something."""
     assert DatabaseCut(repeatable=True).retry_after is not None
     assert DatabaseCut(repeatable=False).retry_after is None
+    assert DatabaseCut(repeatable=False, applied=True).retry_after is None

@@ -26,8 +26,14 @@ page or a session read, in :class:`DatabaseCutMiddleware`, which goes first in `
 into a response at every layer, so it can only look at the response, which the project's ``handler500`` marks with
 :func:`current_cut` and :func:`marked`. A live stream waits in ``live.executor``, as any passing failure.
 
-Past the limit, or when it may not repeat: 503 with ``Retry-After``, never a 500. The code says which: ``database_unavailable``
-(come back in a moment) or ``database_outcome_unknown`` (check whether it was saved).
+Past the limit, or when it may not repeat: 503 with ``Retry-After``, never a 500. The code says which of the three it is:
+``database_unavailable``, nothing was applied (come back in a moment); ``database_answer_lost``, it was applied and only
+its answer was lost (reload to see it); ``database_outcome_unknown``, nobody can know (check whether it was saved).
+
+**Applied, answer lost** (:func:`applied`): a cut outside any operation of a route of the API whose one command (one per
+route) committed, or answered when it has no database. A route writes only through its operations, so what the cut
+stopped is the answer. A page may write outside them, and more than one command, a command that failed or one inside
+someone else's transaction leave it unknown.
 """
 
 import asyncio
@@ -48,7 +54,7 @@ from django.utils.cache import add_never_cache_headers
 from django.utils.translation import gettext
 
 from live.api_errors import is_api_path
-from live.errors import OperationError
+from live.errors import LiveMisuse, OperationError
 from live.middleware import SyncAndAsyncMiddleware
 
 T = TypeVar("T")
@@ -78,13 +84,19 @@ class DatabaseCut(OperationError):
     status = 503
     code = "database_unavailable"
 
-    def __init__(self, *, repeatable: bool) -> None:
+    def __init__(self, *, repeatable: bool, applied: bool = False) -> None:
+        if repeatable and applied:
+            raise LiveMisuse("A cut that was applied can never run again.")
         if repeatable:
             super().__init__(gettext("ERPlora will be back in a moment: try again in a few seconds."), retry_after=RETRY_AFTER_SECONDS)
+        elif applied:
+            message = gettext("It was saved, but the connection was lost before the answer arrived. Reload the page in a few seconds to see it.")
+            super().__init__(message, code="database_answer_lost")
         else:
             message = gettext("The connection was lost while this was being saved. Check whether it was saved before trying again.")
             super().__init__(message, code="database_outcome_unknown")
         self.repeatable = repeatable
+        self.applied = applied
 
 
 def enabled() -> bool:
@@ -111,6 +123,9 @@ class _Request:
     next_wait: float = FIRST_WAIT
     view_started: bool = False
     command_started: bool = False
+    #: Commands that own their transaction (or have none), but the tries a cut rolled back; and how many were applied.
+    commands: int = 0
+    applied: int = 0
 
 
 #: The running request's, when the middleware is on: a command may run with a context that does not name its request.
@@ -124,11 +139,31 @@ def _state(request: HttpRequest) -> _Request:
     return state
 
 
-def command_started() -> None:
-    """A command's body is about to run: from here this request no longer repeats whole, whatever its method."""
+def command_started(*, owner: bool = False) -> None:
+    """A command's body is about to run: from here this request no longer repeats whole, whatever its method.
+
+    ``owner``: it owns its transaction (or has none), so it is its own to say how it ended (:func:`command_ended`)."""
     state = _running.get()
     if state is not None:
         state.command_started = True
+        state.commands += owner
+
+
+def command_ended(*, applied: bool) -> None:
+    """A command that owns its transaction ended: it committed (or answered, without a database), ``applied``, or a cut
+    rolled back a try of it that may run again, which counts as never started."""
+    state = _running.get()
+    if state is not None:
+        if applied:
+            state.applied += 1
+        else:
+            state.commands -= 1
+
+
+def applied(request: HttpRequest) -> bool:
+    """Whether all this request did is known to be applied: a route of the API, whose one command was."""
+    state = _state(request)
+    return state.commands == state.applied == 1 and is_api_path(request.path_info)
 
 
 def may_repeat(request: HttpRequest) -> bool:
@@ -183,6 +218,8 @@ def cut_of(exc: BaseException | None, request: HttpRequest) -> DatabaseCut | Non
     if isinstance(exc, DatabaseCut):
         return exc if not exc.repeatable or may_repeat(request) else DatabaseCut(repeatable=False)
     if is_cut(exc):
+        if applied(request):
+            return DatabaseCut(repeatable=False, applied=True)
         return DatabaseCut(repeatable=may_repeat(request))
     return None
 

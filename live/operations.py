@@ -45,7 +45,7 @@ from django.utils.translation import gettext
 from ninja import Schema
 
 from live.context import OperationContext, Scope
-from live.database_cut import COMMITTING, CONNECTING, RUNNING, DatabaseCut, command_started, is_cut
+from live.database_cut import COMMITTING, CONNECTING, RUNNING, DatabaseCut, command_ended, command_started, is_cut
 from live.errors import LiveMisuse, PermissionDenied
 
 Kind = Literal["query", "command"]
@@ -185,7 +185,7 @@ class Operation:
                                 cursor.execute("SET TRANSACTION READ ONLY")
                                 cursor.execute(f"SET LOCAL statement_timeout = '{QUERY_STATEMENT_TIMEOUT}'")
                         else:
-                            command_started()
+                            command_started(owner=owns_transaction)
                         result = self._validated(self.fn(ctx, data))
                         if self.kind == "query":
                             # A query never commits. Nested in another transaction it runs in a savepoint:
@@ -202,10 +202,15 @@ class Operation:
         except Error as exc:
             if not owns_transaction or not is_cut(exc):
                 raise
-            raise DatabaseCut(repeatable=self._may_repeat_after(stage)) from exc
+            repeatable = self._may_repeat_after(stage)
+            if repeatable and stage == RUNNING and self.kind == "command":
+                command_ended(applied=False)
+            raise DatabaseCut(repeatable=repeatable) from exc
         finally:
             _pending_events.reset(events_token)
             current_operation.reset(operation_token)
+        if self.kind == "command" and owns_transaction:
+            command_ended(applied=True)
         return result
 
     def _may_repeat_after(self, stage: str) -> bool:
@@ -216,6 +221,7 @@ class Operation:
         return self.repeatable and stage == RUNNING
 
     def _without_database(self, ctx: OperationContext, data: Schema) -> Schema:
+        outermost = current_operation.get() is None
         operation_token = current_operation.set(self)
         events_token = _pending_events.set(None)
         alias_token = _operation_alias.set(None)
@@ -223,8 +229,11 @@ class Operation:
             with _database(self, ctx), _no_queries(self):
                 if self.kind == "command":
                     # What it does on the network, no transaction undoes.
-                    command_started()
-                return self._validated(self.fn(ctx, data))
+                    command_started(owner=outermost)
+                result = self._validated(self.fn(ctx, data))
+            if self.kind == "command" and outermost:
+                command_ended(applied=True)
+            return result
         finally:
             _operation_alias.reset(alias_token)
             _pending_events.reset(events_token)

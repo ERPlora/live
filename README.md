@@ -369,8 +369,14 @@ def server_error(request):  # handler500 del proyecto; la página 503 sin proces
 - **Quién espera:** la operación de una ruta en `run_operation`, fuera de su transacción (sin conexión ni plaza de
   `operation_database`); lo demás en el middleware, que lee la respuesta que `handler500` marca; un flujo vivo, en
   `live.executor`, como cualquier fallo pasajero. El tope es el de la petición entera.
-- **Pasado el tope, o si no se puede repetir:** 503 con `Retry-After`, nunca un 500. El código dice cuál: `database_unavailable`
-  (vuelve en un momento) o `database_outcome_unknown` (comprueba si se guardó).
+- **Pasado el tope, o si no se puede repetir:** 503 con `Retry-After`, nunca un 500. El código dice cuál de los tres es, cada
+  uno con su texto en `en` y `es`: `database_unavailable`, no se aplicó nada (vuelve en un momento); `database_answer_lost`,
+  se aplicó y solo se perdió la respuesta (recarga para verlo); `database_outcome_unknown`, nadie puede saberlo (comprueba si
+  se guardó).
+- **Se aplicó y se perdió la respuesta:** un corte fuera de toda operación en una ruta de la API cuyo único comando hizo el
+  COMMIT (o respondió, si no tiene base), como la escritura de la sesión tras la vista. Una ruta solo escribe por sus
+  operaciones, así que lo que cortó fue la respuesta. Una página puede escribir fuera de ellas, y más de un comando, uno que
+  falló o uno dentro de la transacción de otro lo dejan sin saberse.
 
 ## Cómo se prueba
 
