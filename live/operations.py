@@ -44,9 +44,8 @@ from django.utils.module_loading import import_string
 from django.utils.translation import gettext
 from ninja import Schema
 
-from live import database_cut
 from live.context import OperationContext, Scope
-from live.database_cut import COMMITTING, CONNECTING, RUNNING, DatabaseCut
+from live.database_cut import COMMITTING, CONNECTING, RUNNING, DatabaseCut, command_started, is_cut
 from live.errors import LiveMisuse, PermissionDenied
 
 Kind = Literal["query", "command"]
@@ -186,7 +185,7 @@ class Operation:
                                 cursor.execute("SET TRANSACTION READ ONLY")
                                 cursor.execute(f"SET LOCAL statement_timeout = '{QUERY_STATEMENT_TIMEOUT}'")
                         else:
-                            database_cut.command_started()
+                            command_started()
                         result = self._validated(self.fn(ctx, data))
                         if self.kind == "query":
                             # A query never commits. Nested in another transaction it runs in a savepoint:
@@ -201,7 +200,7 @@ class Operation:
                         _operation_alias.reset(alias_token)
                     stage = COMMITTING
         except Error as exc:
-            if not owns_transaction or not database_cut.is_cut(exc):
+            if not owns_transaction or not is_cut(exc):
                 raise
             raise DatabaseCut(repeatable=self._may_repeat_after(stage)) from exc
         finally:
@@ -224,7 +223,7 @@ class Operation:
             with _database(self, ctx), _no_queries(self):
                 if self.kind == "command":
                     # What it does on the network, no transaction undoes.
-                    database_cut.command_started()
+                    command_started()
                 return self._validated(self.fn(ctx, data))
         finally:
             _operation_alias.reset(alias_token)
