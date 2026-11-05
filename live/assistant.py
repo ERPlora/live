@@ -1073,6 +1073,35 @@ def is_uuid(value: Any) -> bool:
     return True
 
 
+#: The mark of a text of an object that names, as a person says it, the record another datum of that object names by
+#: its id, when the id is not known (``json_schema_extra={"name_of": "<that datum>"}``: a booking's service, «Tinte»,
+#: beside ``service_id``; hub#860). It is a name, never a code: a line that carries only it is said by it. Beside its
+#: record the write takes the id and ignores the name, so the card says the record and leaves the name out. A text
+#: without it is sent as it is and never said one by one (a code nobody names: hub#504).
+NAME_OF = "name_of"
+
+
+def _is_record(value: Any, prop: dict) -> bool:
+    """Whether ``value`` names a record as its schema ``prop`` (the branch it fits, ``fitting``) declares it: marked
+    ``REFERS``, or an id."""
+    return REFERS in prop or (prop.get("format") == "uuid" and is_uuid(value))
+
+
+def _name_of(prop: dict, defs: dict) -> str | None:
+    """The datum whose record the text its schema ``prop`` declares names as a person says it (``NAME_OF``), or
+    ``None``."""
+    of = _referred(prop, defs).get(NAME_OF)
+    return of if isinstance(of, str) else None
+
+
+def _name_beside_its_record(key: str, value: dict, props: dict, defs: dict) -> bool:
+    """Whether the datum ``key`` of the object ``value`` is a name a person said (``NAME_OF``) of a record the object
+    carries itself: not empty, of a datum its schema ``props`` declares a record (``_is_record``)."""
+    of = _name_of(props.get(key, {}), defs)
+    record = value.get(of) if of in props else None
+    return record is not None and record != "" and _is_record(record, fitting(record, props[of], defs))
+
+
 #: What a card leaves out: a record it cannot name, an attempt key.
 LEFT_OUT = object()
 
@@ -1211,9 +1240,10 @@ def said(value: Any, prop: dict, defs: dict, name: str, words: Words, inner: boo
     (``Words.moment``), a value of a closed list by the label its app's models give it (``choice_label``; of the field
     its schema marks, ``CHOICES_OF``), a record by
     its name (``Words.reference``) or else ``LEFT_OUT`` — left out of an object, none in a list (which still says how
-    many it carries), as an attempt key (``ATTEMPT_KEY``) is, even empty; an amount (``MONEY``) inside an object or a
-    list as the screen writes one on top (``Words.amount``), in the words of the object it is in (``Words.within``);
-    what is none of them, or not what its schema declares (the write refuses it), as sent."""
+    many it carries), as an attempt key (``ATTEMPT_KEY``) is, even empty, and as the name a person said beside the
+    record it names (``NAME_OF``) is; an amount (``MONEY``) inside an object or a list as the screen writes one on top
+    (``Words.amount``), in the words of the object it is in (``Words.within``); what is none of them, or not what its
+    schema declares (the write refuses it), as sent."""
     prop = fitting(value, prop, defs)
     if is_attempt_key(prop):
         return LEFT_OUT
@@ -1221,7 +1251,7 @@ def said(value: Any, prop: dict, defs: dict, name: str, words: Words, inner: boo
         return value
     if inner and is_money(name, prop) and isinstance(value, int) and not isinstance(value, bool):
         return words.amount(value)
-    if REFERS in prop or (prop.get("format") == "uuid" and is_uuid(value)):
+    if _is_record(value, prop):
         return words.reference(value, prop)
     if prop.get("format") in MOMENTS and isinstance(value, str):
         spoken = words.moment(value, prop["format"])
@@ -1236,7 +1266,9 @@ def said(value: Any, prop: dict, defs: dict, name: str, words: Words, inner: boo
         extra = extra if isinstance(extra, dict) else {}
         own = words.within(value, props, defs)
         spoken_items = {
-            key: said(item, props.get(key, extra), defs, key if key in props else name, own, inner=True)
+            key: LEFT_OUT
+            if _name_beside_its_record(key, value, props, defs)
+            else said(item, props.get(key, extra), defs, key if key in props else name, own, inner=True)
             for key, item in value.items()
         }
         return {key: item for key, item in spoken_items.items() if item is not LEFT_OUT}
@@ -1255,16 +1287,28 @@ def said(value: Any, prop: dict, defs: dict, name: str, words: Words, inner: boo
 def _in_words(value: Any, spoken: Any, prop: dict, defs: dict, name: str) -> bool:
     """Whether ``said`` put the item ``value`` of a list in words (``spoken``) as its schema ``prop`` declares it — a
     record (``REFERS`` or an id), a moment, a value of a closed list, an amount, or a line that carries only one of
-    them (a booking's services, ``[{"service_id": …}]``: hub#835) —, not as sent (``NAMED``). A line with more than
-    one datum is not: which of them names it, only its app knows. An empty datum of a line (a name the model writes
-    as null beside the id it gives) does not count: it does not show."""
+    them (a booking's services, ``[{"service_id": …}]``: hub#835) or only the name a person said of its record
+    (``NAME_OF``: ``[{"service": "Tinte"}]``, hub#860) —, not as sent (``NAMED``). A line with more than one datum is
+    not: which of them names it, only its app knows. An empty datum of a line (a name the model writes as null beside
+    the id it gives) does not count: it does not show; nor does a name beside its record, which the card leaves out."""
     prop = fitting(value, prop, defs)
-    if REFERS in prop or (prop.get("format") == "uuid" and is_uuid(value)):
+    if _is_record(value, prop):
         return True
-    carried = {key: item for key, item in value.items() if item is not None and item != ""} if isinstance(value, dict) else {}
+    props = prop.get("properties", {})
+    carried = (
+        {
+            key: item
+            for key, item in value.items()
+            if item is not None and item != "" and not _name_beside_its_record(key, value, props, defs)
+        }
+        if isinstance(value, dict)
+        else {}
+    )
     if len(carried) == 1:
-        (key, item), props = next(iter(carried.items())), prop.get("properties", {})
+        key, item = next(iter(carried.items()))
         inner = spoken.get(key) if isinstance(spoken, dict) else None
+        if key in props and _name_of(props[key], defs) is not None:
+            return isinstance(item, str)
         return key in props and _in_words(item, inner, props[key], defs, key)
     declared = prop.get("format") in MOMENTS or "enum" in prop or is_money(name, prop)
     return declared and spoken != value
