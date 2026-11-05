@@ -362,6 +362,76 @@ def test_a_list_with_one_item_left_as_sent_is_not_named(lists, monkeypatch):
     assert named(card) == {"sizes": False, "days": False}
 
 
+class ThingRefIn(Schema):
+    """A line that names its record by its id or, when its id is not known, as a person says it (Citas' services)."""
+
+    thing_id: uuid.UUID | None = Field(None, json_schema_extra={"refers": {"read": "testapp.probe.get", "by": "id"}})
+    thing: str | None = None
+
+
+class WhenIn(Schema):
+    """A line of one datum that is no record: a day, or a value of a closed list."""
+
+    day: dt.date | None = None
+    size: Literal["s", "m"] | None = None
+
+
+class LinesIn(Schema):
+    things: list[ThingRefIn] = []
+    priced: list[LineIn] = []
+    whens: list[WhenIn] = []
+
+
+@pytest.fixture
+def lines():
+    return op("testapp.probe.lines", ai=CREATE, input=LinesIn)
+
+
+def test_a_list_of_lines_that_carry_only_their_record_is_named(lines):
+    """hub#835: a booking's services (``[{"service_id": …}]``), each named by the server, and the card said «Servicios:
+    1 elemento». A line that carries one datum, its record, is said as that record is: by its name, or left out — the
+    screen counts it among the more, never by its id."""
+    one, other = str(uuid.uuid4()), str(uuid.uuid4())
+    card = assistant.card(lines, {"things": [{"thing_id": one}, {"thing_id": other}]}, "en", SpokenWords(lines, "en"))
+    assert named(card) == {"things": True}
+    assert fields(card)["things"]["value"] == [{"thing_id": "Table 5"}, {"thing_id": "Table 5"}]
+    left = fields(assistant.card(lines, {"things": [{"thing_id": one}]}, "en"))["things"]
+    assert (left["value"], left.get(assistant.NAMED)) == ([{}], True)
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {"things": [{"thing_id": str(uuid.uuid4()), "thing": "Mesa 4"}]},  # its record and what a person said of it
+        {"things": [{"thing": "Mesa 4"}]},  # a text as sent: nobody named it
+        {"priced": [{"label": "a", "amount": 250}]},  # a label and a price
+    ],
+)
+def test_a_list_of_lines_that_carry_more_than_their_record_is_not_named(lines, arguments):
+    """Which of its data names such a line, only its app knows: the screen says how many it carries."""
+    assert set(named(assistant.card(lines, arguments, "en", SpokenWords(lines, "en"))).values()) == {False}
+
+
+def test_an_empty_datum_beside_its_record_does_not_count(lines):
+    """A model writes the name it does not give as null, or empty (``{"thing_id": …, "thing": null}``): an empty datum
+    does not show on a card, so the line still carries only its record. One with nothing but empty data names nothing."""
+    one = str(uuid.uuid4())
+    sent = {"things": [{"thing_id": one, "thing": None}, {"thing": "", "thing_id": one}]}
+    assert named(assistant.card(lines, sent, "en", SpokenWords(lines, "en"))) == {"things": True}
+    assert named(assistant.card(lines, {"things": [{"thing": None}]}, "en", SpokenWords(lines, "en"))) == {"things": False}
+
+
+def test_a_line_is_named_only_when_the_datum_it_carries_alone_is_said_in_words(lines, monkeypatch):
+    """The one datum of a line is judged as an item of a list is: a day, a value of a closed list by its label; one left
+    as sent (no label, no day) is not, or the screen would say a code."""
+    monkeypatch.setattr(assistant, "choice_label", lambda app, entity, name, value: {"s": "Small"}.get(value))
+    card = assistant.card(lines, {"whens": [{"day": "2026-11-02"}, {"size": "s"}]}, "en")
+    assert named(card) == {"whens": True}
+    assert fields(card)["whens"]["value"][1] == {"size": "Small"}
+    for as_sent in ({"size": "m"}, {"day": "soon"}):
+        assert named(assistant.card(lines, {"whens": [{"size": "s"}, as_sent]}, "en")) == {"whens": False}
+
+
 class RectifyIn(Schema):
     rectification_type: Literal["R1", "R4"] | None = Field(None, json_schema_extra={"choices_of": "invoice_type"})
     payment: Literal["cash", "card"] = Field("cash", json_schema_extra={"choices_of": "sale.method"})
