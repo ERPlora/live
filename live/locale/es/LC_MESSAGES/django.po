@@ -240,3 +240,15 @@ msgid ""
 "There is too much to show at once. Narrow it down with a search or a filter."
 msgstr ""
 "Hay demasiado para mostrar de una vez. Acótalo con una búsqueda o un filtro."
+
+#: live/database_cut.py
+msgid "ERPlora will be back in a moment: try again in a few seconds."
+msgstr "ERPlora vuelve en un momento: inténtalo de nuevo en unos segundos."
+
+#: live/database_cut.py
+msgid ""
+"The connection was lost while this was being saved. Check whether it was "
+"saved before trying again."
+msgstr ""
+"Se ha perdido la conexión mientras se guardaba. Comprueba si se ha guardado "
+"antes de volver a intentarlo."

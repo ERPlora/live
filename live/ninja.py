@@ -18,8 +18,8 @@ from importlib import import_module
 from importlib.util import find_spec
 from typing import Any
 
-from asgiref.sync import sync_to_async
 from django.conf import settings
+from django.db import Error
 from django.http import Http404
 from django.urls import NoReverseMatch
 from django.utils.translation import gettext, ngettext_lazy
@@ -31,6 +31,7 @@ from ninja.operation import Operation as Route
 from ninja.utils import normalize_path
 
 from live.context import get_builder
+from live.database_cut import aretrying, cut_of, marked, retrying
 from live.errors import InvalidPayload, LiveMisuse, NotFound, OperationError
 from live.meta import all_live_app_configs
 from live.operations import Operation, get, registry
@@ -147,8 +148,7 @@ async def run_operation(
 ) -> Schema:
     """Run ``op`` (or the operation named so) for the caller of ``request``, from an async route."""
     op, data = _prepare(op, data)
-    ctx = await sync_to_async(get_builder().from_request)(request)
-    return await sync_to_async(op)(ctx, data)
+    return await aretrying(request, lambda: op(get_builder().from_request(request), data))
 
 
 def run_operation_sync(
@@ -156,7 +156,7 @@ def run_operation_sync(
 ) -> Schema:
     """Same as ``run_operation``, for a sync route."""
     op, data = _prepare(op, data)
-    return op(get_builder().from_request(request), data)
+    return retrying(request, lambda: op(get_builder().from_request(request), data))
 
 
 def _prepare(op: Operation | str, data: Schema | None) -> tuple[Operation, Schema]:
@@ -238,7 +238,7 @@ def install_error_handlers(api: NinjaAPI) -> None:
 
     def operation_error(request: Any, exc: OperationError) -> Any:
         exc.reached_client()
-        return api.create_response(request, exc.envelope(), status=exc.status)
+        return marked(api.create_response(request, exc.envelope(), status=exc.status), exc)
 
     def invalid_payload(request: Any, exc: ValidationError) -> Any:
         fields = _fields(exc.errors)
@@ -269,10 +269,15 @@ def install_error_handlers(api: NinjaAPI) -> None:
             ),
         )
 
+    def database_error(request: Any, exc: Error) -> Any:
+        cut = cut_of(exc, request)
+        return unexpected(request, exc) if cut is None else operation_error(request, cut)
+
     api.add_exception_handler(OperationError, operation_error)
     api.add_exception_handler(ValidationError, invalid_payload)
     api.add_exception_handler(Http404, not_found)
     api.add_exception_handler(HttpError, http_error)
+    api.add_exception_handler(Error, database_error)
     api.add_exception_handler(Exception, unexpected)
     api.validation_error_from_error_contexts = partial(
         _without_body_parameter_name, api.validation_error_from_error_contexts

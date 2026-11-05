@@ -11,7 +11,8 @@ ends with ``close_old_connections()``, so threads never keep a database connecti
 (``OperationError.retry_after``: a hub busy for a moment) is its scope's: the pass waits once, outside the scope's turn,
 and goes on from that subscription, up to three more times; only then do the subscriptions still unanswered get its
 error frame. However many subscriptions wait, a pass waits at most three times ``MAX_RETRY_AFTER``.
-A worker thread inherits no active language, so each run activates the stream's
+A cut of the database (``live.database_cut``) is one more passing error, whether an operation or the re-read of the
+context met it. A worker thread inherits no active language, so each run activates the stream's
 (``ctx.language``): the operation's texts and the messages of its error frames reach the client
 in it. Nor does it inherit the request's context vars: a builder with ``enter(ctx)`` gets each run
 (its refresh included) inside the context manager it returns (hub-next: ``use_hub`` of the stream's
@@ -42,6 +43,7 @@ from django.utils.translation import gettext, override
 from ninja import Schema
 
 from live.context import OperationContext, Scope, get_builder
+from live.database_cut import DatabaseCut, is_cut
 from live.errors import AppInactive, OperationError, PermissionDenied, Unauthorized
 from live.live_registry import live_registry, session_events
 from live.sse import BYE, ERROR, MAX_RESULT_BYTES, RESULT, frame
@@ -352,7 +354,11 @@ class Executor:
                 return _Passing(exc.retry_after, exc.envelope()["error"], exc)
             exc.reached_client()
             return self._error(sub, exc.envelope()["error"])
-        except Exception:
+        except Exception as exc:
+            if is_cut(exc):
+                # No operation to say so: the context is re-read before it runs.
+                cut = DatabaseCut(repeatable=True)
+                return _Passing(cut.retry_after, cut.envelope()["error"], cut)
             logger.exception("Live query %s failed (stream %s, subscription %s).", sub.op.name, stream.id, sub.id)
             message = gettext(
                 "This information could not be loaded. Try again in a few seconds, and tell an administrator if it"

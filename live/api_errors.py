@@ -12,13 +12,13 @@ stream and the API docs, and every path outside the prefix (``settings.LIVE["api
 """
 
 import json
-from typing import Any
 
-from asgiref.sync import iscoroutinefunction, markcoroutinefunction
 from django.conf import settings
 from django.http import HttpRequest
 from django.http.response import HttpResponseBase
 from django.utils.translation import gettext_lazy as _
+
+from live.middleware import SyncAndAsyncMiddleware
 
 DEFAULT_API_PREFIX = "/api/"
 #: First segments under the prefix that are not JSON endpoints: the SSE stream and Swagger UI.
@@ -30,24 +30,13 @@ ENVELOPES = {
 }
 
 
-class ApiErrorEnvelopeMiddleware:
+class ApiErrorEnvelopeMiddleware(SyncAndAsyncMiddleware):
     """Answer an API 404/405 that is not JSON with the error envelope (sync and async)."""
 
-    sync_capable = True
-    async_capable = True
-
-    def __init__(self, get_response: Any) -> None:
-        self.get_response = get_response
-        self.is_async = iscoroutinefunction(get_response)
-        if self.is_async:
-            markcoroutinefunction(self)
-
-    def __call__(self, request: HttpRequest) -> Any:
-        if self.is_async:
-            return self._acall(request)
+    def sync(self, request: HttpRequest) -> HttpResponseBase:
         return envelope_api_error(request, self.get_response(request))
 
-    async def _acall(self, request: HttpRequest) -> HttpResponseBase:
+    async def asynchronous(self, request: HttpRequest) -> HttpResponseBase:
         return envelope_api_error(request, await self.get_response(request))
 
 
@@ -60,7 +49,7 @@ def envelope_api_error(
         entry is None
         or response.streaming
         or _is_json(response)
-        or not _is_api_path(request.path_info)
+        or not is_api_path(request.path_info)
     ):
         return response
     code, message = entry
@@ -78,7 +67,8 @@ def _is_json(response: HttpResponseBase) -> bool:
     return media_type == "application/json" or media_type.endswith("+json")
 
 
-def _is_api_path(path: str) -> bool:
+def is_api_path(path: str) -> bool:
+    """Whether ``path`` is a route of the API: under its prefix, and neither the live stream nor the docs."""
     prefix = (
         getattr(settings, "LIVE", {}).get("api_prefix", DEFAULT_API_PREFIX).rstrip("/")
         + "/"

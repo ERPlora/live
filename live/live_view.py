@@ -23,6 +23,7 @@ from django.http import Http404, JsonResponse, StreamingHttpResponse
 from live import sse
 from live.broker import broker
 from live.context import get_builder
+from live.database_cut import marked
 from live.errors import OperationError
 from live.executor import BYE_FRAME, Stream, Subscription, executor
 from live.live_registry import live_registry
@@ -51,7 +52,7 @@ async def live_stream(request) -> StreamingHttpResponse | JsonResponse:
         ctx = await sync_to_async(get_builder().from_request)(request)
     except OperationError as exc:
         exc.reached_client()
-        return JsonResponse(exc.envelope(), status=exc.status)
+        return marked(JsonResponse(exc.envelope(), status=exc.status), exc)
     except Http404:
         # The builder rejects the Host (hub-next: not a hub's slug), as the ninja routes answer it.
         return _envelope(404, "not_found", "Not found.")

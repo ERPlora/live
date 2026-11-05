@@ -342,6 +342,36 @@ puntuación: invisible, sin casilla ni puzle (Ioan, 2026-10-22). Hoy lo usa el S
   `recaptcha.google.com/recaptcha/`, `connect-src` `www.google.com/recaptcha/`) y, si la política tiene Trusted
   Types, la política `goog#html` que crea su script.
 
+## Un corte de la base de datos (`live.database_cut`, PLAN-DB ronda 2026-11-04e, punto 5)
+
+Un reinicio del escritor, un mantenimiento de AWS o el cambio de Blue/Green cortan las conexiones o dejan la base en solo
+lectura unos segundos. Un proyecto lo pide nombrando `LIVE["database_cut"]`; sin ese ajuste, un corte sigue siendo el error
+que era (así sigue el Hub hasta hub#831):
+
+```python
+LIVE = {"database_cut": {"wait_seconds": 20, "no_wait_prefixes": ("/internal/", "/webhooks/", "/readyz")}}
+MIDDLEWARE = ["<salud>", "live.database_cut.DatabaseCutMiddleware", ...]  # el primero tras las comprobaciones de salud
+DATABASES["default"]["OPTIONS"]["pool"]["check"] = ConnectionPool.check_connection
+
+
+def server_error(request):  # handler500 del proyecto; la página 503 sin procesadores de contexto: leen la base
+    if (cut := current_cut(request)) is not None:
+        return marked(JsonResponse(cut.envelope(), status=cut.status), cut)
+```
+
+- **Qué es un corte** (`is_cut`): una conexión perdida o rechazada, un pool sin nada que dar, `25006`, `57P01`, `57P02`,
+  `57P03` y la clase `08`. Un `statement_timeout`, un deadlock o un fallo del programa no lo son.
+- **Qué se repite**, y solo esto: una lectura; un comando cuyo cuerpo no llegó a correr; un comando con `repeatable=True` si
+  el corte llega antes de enviar el COMMIT; una petición entera cortada antes de su vista, o de método seguro que no empezó
+  ningún comando. Un corte mientras se envía el COMMIT deja el resultado sin saberse: nada lo repite.
+- **`repeatable=True`** es la palabra del comando de que no toca nada más que su base. Nunca uno que cobra, numera o llama
+  a un tercero en su cuerpo: ese responde 503 y la persona comprueba.
+- **Quién espera:** la operación de una ruta en `run_operation`, fuera de su transacción (sin conexión ni plaza de
+  `operation_database`); lo demás en el middleware, que lee la respuesta que `handler500` marca; un flujo vivo, en
+  `live.executor`, como cualquier fallo pasajero. El tope es el de la petición entera.
+- **Pasado el tope, o si no se puede repetir:** 503 con `Retry-After`, nunca un 500. El código dice cuál: `database_unavailable`
+  (vuelve en un momento) o `database_outcome_unknown` (comprueba si se guardó).
+
 ## Cómo se prueba
 
 Los tests van con pytest + pytest-django contra Postgres 17 (nunca SQLite). Se corren **desde la
