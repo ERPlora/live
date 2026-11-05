@@ -18,7 +18,8 @@ class OperationError(Exception):
     code: str = "error"
     #: For a passing failure that ran nothing (such as a hub busy for a moment, refused before any statement): the
     #: seconds after which the same call may succeed. ``None`` for any other failure, and always for one that may have
-    #: done something. The live executor tries the query again after it (``live.executor``).
+    #: done something. The live executor tries the query again after it (``live.executor``); ``live.database_cut`` is a
+    #: cut of the database, one such failure.
     retry_after: float | None = None
 
     def __init__(

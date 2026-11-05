@@ -18,6 +18,10 @@ An operation declared ``database=False`` touches no database: what waits on the 
 runs with no transaction open, so the wait holds no connection. It keeps the permission, the project's hook and the
 validated output; a query to any database inside it, an event or an ``on_commit`` is a ``LiveMisuse``.
 
+A project that asks for it (``LIVE["database_cut"]``, ``live.database_cut``) gets a cut of the database as a
+``DatabaseCut``, 503, instead of the driver's error: the outermost operation says whether it may run again, by how far its
+transaction got. ``repeatable=True`` is a command's own word that a try the database rolled back left nothing behind.
+
 Every operation tells the assistant what it is (PLAN §30: every operation is a tool by default): ``ai=AI(description=…,
 risk="normal"|"high")`` for a tool, ``ai=INTERNAL`` for what is not one, never by omission (``live.E017``). A ``dict``
 declared before ``AI`` existed is still accepted: ``Operation.ai_spec()`` reads it as one of the two. A tool also says
@@ -35,12 +39,14 @@ from typing import Any, Literal, Self, TypeVar
 
 import pydantic
 from django.conf import settings
-from django.db import DEFAULT_DB_ALIAS, connections, transaction
+from django.db import DEFAULT_DB_ALIAS, Error, connections, transaction
 from django.utils.module_loading import import_string
 from django.utils.translation import gettext
 from ninja import Schema
 
+from live import database_cut
 from live.context import OperationContext, Scope
+from live.database_cut import COMMITTING, CONNECTING, RUNNING, DatabaseCut
 from live.errors import LiveMisuse, PermissionDenied
 
 Kind = Literal["query", "command"]
@@ -127,6 +133,8 @@ class Operation:
     fn: Callable[[OperationContext, Schema], Any]
     #: ``False``: it touches no database and runs with no transaction open (what waits on the network).
     database: bool = True
+    #: A command that touches nothing but its database: a cut before its COMMIT may run it again (``live.database_cut``).
+    repeatable: bool = False
 
     @property
     def app_label(self) -> str:
@@ -161,32 +169,52 @@ class Operation:
             )
         if not self.database:
             return self._without_database(ctx, data)
+        # An operation inside another, or inside someone's transaction, leaves a cut to the one that owns the transaction.
+        owns_transaction = current_operation.get() is None
+        stage = CONNECTING
         operation_token = current_operation.set(self)
         events_token = _pending_events.set([])
         try:
-            with _database(self, ctx) as alias, transaction.atomic(using=alias):
-                alias_token = _operation_alias.set(alias)
-                try:
-                    if self.kind == "query":
-                        with transaction.get_connection(alias).cursor() as cursor:
-                            cursor.execute("SET TRANSACTION READ ONLY")
-                            cursor.execute(f"SET LOCAL statement_timeout = '{QUERY_STATEMENT_TIMEOUT}'")
-                    result = self._validated(self.fn(ctx, data))
-                    if self.kind == "query":
-                        # A query never commits. Nested in another transaction it runs in a savepoint:
-                        # Postgres restores READ ONLY when the savepoint ends, but SET LOCAL
-                        # statement_timeout would outlive a released savepoint; rolling it back undoes it.
-                        transaction.set_rollback(True, using=alias)
-                    else:
-                        names = list(_pending_events.get())
-                        if names:
-                            transaction.on_commit(partial(_notify, ctx.scope, names), using=alias, robust=True)
-                finally:
-                    _operation_alias.reset(alias_token)
+            with _database(self, ctx) as alias:
+                owns_transaction = owns_transaction and not transaction.get_connection(alias).in_atomic_block
+                with transaction.atomic(using=alias):
+                    stage = RUNNING
+                    alias_token = _operation_alias.set(alias)
+                    try:
+                        if self.kind == "query":
+                            with transaction.get_connection(alias).cursor() as cursor:
+                                cursor.execute("SET TRANSACTION READ ONLY")
+                                cursor.execute(f"SET LOCAL statement_timeout = '{QUERY_STATEMENT_TIMEOUT}'")
+                        else:
+                            database_cut.command_started()
+                        result = self._validated(self.fn(ctx, data))
+                        if self.kind == "query":
+                            # A query never commits. Nested in another transaction it runs in a savepoint:
+                            # Postgres restores READ ONLY when the savepoint ends, but SET LOCAL
+                            # statement_timeout would outlive a released savepoint; rolling it back undoes it.
+                            transaction.set_rollback(True, using=alias)
+                        else:
+                            names = list(_pending_events.get())
+                            if names:
+                                transaction.on_commit(partial(_notify, ctx.scope, names), using=alias, robust=True)
+                    finally:
+                        _operation_alias.reset(alias_token)
+                    stage = COMMITTING
+        except Error as exc:
+            if not owns_transaction or not database_cut.is_cut(exc):
+                raise
+            raise DatabaseCut(repeatable=self._may_repeat_after(stage)) from exc
         finally:
             _pending_events.reset(events_token)
             current_operation.reset(operation_token)
         return result
+
+    def _may_repeat_after(self, stage: str) -> bool:
+        """Whether a cut at ``stage`` of its transaction leaves this operation free to run again. A read, always; a
+        command, if its body never ran, or if it says so and the COMMIT was not sent: once it was, nobody can know."""
+        if self.kind == "query" or stage == CONNECTING:
+            return True
+        return self.repeatable and stage == RUNNING
 
     def _without_database(self, ctx: OperationContext, data: Schema) -> Schema:
         operation_token = current_operation.set(self)
@@ -213,7 +241,7 @@ registry: dict[str, Operation] = {}
 
 
 def _declaration(op: Operation) -> tuple:
-    return (op.fn, op.kind, op.permission, op.input, op.output, op.expose_api, op.ai, op.database)
+    return (op.fn, op.kind, op.permission, op.input, op.output, op.expose_api, op.ai, op.database, op.repeatable)
 
 
 def operation(
@@ -226,10 +254,14 @@ def operation(
     expose_api: bool = False,
     ai: AI | Internal | dict | None = None,
     database: bool = True,
+    repeatable: bool = False,
 ) -> Callable[[F], Operation]:
     """Declare and register an operation; misdeclarations fail at import time.
 
     ``database=False``: the operation touches no database and runs with no transaction open (it waits on the network).
+    ``repeatable=True``: a command that touches nothing but its database, so a try the database rolled back left nothing
+    behind and a cut before its COMMIT may run it again. Never one that charges, numbers or calls a third party in its
+    body: without it, it just answers 503 (``live.database_cut``).
     """
     if not NAME_RE.match(name):
         raise LiveMisuse(f"Operation name {name!r} must be <app>.<entity>.<action> (lowercase snake_case).")
@@ -238,6 +270,8 @@ def operation(
     for role, schema in (("input", input), ("output", output)):
         if not (isinstance(schema, type) and issubclass(schema, Schema)):
             raise LiveMisuse(f"Operation {name!r}: {role} must be a ninja Schema class, not {schema!r}.")
+    if repeatable and (kind != "command" or not database):
+        raise LiveMisuse(f"Operation {name!r}: repeatable is the word of a command that uses its database.")
 
     def register(fn: F) -> Operation:
         suffix = _MODULE_SUFFIX[kind]
@@ -253,6 +287,7 @@ def operation(
             ai=ai,
             fn=fn,
             database=database,
+            repeatable=repeatable,
         )
         existing = registry.get(name)
         if existing is not None:
