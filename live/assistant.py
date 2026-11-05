@@ -1078,7 +1078,8 @@ LEFT_OUT = object()
 
 #: The mark of a datum of a card that is a list whose every item ``said`` put in words — a record by its name (or left
 #: out, none), a moment, a value of a closed list by its label, an amount —, never one as sent: the screen says its items
-#: one after another. A list without it (texts sent as they are, codes nobody names, lines) says how many it carries.
+#: one after another (a line that carries only its record, by that record). A list without it (texts sent as they
+#: are, codes nobody names, lines of more than one datum) says how many it carries.
 NAMED = "named"
 
 
@@ -1253,10 +1254,16 @@ def said(value: Any, prop: dict, defs: dict, name: str, words: Words, inner: boo
 
 def _in_words(value: Any, spoken: Any, prop: dict, defs: dict, name: str) -> bool:
     """Whether ``said`` put the item ``value`` of a list in words (``spoken``) as its schema ``prop`` declares it — a
-    record (``REFERS`` or an id), a moment, a value of a closed list, an amount —, not as sent (``NAMED``)."""
+    record (``REFERS`` or an id), a moment, a value of a closed list, an amount, or a line that carries only one of
+    them (a booking's services, ``[{"service_id": …}]``: hub#835) —, not as sent (``NAMED``). A line with more than
+    one datum is not: which of them names it, only its app knows."""
     prop = fitting(value, prop, defs)
     if REFERS in prop or (prop.get("format") == "uuid" and is_uuid(value)):
         return True
+    if isinstance(value, dict) and len(value) == 1:
+        (key, item), props = next(iter(value.items())), prop.get("properties", {})
+        inner = spoken.get(key) if isinstance(spoken, dict) else None
+        return key in props and _in_words(item, inner, props[key], defs, key)
     declared = prop.get("format") in MOMENTS or "enum" in prop or is_money(name, prop)
     return declared and spoken != value
 
