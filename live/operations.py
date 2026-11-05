@@ -169,7 +169,7 @@ class Operation:
         if not self.database:
             return self._without_database(ctx, data)
         # An operation inside another, or inside someone's transaction, leaves a cut to the one that owns the transaction.
-        owns_transaction = current_operation.get() is None
+        outermost = owns_transaction = current_operation.get() is None
         stage = CONNECTING
         operation_token = current_operation.set(self)
         events_token = _pending_events.set([])
@@ -185,7 +185,7 @@ class Operation:
                                 cursor.execute("SET TRANSACTION READ ONLY")
                                 cursor.execute(f"SET LOCAL statement_timeout = '{QUERY_STATEMENT_TIMEOUT}'")
                         else:
-                            command_started(owner=owns_transaction)
+                            command_started(owner=owns_transaction, foreign=outermost and not owns_transaction)
                         result = self._validated(self.fn(ctx, data))
                         if self.kind == "query":
                             # A query never commits. Nested in another transaction it runs in a savepoint:

@@ -211,6 +211,15 @@ def after_two_writes(request):
     return {"rows": scripted("raw")}
 
 
+@router.post("/after-write-then-one-in-a-transaction", response=Answer)
+def after_write_then_one_in_a_transaction(request):
+    """The first command owns its transaction; the second runs inside the route's, which a cut may roll back."""
+    run_operation_sync(request, WRITE.name)
+    with transaction.atomic():
+        run_operation_sync(request, REPEATABLE.name)
+        return {"rows": scripted("raw")}
+
+
 @router.post("/after-write-in-its-transaction", response=Answer)
 def after_write_in_its_transaction(request):
     with transaction.atomic():
@@ -711,6 +720,42 @@ def test_a_route_cut_after_two_commands_applied_does_not_say_it_was_saved_either
     assert response.status_code == 503, response.content
     assert code_of(response) == UNKNOWN
     assert things_in_the_database() == 2
+
+
+def test_a_command_cut_inside_someone_elses_transaction_is_never_repeated(client):
+    """The second command runs inside the route's transaction: the cut rolled all of it back, so no try of it can stand
+    on its own. It is the route's transaction to answer for, and the first command already committed: the person
+    checks."""
+
+    def inserts_then_cut(attempt):
+        Thing.objects.create(name="rolled back")
+        terminate()
+        return Thing.objects.count()
+
+    script["write"] = inserts
+    script["repeatable"] = inserts_then_cut
+
+    response = client.post("/api/after-write-then-one-in-a-transaction")
+
+    assert response.status_code == 503, response.content
+    assert code_of(response) == UNKNOWN
+    assert (runs["write"], runs["repeatable"]) == (1, 1)
+    assert things_in_the_database() == 1
+
+
+def test_a_route_cut_in_its_transaction_after_a_command_committed_does_not_say_it_was_saved(client):
+    """The first command committed, the second answered inside the route's transaction, and the cut rolled that one
+    back: saved would be half true."""
+    script["write"] = inserts
+    script["repeatable"] = inserts
+    script["raw"] = always_cut
+
+    response = client.post("/api/after-write-then-one-in-a-transaction")
+
+    assert response.status_code == 503, response.content
+    assert code_of(response) == UNKNOWN
+    assert (runs["write"], runs["repeatable"], runs["raw"]) == (1, 1, 1)
+    assert things_in_the_database() == 1
 
 
 def test_a_route_cut_inside_the_transaction_its_command_ran_in_does_not_say_it_was_saved(client):

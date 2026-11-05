@@ -32,8 +32,11 @@ its answer was lost (reload to see it); ``database_outcome_unknown``, nobody can
 
 **Applied, answer lost** (:func:`applied`): a cut outside any operation of a route of the API whose one command (one per
 route) committed, or answered when it has no database. A route writes only through its operations, so what the cut
-stopped is the answer. A page may write outside them, and more than one command, a command that failed or one inside
-someone else's transaction leave it unknown.
+stopped is the answer. A page may write outside them, and more than one command, a command that failed or any command
+inside someone else's transaction leave it unknown.
+
+**Inside someone else's transaction** (a route's ``transaction.atomic()`` around its operation), a cut rolled back all of
+it: no try of the operation stands on its own, so nothing waits for it, and what it means is the whole request's.
 """
 
 import asyncio
@@ -126,6 +129,8 @@ class _Request:
     #: Commands that own their transaction (or have none), but the tries a cut rolled back; and how many were applied.
     commands: int = 0
     applied: int = 0
+    #: A command ran inside someone else's transaction: whether it was applied is that transaction's, never known here.
+    foreign: bool = False
 
 
 #: The running request's, when the middleware is on: a command may run with a context that does not name its request.
@@ -139,14 +144,16 @@ def _state(request: HttpRequest) -> _Request:
     return state
 
 
-def command_started(*, owner: bool = False) -> None:
+def command_started(*, owner: bool = False, foreign: bool = False) -> None:
     """A command's body is about to run: from here this request no longer repeats whole, whatever its method.
 
-    ``owner``: it owns its transaction (or has none), so it is its own to say how it ended (:func:`command_ended`)."""
+    ``owner``: it owns its transaction (or has none), so it is its own to say how it ended (:func:`command_ended`).
+    ``foreign``: no operation runs it, but someone else's transaction does, which a cut may roll back after it answered."""
     state = _running.get()
     if state is not None:
         state.command_started = True
         state.commands += owner
+        state.foreign = state.foreign or foreign
 
 
 def command_ended(*, applied: bool) -> None:
@@ -161,9 +168,10 @@ def command_ended(*, applied: bool) -> None:
 
 
 def applied(request: HttpRequest) -> bool:
-    """Whether all this request did is known to be applied: a route of the API, whose one command was."""
+    """Whether all this request did is known to be applied: a route of the API, whose one command was, and none ran
+    inside someone else's transaction."""
     state = _state(request)
-    return state.commands == state.applied == 1 and is_api_path(request.path_info)
+    return state.commands == state.applied == 1 and not state.foreign and is_api_path(request.path_info)
 
 
 def may_repeat(request: HttpRequest) -> bool:
@@ -250,6 +258,9 @@ def _wait_or_raise(request: HttpRequest, exc: Exception) -> float:
         return wait
     if not is_cut(exc):
         raise exc
+    if any(connection.in_atomic_block for connection in connections.all(initialized_only=True)):
+        # Inside someone else's transaction, which the cut rolled back whole: it is that one's to answer for.
+        raise DatabaseCut(repeatable=may_repeat(request)) from exc
     # The operation turns its own cuts into DatabaseCut: this one is from reading who asks, before it ran.
     wait = next_wait(request)
     if wait is None:

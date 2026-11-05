@@ -376,7 +376,10 @@ def server_error(request):  # handler500 del proyecto; la página 503 sin proces
 - **Se aplicó y se perdió la respuesta:** un corte fuera de toda operación en una ruta de la API cuyo único comando hizo el
   COMMIT (o respondió, si no tiene base), como la escritura de la sesión tras la vista. Una ruta solo escribe por sus
   operaciones, así que lo que cortó fue la respuesta. Una página puede escribir fuera de ellas, y más de un comando, uno que
-  falló o uno dentro de la transacción de otro lo dejan sin saberse.
+  falló o cualquiera dentro de la transacción de otro lo dejan sin saberse.
+- **Dentro de la transacción de otro** (un `transaction.atomic()` de la ruta alrededor de su operación), el corte deshizo
+  toda esa transacción: ningún intento de la operación vale por sí solo, así que no se espera ni se repite, y lo que
+  significa es lo de la petición entera.
 
 ## Cómo se prueba
 
