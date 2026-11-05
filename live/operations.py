@@ -222,6 +222,9 @@ class Operation:
         alias_token = _operation_alias.set(None)
         try:
             with _database(self, ctx), _no_queries(self):
+                if self.kind == "command":
+                    # What it does on the network, no transaction undoes.
+                    database_cut.command_started()
                 return self._validated(self.fn(ctx, data))
         finally:
             _operation_alias.reset(alias_token)

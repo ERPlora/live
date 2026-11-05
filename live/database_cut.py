@@ -15,7 +15,8 @@ they were.
 - a command whose body never ran: it could not connect;
 - a command that says so (``repeatable=True``), when the cut came before its COMMIT was sent: its database rolled back,
   and it declares that it touches nothing else. Never a charge, a numbering, a call to a third party;
-- a whole request cut before its view started, or a safe method (GET, HEAD, OPTIONS) that started no command.
+- a whole request cut before its view started (a route of the API counts as started when a command does: it writes only
+  through its operations), or a safe method (GET, HEAD, OPTIONS) that started no command.
 
 A cut while sending the COMMIT leaves the result unknown: nothing repeats it, not even a command that says it can.
 
@@ -45,6 +46,7 @@ from django.http import HttpRequest
 from django.http.response import HttpResponseBase
 from django.utils.cache import add_never_cache_headers
 from django.utils.translation import gettext
+from ninja.operation import PathView
 
 from live.errors import OperationError
 
@@ -280,7 +282,10 @@ class DatabaseCutMiddleware:
             _running.reset(token)
 
     def process_view(self, request: HttpRequest, view_func: Any, view_args: Any, view_kwargs: Any) -> None:
-        _state(request).view_started = True
+        # A route of the API writes only through its operations, and a command says when it starts. Until then a cut (who
+        # is asking is read inside the route: the session, an API key) has applied nothing, whatever the method.
+        if not isinstance(getattr(view_func, "__self__", None), PathView):
+            _state(request).view_started = True
 
     @staticmethod
     def _wait(request: HttpRequest, response: HttpResponseBase) -> float | None:

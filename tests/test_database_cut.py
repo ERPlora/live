@@ -78,7 +78,8 @@ def _declare(name: str, kind: str, **options):
 READ = _declare("read", "query")
 WRITE = _declare("write", "command")
 REPEATABLE = _declare("repeatable", "command", repeatable=True)
-OPERATIONS = (READ, WRITE, REPEATABLE)
+THIRD_PARTY = _declare("thirdparty", "command", database=False)
+OPERATIONS = (READ, WRITE, REPEATABLE, THIRD_PARTY)
 
 
 # --- The project's side -----------------------------------------------------------------------------------------------
@@ -150,6 +151,29 @@ def raw_read(request):
 
 @router.post("/raw", response=Answer)
 def raw_write(request):
+    return {"rows": scripted("raw")}
+
+
+def reads_who_asks(request):
+    """A route's authentication, as the session or an API key: inside the route, before its operation."""
+    scripted("auth")
+    return True
+
+
+@router.post("/after-auth", response=Answer, auth=reads_who_asks)
+def after_auth(request):
+    return run_operation_sync(request, WRITE.name)
+
+
+@router.post("/after-third-party", response=Answer)
+def after_third_party(request):
+    run_operation_sync(request, THIRD_PARTY.name)
+    return {"rows": scripted("raw")}
+
+
+@router.post("/after-write", response=Answer)
+def after_write(request):
+    run_operation_sync(request, WRITE.name)
     return {"rows": scripted("raw")}
 
 
@@ -526,15 +550,58 @@ def test_a_route_read_outside_its_operation_waits_too(client):
     assert runs["raw"] == 2
 
 
-def test_a_route_write_outside_any_operation_is_not_repeated(client):
+def test_a_post_cut_while_reading_who_asks_is_applied_once(client):
+    """The first read of a route on the panel. It writes only through its operation, and that one has not started."""
+
+    def inserts(attempt):
+        return Thing.objects.create(name="once") and 1
+
+    script["auth"] = cut_once
+    script["write"] = inserts
+
+    response = client.post("/api/after-auth")
+
+    assert response.status_code == 200, response.content
+    assert (runs["auth"], runs["write"]) == (2, 1)
+    assert things_in_the_database() == 1
+
+
+def test_a_route_with_no_command_started_repeats_while_it_can(client):
     script["raw"] = always_cut
 
     response = client.post("/api/raw")
 
     assert response.status_code == 503, response.content
-    assert code_of(response) == UNKNOWN
+    assert code_of(response) == UNAVAILABLE
     assert int(response["Retry-After"]) > 0
-    assert runs["raw"] == 1
+    assert runs["raw"] > 1
+
+
+def test_a_route_cut_after_its_command_committed_is_not_repeated(client):
+    def inserts(attempt):
+        return Thing.objects.create(name="once") and 1
+
+    script["write"] = inserts
+    script["raw"] = always_cut
+
+    response = client.post("/api/after-write")
+
+    assert response.status_code == 503, response.content
+    assert code_of(response) == UNKNOWN
+    assert (runs["write"], runs["raw"]) == (1, 1)
+    assert things_in_the_database() == 1
+
+
+def test_a_route_cut_after_a_call_to_a_third_party_is_not_repeated(client):
+    """A command with no database has no transaction to undo what it did on the network."""
+    script["thirdparty"] = lambda attempt: 1
+    script["raw"] = always_cut
+
+    response = client.post("/api/after-third-party")
+
+    assert response.status_code == 503, response.content
+    assert code_of(response) == UNKNOWN
+    assert (runs["thirdparty"], runs["raw"]) == (1, 1)
 
 
 def test_a_cut_of_what_answers_at_once_does_not_wait(client):
