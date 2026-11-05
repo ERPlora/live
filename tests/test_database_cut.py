@@ -270,6 +270,12 @@ class DatabaseDoor:
     def close(self) -> None:
         listener, self._listener = self._listener, None
         if listener is not None:
+            # On Linux a close alone leaves the blocked accept, and with it the port, alive: the shutdown wakes it
+            # (EINVAL). macOS wakes it on close and refuses the shutdown of a listening socket (ENOTCONN).
+            try:
+                listener.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
             listener.close()
         for each in self._sockets:
             try:
@@ -284,6 +290,10 @@ class DatabaseDoor:
             try:
                 client, _ = listener.accept()
             except OSError:
+                return
+            if self._listener is not listener:
+                # Slipped in while the door was closing: the door is closed.
+                client.close()
                 return
             server = socket.create_connection(self.target)
             self._sockets += [client, server]

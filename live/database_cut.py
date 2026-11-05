@@ -39,7 +39,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any, TypeVar
 
-from asgiref.sync import iscoroutinefunction, markcoroutinefunction, sync_to_async
+from asgiref.sync import sync_to_async
 from django.conf import settings
 from django.db import Error, OperationalError, connections
 from django.http import HttpRequest
@@ -49,6 +49,7 @@ from django.utils.translation import gettext
 
 from live.api_errors import is_api_path
 from live.errors import OperationError
+from live.middleware import SyncAndAsyncMiddleware
 
 T = TypeVar("T")
 
@@ -241,21 +242,10 @@ async def aretrying(request: HttpRequest, call: Callable[[], T]) -> T:
         await asyncio.sleep(wait)
 
 
-class DatabaseCutMiddleware:
+class DatabaseCutMiddleware(SyncAndAsyncMiddleware):
     """Repeats the request that a cut stopped, when it may repeat. First in ``MIDDLEWARE``, after the health checks."""
 
-    sync_capable = True
-    async_capable = True
-
-    def __init__(self, get_response: Any) -> None:
-        self.get_response = get_response
-        self.is_async = iscoroutinefunction(get_response)
-        if self.is_async:
-            markcoroutinefunction(self)
-
-    def __call__(self, request: HttpRequest) -> Any:
-        if self.is_async:
-            return self._acall(request)
+    def sync(self, request: HttpRequest) -> HttpResponseBase:
         token = _running.set(_state(request))
         try:
             while True:
@@ -268,7 +258,7 @@ class DatabaseCutMiddleware:
         finally:
             _running.reset(token)
 
-    async def _acall(self, request: HttpRequest) -> HttpResponseBase:
+    async def asynchronous(self, request: HttpRequest) -> HttpResponseBase:
         token = _running.set(_state(request))
         try:
             while True:
