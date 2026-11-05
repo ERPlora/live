@@ -60,7 +60,7 @@ def envelope_api_error(
         entry is None
         or response.streaming
         or _is_json(response)
-        or not _is_api_path(request.path_info)
+        or not is_api_path(request.path_info)
     ):
         return response
     code, message = entry
@@ -78,7 +78,8 @@ def _is_json(response: HttpResponseBase) -> bool:
     return media_type == "application/json" or media_type.endswith("+json")
 
 
-def _is_api_path(path: str) -> bool:
+def is_api_path(path: str) -> bool:
+    """Whether ``path`` is a route of the API: under its prefix, and neither the live stream nor the docs."""
     prefix = (
         getattr(settings, "LIVE", {}).get("api_prefix", DEFAULT_API_PREFIX).rstrip("/")
         + "/"

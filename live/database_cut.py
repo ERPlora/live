@@ -46,8 +46,8 @@ from django.http import HttpRequest
 from django.http.response import HttpResponseBase
 from django.utils.cache import add_never_cache_headers
 from django.utils.translation import gettext
-from ninja.operation import PathView
 
+from live.api_errors import is_api_path
 from live.errors import OperationError
 
 T = TypeVar("T")
@@ -284,7 +284,7 @@ class DatabaseCutMiddleware:
     def process_view(self, request: HttpRequest, view_func: Any, view_args: Any, view_kwargs: Any) -> None:
         # A route of the API writes only through its operations, and a command says when it starts. Until then a cut (who
         # is asking is read inside the route: the session, an API key) has applied nothing, whatever the method.
-        if not isinstance(getattr(view_func, "__self__", None), PathView):
+        if not is_api_path(request.path_info):
             _state(request).view_started = True
 
     @staticmethod
