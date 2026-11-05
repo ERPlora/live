@@ -561,6 +561,29 @@ def test_an_id_written_where_the_name_goes_is_never_said(said_lines):
     assert said_things(said_lines, mixed, SpokenWords(said_lines, "en"))[1] is False
 
 
+@pytest.mark.parametrize("blank", ["   ", "\t", "\n", " \t\r\n ", "\xa0"])
+def test_a_name_in_blank_names_nothing(said_lines, blank):
+    """hub#879: a model that writes the name as blanks (``{"service": "   "}``) and the card said «Servicios:» with
+    nothing after it. Blanks say nothing, as an empty name does: the screen says how many the list carries. Beside its
+    record, the record still names the line."""
+    words = SpokenWords(said_lines, "en")
+    assert said_things(said_lines, [{"thing": blank}], words) == ([{"thing": blank}], False)
+    assert said_things(said_lines, [{"thing": "Mesa 4"}, {"thing": blank, "thing_id": None}], words)[1] is False
+    beside = [{"thing_id": str(uuid.uuid4()), "thing": blank}]
+    assert said_things(said_lines, beside, words) == ([{"thing_id": "Table 5"}], True)
+    by_code = fields(assistant.card(said_lines, {"codes": [{"name": blank}]}, "en", words))["codes"]
+    assert by_code.get(assistant.NAMED, False) is False
+
+
+def test_a_name_is_judged_by_what_it_says_not_by_the_blanks_around_it(said_lines):
+    """A real name the model pads with blanks is still the name a person said; an id it pads is still an id, which a card
+    never says."""
+    words = SpokenWords(said_lines, "en")
+    assert said_things(said_lines, [{"thing": " Mesa 4 "}], words) == ([{"thing": " Mesa 4 "}], True)
+    padded = f" {uuid.uuid4()}\n"
+    assert said_things(said_lines, [{"thing": padded}], words) == ([{"thing": padded}], False)
+
+
 class RectifyIn(Schema):
     rectification_type: Literal["R1", "R4"] | None = Field(None, json_schema_extra={"choices_of": "invoice_type"})
     payment: Literal["cash", "card"] = Field("cash", json_schema_extra={"choices_of": "sale.method"})

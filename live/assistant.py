@@ -1077,9 +1077,9 @@ def is_uuid(value: Any) -> bool:
 #: its id, when the id is not known (``json_schema_extra={"name_of": "<that datum>"}``: a booking's service, «Tinte»,
 #: beside ``service_id``; hub#860). It is a name, never a code: a line that carries only it is said by it. Beside its
 #: record the write takes the id and ignores the name, so the card says the record and leaves the name out. A text
-#: without it is sent as it is and never said one by one (a code nobody names: hub#504), and so is an id written
-#: where the name goes. It marks a text of an object a write sends (a line of a list); on a write's own data it
-#: does nothing: each of them shows under its own label.
+#: without it is sent as it is and never said one by one (a code nobody names: hub#504), and so are blanks or an id
+#: written where the name goes (``_is_said_name``). It marks a text of an object a write sends (a line of a list); on
+#: a write's own data it does nothing: each of them shows under its own label.
 NAME_OF = "name_of"
 
 
@@ -1094,6 +1094,13 @@ def _name_of(prop: dict, defs: dict) -> str | None:
     ``None``."""
     of = _referred(prop, defs).get(NAME_OF)
     return of if isinstance(of, str) else None
+
+
+def _is_said_name(text: Any) -> bool:
+    """Whether ``text``, a datum marked ``NAME_OF``, is a name a person said, judged by what it says: a text with more
+    than blanks (blanks show nothing, as an empty name does: hub#879) and no id (a card never says one), even padded."""
+    words = text.strip() if isinstance(text, str) else ""
+    return words != "" and not is_uuid(words)
 
 
 def _name_beside_its_record(key: str, value: dict, props: dict, defs: dict) -> bool:
@@ -1310,7 +1317,7 @@ def _in_words(value: Any, spoken: Any, prop: dict, defs: dict, name: str) -> boo
         key, item = next(iter(carried.items()))
         inner = spoken.get(key) if isinstance(spoken, dict) else None
         if key in props and _name_of(props[key], defs) is not None:
-            return isinstance(item, str) and not is_uuid(item)  # an id is no name: a card never says one
+            return _is_said_name(item)
         return key in props and _in_words(item, inner, props[key], defs, key)
     declared = prop.get("format") in MOMENTS or "enum" in prop or is_money(name, prop)
     return declared and spoken != value
