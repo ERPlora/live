@@ -14,11 +14,12 @@ import threading
 import time
 from collections import Counter
 from collections.abc import Callable
+from contextlib import nullcontext
 
 import psycopg
 import pytest
 from asgiref.sync import sync_to_async
-from django.db import connections
+from django.db import OperationalError, connections
 from django.http import HttpResponse, HttpResponseServerError
 from django.test import AsyncClient, Client
 from django.urls import path
@@ -142,6 +143,16 @@ async def aread(request):
     return await run_operation(request, READ.name)
 
 
+@router.get("/raw", response=Answer)
+def raw_read(request):
+    return {"rows": scripted("raw")}
+
+
+@router.post("/raw", response=Answer)
+def raw_write(request):
+    return {"rows": scripted("raw")}
+
+
 @router.post("/write", response=Answer)
 def write(request):
     return run_operation_sync(request, WRITE.name)
@@ -173,9 +184,12 @@ handler500 = "tests.test_database_cut.server_error"
 
 def on_other(op, ctx):
     """``LIVE["operation_database"]``: the operation's transaction opens on the alias behind the door."""
-    from contextlib import nullcontext
-
     return nullcontext("other")
+
+
+def read_on_other(op, ctx):
+    """``LIVE["operation_database"]``: the commands on ``default``, the reads on ``other``, as a hub's and control."""
+    return nullcontext("other" if op.kind == "query" else "default")
 
 
 # --- Cutting the database for real ------------------------------------------------------------------------------------
@@ -383,8 +397,8 @@ def test_the_limit_is_shared_by_every_try_of_the_request(client):
     assert time.monotonic() - started < WAIT_SECONDS + 2
 
 
-def test_without_the_setting_nothing_changes(client, settings):
-    """A project that has not asked for it (the Hub until hub#831) keeps today's answer."""
+def test_without_the_setting_nothing_changes(client, settings, caplog):
+    """A project that has not asked for it (the Hub until hub#831) keeps today's answer, and the driver's error."""
     settings.LIVE = {key: value for key, value in settings.LIVE.items() if key != "database_cut"}
     script["read"] = cut_once
 
@@ -394,6 +408,7 @@ def test_without_the_setting_nothing_changes(client, settings):
     assert code_of(response) == "internal_error"
     assert "Retry-After" not in response
     assert runs["read"] == 1
+    assert [record.exc_info[0] for record in caplog.records if record.exc_info] == [OperationalError]
 
 
 @pytest.mark.parametrize(
@@ -430,8 +445,13 @@ def test_the_context_of_the_operation_is_read_again_after_a_cut(client):
     assert (runs["builder"], runs["read"]) == (2, 1)
 
 
-async def test_an_async_route_waits_without_holding_the_event_loop():
-    script["read"] = always_cut
+@pytest.mark.parametrize(
+    ("url", "piece"),
+    [pytest.param("/api/aread", "read", id="an async route"), pytest.param("/page", "page", id="the async middleware")],
+)
+async def test_waiting_does_not_hold_the_event_loop(settings, url, piece):
+    settings.MIDDLEWARE = MIDDLEWARE[:1]  # Only async-capable: the chain runs on the loop, no thread of its own to sleep in.
+    script[piece] = always_cut
     gaps = []
 
     async def ticker():
@@ -443,11 +463,11 @@ async def test_an_async_route_waits_without_holding_the_event_loop():
             last = now
 
     ticking = asyncio.ensure_future(ticker())
-    response = await async_request("get", "/api/aread")
+    response = await async_request("get", url)
     ticking.cancel()
 
     assert response.status_code == 503, response.content
-    assert runs["read"] > 1
+    assert runs[piece] > 1
     # Waits reach 0.5 s and more: a loop asleep for one of them would show here.
     assert max(gaps) < 0.4
 
@@ -485,13 +505,36 @@ def test_a_page_that_stays_cut_answers_503_with_retry_after(client):
     assert runs["page"] > 1
 
 
-async def test_a_page_waits_on_the_async_chain_too():
+@pytest.mark.parametrize("chain", [MIDDLEWARE[:1], MIDDLEWARE], ids=["all of it async", "with a sync middleware inside"])
+async def test_a_page_waits_on_the_async_chain_too(settings, chain):
+    settings.MIDDLEWARE = chain
     script["page"] = cut_once
 
     response = await async_request("get", "/page")
 
     assert response.status_code == 200, response.content
     assert runs["page"] == 2
+
+
+def test_a_route_read_outside_its_operation_waits_too(client):
+    """Whatever a route reads before its operation, an API key for instance."""
+    script["raw"] = cut_once
+
+    response = client.get("/api/raw")
+
+    assert response.status_code == 200, response.content
+    assert runs["raw"] == 2
+
+
+def test_a_route_write_outside_any_operation_is_not_repeated(client):
+    script["raw"] = always_cut
+
+    response = client.post("/api/raw")
+
+    assert response.status_code == 503, response.content
+    assert code_of(response) == UNKNOWN
+    assert int(response["Retry-After"]) > 0
+    assert runs["raw"] == 1
 
 
 def test_a_cut_of_what_answers_at_once_does_not_wait(client):
@@ -674,6 +717,30 @@ def test_a_query_inside_a_command_answers_for_the_command(client):
     assert response.status_code == 503, response.content
     assert code_of(response) == UNKNOWN
     assert (runs["write"], runs["read"]) == (1, 1)
+
+
+def test_a_query_on_another_database_inside_a_command_answers_for_the_command(client, settings):
+    """Not in a transaction of its own alias, and still not the one that decides: the command runs once."""
+    settings.LIVE = {**settings.LIVE, "operation_database": "tests.test_database_cut.read_on_other"}
+
+    def inserts_then_reads_elsewhere(attempt):
+        Thing.objects.create(name="once")
+        READ(ProbeBuilder._context(), Empty())
+
+    def reads(attempt):
+        terminate("other")
+        with connections["other"].cursor() as cursor:
+            cursor.execute("SELECT 1")
+
+    script["write"] = inserts_then_reads_elsewhere
+    script["read"] = reads
+
+    response = client.post("/api/write")
+
+    assert response.status_code == 503, response.content
+    assert code_of(response) == UNKNOWN
+    assert (runs["write"], runs["read"]) == (1, 1)
+    assert things_in_the_database() == 0
 
 
 def test_repeatable_is_only_for_a_command_that_uses_its_database():
