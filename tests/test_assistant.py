@@ -286,6 +286,16 @@ def test_a_name_in_cents_makes_no_amount_only_its_mark_does():
     assert not assistant.sends_amount(arguments, NamedCentsIn.model_json_schema(), {}, "")
 
 
+def test_a_marked_amount_sent_as_no_whole_number_stays_as_sent(probes):
+    """The mark says the amount of a whole number: one that comes as anything else — a text, a fraction, which the
+    write refuses — is no money on the card but as sent. A list named in ``_cents`` said so by its name until hub#917
+    took the name's word away; this says it by the mark."""
+    arguments = {"name": "x", "price": "12,50", "counted": 2.5}
+    shown = fields(assistant.card(probes["testapp.probe.create"], arguments, "en"))
+    assert (shown["price"]["kind"], shown["price"]["value"]) == ("text", "12,50")
+    assert (shown["counted"]["kind"], shown["counted"]["value"]) == ("text", 2.5)
+
+
 def test_a_secret_is_hidden_and_what_nobody_can_judge_is_left_out(probes):
     arguments = {"name": "x", "password": "hunter2", "idempotency_key": "k-1", "thing": str(uuid.uuid4())}
     shown = fields(assistant.card(probes["testapp.probe.create"], arguments, "en"))
