@@ -957,12 +957,14 @@ def verbose_name(app_label: str, entity: str, name: str) -> Any:
 
 def choice_label(app_label: str, entity: str, name: str, value: Any) -> Any:
     """The label the models of the app ``app_label`` give the value ``value`` of their field ``name`` — its
-    ``choices``, the ones its screens show (lazy: said in the active language) —, or ``None``."""
+    ``choices``, the ones its screens show (lazy: said in the active language) —, else the one the app declares for a
+    closed list no field holds (``LiveAppConfig.choices``), or ``None``."""
     for field_ in model_fields(app_label, entity, name):
         labels = dict(getattr(field_, "flatchoices", None) or ())
         if value in labels:
             return labels[value]
-    return None
+    config = config_of(app_label)
+    return dict(config.choices.get(name, ())).get(value) if config is not None else None
 
 
 #: The mark of a datum whose values are those of a field of the models under another name

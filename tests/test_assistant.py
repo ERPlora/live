@@ -690,6 +690,43 @@ def test_choices_of_says_whose_labels_name_a_datum(prop, expected):
     assert assistant.choices_of("invoice", "rectification_type", prop) == expected
 
 
+class Look(Schema):
+    shade: Literal["pale", "deep", "neon"] = "pale"
+    days: list[Literal["mon", "sun"]] = []
+
+
+class RestyleIn(Schema):
+    look: Look
+    shade: Literal["pale", "deep", "neon"] = "pale"
+    tone: Literal["pale", "deep"] = "pale"
+
+
+#: The closed lists the test app keeps where no field of its models holds them, with their labels.
+APP_CHOICES = {"shade": (("pale", "Pale"), ("deep", "Deep")), "days": (("mon", "Monday"), ("sun", "Sunday"))}
+
+
+def test_a_closed_list_no_field_holds_is_said_by_the_labels_its_app_declares(monkeypatch):
+    """hub#679: a closed list an app keeps where no field of its models holds it (inside a JSON: a website's palette, the
+    days of its opening hours) says each value by the label its app declares for that datum (``LiveAppConfig.choices``),
+    at any depth and in a list; a value it does not label, or a datum it declares nothing of, as sent."""
+    monkeypatch.setattr(apps.get_app_config("testapp"), "choices", APP_CHOICES)
+    assert str(assistant.choice_label("testapp", "thing", "shade", "deep")) == "Deep"
+    assert assistant.choice_label("testapp", "thing", "shade", "neon") is None
+    assert assistant.choice_label("testapp", "thing", "tone", "deep") is None
+    restyle = op("testapp.probe.restyle", ai=CREATE, input=RestyleIn)
+    arguments = {"look": {"shade": "deep", "days": ["mon", "sun"]}, "shade": "neon", "tone": "deep"}
+    shown = fields(assistant.card(restyle, arguments, "en", SpokenWords(restyle, "en")))
+    assert shown["look"]["value"] == {"shade": "Deep", "days": ["Monday", "Sunday"]}
+    assert (shown["shade"]["value"], shown["tone"]["value"]) == ("neon", "deep")
+
+
+def test_an_app_declares_no_closed_list_of_its_own_by_default():
+    """What a module declares nothing of: a field of its models names its values, or nothing does."""
+    from live.meta import LiveAppConfig
+
+    assert LiveAppConfig.choices == {}
+
+
 class PairsIn(Schema):
     two_things: tuple[uuid.UUID, uuid.UUID] | None = None
     thing_and_tag: tuple[uuid.UUID, str] | None = None
