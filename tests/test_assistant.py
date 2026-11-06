@@ -275,15 +275,29 @@ def test_a_name_in_cents_makes_no_amount_only_its_mark_does():
     """hub#917: a whole number counted as money by its name alone (``…_cents``) while its schema carried no mark, so a
     new datum named so that is no amount would reach the card as money. Only the mark (``MONEY``) says an amount now,
     on top, inside an object and in a list, as the words of a description never did."""
-    assert assistant.is_money("price", {assistant.MONEY: True})
-    assert not assistant.is_money("total_cents", {"type": "integer"})
+    assert assistant.is_money({assistant.MONEY: True})
+    assert not assistant.is_money(NamedCentsIn.model_json_schema()["properties"]["total_cents"])
     write = op("testapp.probe.cents", ai=CREATE, input=NamedCentsIn)
     arguments = {"total_cents": 1500, "lines": [{"label": "Corte", "unit_cents": 1200}], "prices_cents": [150]}
     shown = fields(assistant.card(write, arguments, "en"))
     assert (shown["total_cents"]["kind"], shown["total_cents"]["value"]) == ("text", 1500)
     assert shown["lines"]["value"] == [{"label": "Corte", "unit_cents": 1200}]
     assert shown["prices_cents"]["value"] == [150]
-    assert not assistant.sends_amount(arguments, NamedCentsIn.model_json_schema(), {}, "")
+    schema = NamedCentsIn.model_json_schema()
+    assert not assistant.sends_amount(arguments, schema, schema.get("$defs", {}))
+
+
+def test_an_amount_its_mark_declares_is_sent_on_top_inside_an_object_and_in_a_list():
+    """live#41: the Hub reads the currency of the record a write names (a cart in dollars) only when the write sends
+    an amount (``sends_amount``), so one it stopped seeing would paint that amount in the business's own currency.
+    The schema's mark says it wherever the whole number is, and only the mark: no datum's name is asked for."""
+    schema = ThingIn.model_json_schema()
+    defs = schema["$defs"]
+    assert assistant.sends_amount(1500, {assistant.MONEY: True}, {})
+    assert assistant.sends_amount({"name": "x", "price": 1500}, schema, defs)
+    assert assistant.sends_amount({"name": "x", "lines": [{"label": "Corte", "amount": 1500}]}, schema, defs)
+    assert not assistant.sends_amount({"name": "x", "price": None, "lines": [{"label": "Corte"}]}, schema, defs)
+    assert not assistant.sends_amount(1500, {"type": "integer"}, {})
 
 
 def test_a_marked_amount_sent_as_no_whole_number_stays_as_sent(probes):

@@ -892,9 +892,9 @@ def resolved(prop: dict, defs: dict) -> dict:
 MONEY = "money"
 
 
-def is_money(name: str, prop: dict) -> bool:
-    """Whether the datum ``name`` is an amount: its schema's mark (``MONEY``), and only that — neither its name (a
-    ``…_cents`` without the mark is no amount) nor a description's words."""
+def is_money(prop: dict) -> bool:
+    """Whether the schema ``prop`` declares an amount: its mark (``MONEY``), and only that — neither the datum's name
+    (a ``…_cents`` without the mark is no amount, hub#917), which it is not even given, nor a description's words."""
     return prop.get(MONEY) is True
 
 
@@ -904,20 +904,20 @@ def is_signed(prop: dict) -> bool:
     return prop.get("signed") is True
 
 
-def sends_amount(value: Any, prop: dict, defs: dict, name: str, depth: int = 0) -> bool:
+def sends_amount(value: Any, prop: dict, defs: dict, *, depth: int = 0) -> bool:
     """Whether ``value`` carries an amount (``MONEY``) as its schema ``prop`` declares it, at any depth."""
     prop = fitting(value, prop, defs)
     if depth > 8:  # a schema that names itself
         return False
     if isinstance(value, int) and not isinstance(value, bool):
-        return is_money(name, prop)
+        return is_money(prop)
     if isinstance(value, dict):
         props = prop.get("properties", {})
-        return any(sends_amount(inner, props.get(key, {}), defs, key, depth + 1) for key, inner in value.items())
+        return any(sends_amount(inner, props.get(key, {}), defs, depth=depth + 1) for key, inner in value.items())
     if isinstance(value, list):
         items = prop.get("items")
         items = items if isinstance(items, dict) else {}
-        return any(sends_amount(item, items, defs, name, depth + 1) for item in value)
+        return any(sends_amount(item, items, defs, depth=depth + 1) for item in value)
     return False
 
 
@@ -1258,7 +1258,7 @@ def said(value: Any, prop: dict, defs: dict, name: str, words: Words, inner: boo
         return LEFT_OUT
     if value is None or value == "":
         return value
-    if inner and is_money(name, prop) and isinstance(value, int) and not isinstance(value, bool):
+    if inner and is_money(prop) and isinstance(value, int) and not isinstance(value, bool):
         return words.amount(value)
     if _is_record(value, prop):
         return words.reference(value, prop)
@@ -1293,7 +1293,7 @@ def said(value: Any, prop: dict, defs: dict, name: str, words: Words, inner: boo
     return value
 
 
-def _in_words(value: Any, spoken: Any, prop: dict, defs: dict, name: str) -> bool:
+def _in_words(value: Any, spoken: Any, prop: dict, defs: dict) -> bool:
     """Whether ``said`` put the item ``value`` of a list in words (``spoken``) as its schema ``prop`` declares it — a
     record (``REFERS`` or an id), a moment, a value of a closed list, an amount, or a line that carries only one of
     them (a booking's services, ``[{"service_id": …}]``: hub#835) or only the name a person said of its record
@@ -1318,18 +1318,18 @@ def _in_words(value: Any, spoken: Any, prop: dict, defs: dict, name: str) -> boo
         inner = spoken.get(key) if isinstance(spoken, dict) else None
         if key in props and _name_of(props[key], defs) is not None:
             return _is_said_name(item)
-        return key in props and _in_words(item, inner, props[key], defs, key)
-    declared = prop.get("format") in MOMENTS or "enum" in prop or is_money(name, prop)
+        return key in props and _in_words(item, inner, props[key], defs)
+    declared = prop.get("format") in MOMENTS or "enum" in prop or is_money(prop)
     return declared and spoken != value
 
 
-def _said_in_words(value: list, spoken: list, prop: dict, defs: dict, name: str) -> bool:
+def _said_in_words(value: list, spoken: list, prop: dict, defs: dict) -> bool:
     """Whether ``said`` put every item of the list ``value`` in words (``spoken``, item by item)."""
     prop = fitting(value, prop, defs)
     items, prefix = prop.get("items"), prop.get("prefixItems", [])
     items = items if isinstance(items, dict) else {}
     return all(
-        _in_words(item, said_item, prefix[i] if i < len(prefix) else items, defs, name)
+        _in_words(item, said_item, prefix[i] if i < len(prefix) else items, defs)
         for i, (item, said_item) in enumerate(zip(value, spoken, strict=True))
     )
 
@@ -1355,7 +1355,7 @@ def field(
         kind = "empty"
     elif isinstance(value, bool):
         kind = "bool"
-    elif isinstance(value, int) and is_money(name, prop) and (words is None or words.priced):
+    elif isinstance(value, int) and is_money(prop) and (words is None or words.priced):
         kind = "money"
     elif isinstance(value, list):
         kind = "list"
@@ -1366,7 +1366,7 @@ def field(
     shown = {"name": name, "label": label, "kind": kind, "value": value}
     if titled:
         shown["titled"] = True
-    if kind == "list" and words is not None and isinstance(sent, list) and _said_in_words(sent, value, prop, defs, name):
+    if kind == "list" and words is not None and isinstance(sent, list) and _said_in_words(sent, value, prop, defs):
         shown[NAMED] = True
     if kind == "money" and is_signed(prop):
         shown["signed"] = True
