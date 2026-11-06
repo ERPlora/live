@@ -198,6 +198,10 @@ class LiveAppConfig(AppConfig):
     bell: ClassVar[list[BellCounter]] = []
     # Module metadata, PLAN-HUB round 2026-10-23: the device's notices, which base fills in.
     notices: ClassVar[list[DeviceNotice]] = []
+    # The closed lists the app keeps where no field of its models holds them (inside a JSON: a website's palette), by
+    # the datum's name, each value with the label its screens show (lazy): the assistant's card says a value by it as
+    # by a field's ``choices`` (``live.assistant.choice_label``). A field of its models with that name names it first.
+    choices: ClassVar[dict[str, tuple[tuple[str, Any], ...]]] = {}
 
     # An apps.py that imports LiveAppConfig holds two AppConfig subclasses, and Django then
     # silently falls back to a plain AppConfig. The base opts out of auto-detection and every
