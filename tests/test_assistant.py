@@ -10,7 +10,7 @@ the records its reads name) come in through ``Words``. These tests use the packa
 import datetime as dt
 import json
 import uuid
-from typing import Literal
+from typing import Annotated, Literal
 
 import pytest
 from django.apps import apps
@@ -258,6 +258,44 @@ def test_an_amount_is_money_in_the_plain_currency_at_any_depth(probes):
     assert shown["lines"]["value"] == [{"label": "Corte", "amount": {"kind": "money", "value": 1500, "money": euros}}]
 
 
+class CentsLineIn(Schema):
+    label: str
+    unit_cents: int
+
+
+class NamedCentsIn(Schema):
+    """Whole numbers named as amounts are, none of them marked: only the mark makes an amount."""
+
+    total_cents: int
+    lines: list[CentsLineIn] = []
+    prices_cents: list[int] = []
+
+
+def test_a_name_in_cents_makes_no_amount_only_its_mark_does():
+    """hub#917: a whole number counted as money by its name alone (``…_cents``) while its schema carried no mark, so a
+    new datum named so that is no amount would reach the card as money. Only the mark (``MONEY``) says an amount now,
+    on top, inside an object and in a list, as the words of a description never did."""
+    assert assistant.is_money("price", {assistant.MONEY: True})
+    assert not assistant.is_money("total_cents", {"type": "integer"})
+    write = op("testapp.probe.cents", ai=CREATE, input=NamedCentsIn)
+    arguments = {"total_cents": 1500, "lines": [{"label": "Corte", "unit_cents": 1200}], "prices_cents": [150]}
+    shown = fields(assistant.card(write, arguments, "en"))
+    assert (shown["total_cents"]["kind"], shown["total_cents"]["value"]) == ("text", 1500)
+    assert shown["lines"]["value"] == [{"label": "Corte", "unit_cents": 1200}]
+    assert shown["prices_cents"]["value"] == [150]
+    assert not assistant.sends_amount(arguments, NamedCentsIn.model_json_schema(), {}, "")
+
+
+def test_a_marked_amount_sent_as_no_whole_number_stays_as_sent(probes):
+    """The mark says the amount of a whole number: one that comes as anything else — a text, a fraction, which the
+    write refuses — is no money on the card but as sent. A list named in ``_cents`` said so by its name until hub#917
+    took the name's word away; this says it by the mark."""
+    arguments = {"name": "x", "price": "12,50", "counted": 2.5}
+    shown = fields(assistant.card(probes["testapp.probe.create"], arguments, "en"))
+    assert (shown["price"]["kind"], shown["price"]["value"]) == ("text", "12,50")
+    assert (shown["counted"]["kind"], shown["counted"]["value"]) == ("text", 2.5)
+
+
 def test_a_secret_is_hidden_and_what_nobody_can_judge_is_left_out(probes):
     arguments = {"name": "x", "password": "hunter2", "idempotency_key": "k-1", "thing": str(uuid.uuid4())}
     shown = fields(assistant.card(probes["testapp.probe.create"], arguments, "en"))
@@ -312,7 +350,7 @@ class ListsIn(Schema):
     things: list[uuid.UUID] = []
     days: list[dt.date] = []
     sizes: list[Literal["s", "m"]] = []
-    prices_cents: list[int] = []
+    prices: list[Annotated[int, Field(json_schema_extra={"money": True})]] = []
     lines: list[LineIn] = []
 
 
@@ -321,7 +359,7 @@ LISTS = {
     "things": [str(uuid.uuid4()), str(uuid.uuid4())],
     "days": ["2026-11-02", "2026-11-09"],
     "sizes": ["s", "m"],
-    "prices_cents": [150, 1200],
+    "prices": [150, 1200],
     "lines": [{"label": "a", "amount": 250}],
 }
 
@@ -342,7 +380,7 @@ def test_a_list_the_card_says_in_words_is_marked_named_one_as_sent_is_not(lists)
     said each one in words — a record by its name, a moment, a value of a closed list by its label, an amount —; a list
     of texts sent as they are (codes nobody names: «sale.sale.create») or of lines says how many it carries."""
     card = assistant.card(lists, LISTS, "en", SpokenWords(lists, "en"))
-    assert named(card) == {"tags": False, "things": True, "days": True, "sizes": True, "prices_cents": True, "lines": False}
+    assert named(card) == {"tags": False, "things": True, "days": True, "sizes": True, "prices": True, "lines": False}
     shown = fields(card)
     assert shown["things"]["value"] == ["Table 5", "Table 5"]
     assert shown["sizes"]["value"] == ["Small", "Medium"]

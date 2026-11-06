@@ -893,9 +893,9 @@ MONEY = "money"
 
 
 def is_money(name: str, prop: dict) -> bool:
-    """Whether the datum ``name`` is an amount: its schema's mark (``MONEY``). A name in ``_cents`` still counts while
-    some schemas give one without its mark; a description's words never do."""
-    return prop.get(MONEY) is True or name.endswith("_cents")
+    """Whether the datum ``name`` is an amount: its schema's mark (``MONEY``), and only that — neither its name (a
+    ``…_cents`` without the mark is no amount) nor a description's words."""
+    return prop.get(MONEY) is True
 
 
 def is_signed(prop: dict) -> bool:
