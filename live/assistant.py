@@ -1118,8 +1118,9 @@ LEFT_OUT = object()
 
 #: The mark of a datum of a card that is a list whose every item ``said`` put in words — a record by its name (or left
 #: out, none), a moment, a value of a closed list by its label, an amount —, never one as sent: the screen says its items
-#: one after another (a line that carries only its record, by that record). A list without it (texts sent as they
-#: are, codes nobody names, lines of more than one datum) says how many it carries.
+#: one after another (a line that carries only its record, by that record; one that carries its record and figures, by
+#: both, as «Vino tinto · 6»). A list without it (texts sent as they are, codes nobody names, any other line of more
+#: than one datum) says how many it carries.
 NAMED = "named"
 
 
@@ -1295,13 +1296,43 @@ def said(value: Any, prop: dict, defs: dict, name: str, words: Words, inner: boo
     return value
 
 
+#: A figure as JSON and the text of a decimal write one («6», «-1.250»): never an exponent, a blank or a word.
+_FIGURE = re.compile(r"-?\d+(?:\.\d+)?")
+
+
+def _is_figure(value: Any, prop: dict, defs: dict) -> bool:
+    """Whether ``value`` is a figure its schema ``prop`` takes: a number (a quantity, sessions, an amount) or the text
+    of one where its schema takes a number too (a decimal, which Pydantic declares a number or a text) — never a yes
+    or no, nor a text whose schema takes no number, though it reads as one."""
+    prop = _referred(prop, defs)
+    branches = [_referred(branch, defs) for branch in (*prop.get("anyOf", []), *prop.get("oneOf", []))] or [prop]
+    if isinstance(value, bool) or not any(branch.get("type") in ("integer", "number") for branch in branches):
+        return False
+    return isinstance(value, int | float) or (isinstance(value, str) and _FIGURE.fullmatch(value) is not None)
+
+
+def _record_and_figures(carried: dict, spoken: Any, props: dict, defs: dict) -> bool:
+    """Whether the data a line carries (``carried``) are one record ``said`` named (``spoken``: by the name its read
+    gives it, never left out) and, beside it, only figures (``_is_figure``): a reception's product and its quantity
+    (hub#970). Two records, or none the card names, are not: the line would read as the wrong one, or as a bare
+    figure."""
+    records = [
+        key for key, item in carried.items() if key in props and _is_record(item, fitting(item, props[key], defs))
+    ]
+    if len(records) != 1 or not isinstance(spoken, dict) or not _is_said_name(spoken.get(records[0])):
+        return False
+    figures = {key: item for key, item in carried.items() if key != records[0]}
+    return all(key in props and _is_figure(item, props[key], defs) for key, item in figures.items())
+
+
 def _in_words(value: Any, spoken: Any, prop: dict, defs: dict) -> bool:
     """Whether ``said`` put the item ``value`` of a list in words (``spoken``) as its schema ``prop`` declares it — a
     record (``REFERS`` or an id), a moment, a value of a closed list, an amount, or a line that carries only one of
     them (a booking's services, ``[{"service_id": …}]``: hub#835) or only the name a person said of its record
-    (``NAME_OF``: ``[{"service": "Tinte"}]``, hub#860) —, not as sent (``NAMED``). A line with more than one datum is
-    not: which of them names it, only its app knows. An empty datum of a line (a name the model writes as null beside
-    the id it gives) does not count: it does not show; nor does a name beside its record, which the card leaves out."""
+    (``NAME_OF``: ``[{"service": "Tinte"}]``, hub#860), or a record the card names and figures beside it
+    (``_record_and_figures``: hub#970) —, not as sent (``NAMED``). Any other line with more than one datum is not:
+    which of them names it, only its app knows. An empty datum of a line (a name the model writes as null beside the id
+    it gives) does not count: it does not show; nor does a name beside its record, which the card leaves out."""
     prop = fitting(value, prop, defs)
     if _is_record(value, prop):
         return True
@@ -1321,6 +1352,8 @@ def _in_words(value: Any, spoken: Any, prop: dict, defs: dict) -> bool:
         if key in props and _name_of(props[key], defs) is not None:
             return _is_said_name(item)
         return key in props and _in_words(item, inner, props[key], defs)
+    if _record_and_figures(carried, spoken, props, defs):
+        return True
     declared = prop.get("format") in MOMENTS or "enum" in prop or is_money(prop)
     return declared and spoken != value
 
