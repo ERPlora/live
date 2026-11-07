@@ -10,6 +10,7 @@ the records its reads name) come in through ``Words``. These tests use the packa
 import datetime as dt
 import json
 import uuid
+from decimal import Decimal
 from typing import Annotated, Literal
 
 import pytest
@@ -482,6 +483,91 @@ def test_a_line_is_named_only_when_the_datum_it_carries_alone_is_said_in_words(l
     assert fields(card)["whens"]["value"][1] == {"size": "Small"}
     for as_sent in ({"size": "m"}, {"day": "soon"}):
         assert named(assistant.card(lines, {"whens": [{"size": "s"}, as_sent]}, "en")) == {"whens": False}
+
+
+class StockLineIn(Schema):
+    """A line that carries its record and figures (Inventario's reception, a sale's lines, a package's services): a
+    quantity — a decimal, which a model writes as a number or as a text —, how many sessions, an amount; or more than
+    one record, or a text of its own."""
+
+    thing_id: uuid.UUID | None = Field(None, json_schema_extra={"refers": {"read": "testapp.probe.get", "by": "id"}})
+    thing: str | None = Field(None, json_schema_extra={"name_of": "thing_id"})
+    other_id: uuid.UUID | None = Field(None, json_schema_extra={"refers": {"read": "testapp.probe.get", "by": "id"}})
+    table: int | None = Field(None, json_schema_extra={"refers": {"read": "testapp.probe.get", "by": "number"}})
+    qty: Decimal | None = None
+    sessions: int | None = None
+    cost: int | None = Field(None, json_schema_extra={"money": True})
+    note: str | None = None
+
+
+class StockIn(Schema):
+    items: list[StockLineIn] = []
+
+
+@pytest.fixture
+def stock():
+    return op("testapp.probe.stock", ai=CREATE, input=StockIn)
+
+
+def said_items(write, items, words=None) -> tuple:
+    shown = fields(assistant.card(write, {"items": items}, "en", words))["items"]
+    return shown["value"], shown.get(assistant.NAMED, False)
+
+
+def test_a_line_of_its_record_and_figures_is_named_by_that_record(stock):
+    """hub#970: a reception of goods (``[{"product_id": …, "qty": "6"}]``), its product named by the server, and the
+    card said «Productos: 1 elemento». A line that carries one record the server names and, beside it, only figures — a
+    quantity as a number or as the text of a decimal, sessions, an amount — is said by that record and its figures;
+    the name beside its record still does not count."""
+    one = str(uuid.uuid4())
+    sent = [
+        {"thing_id": one, "qty": "6"},
+        {"qty": 2.5, "thing_id": one, "cost": 450},
+        {"thing_id": one, "sessions": 5, "thing": "Mesa 4"},
+        {"thing_id": one, "qty": "-1.250", "note": None},
+    ]
+    assert said_items(stock, sent, SpokenWords(stock, "en")) == (
+        [
+            {"thing_id": "Table 5", "qty": "6"},
+            {"qty": 2.5, "thing_id": "Table 5", "cost": "4.50 $"},
+            {"thing_id": "Table 5", "sessions": 5},
+            {"thing_id": "Table 5", "qty": "-1.250", "note": None},
+        ],
+        True,
+    )
+
+
+def test_a_line_of_figures_whose_record_the_card_cannot_name_is_not_named(stock):
+    """No read names its record (``PlainWords``, or the person may not see it): the line would read as a bare quantity
+    («6»), so the screen says how many the list carries — even beside a line it can name."""
+    one = str(uuid.uuid4())
+    assert said_items(stock, [{"thing_id": one, "qty": "6"}]) == ([{"qty": "6"}], False)
+
+    class Unnamed(SpokenWords):
+        def reference(self, value, prop):
+            return "Table 5" if value == one else assistant.LEFT_OUT
+
+    mixed = [{"thing_id": one, "qty": "6"}, {"thing_id": str(uuid.uuid4()), "qty": "2"}]
+    assert said_items(stock, mixed, Unnamed(stock, "en"))[1] is False
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        {"thing_id": str(uuid.uuid4()), "other_id": str(uuid.uuid4()), "qty": "6"},  # two records: which one names it?
+        {"thing_id": str(uuid.uuid4()), "table": 4, "qty": "6"},  # nor is a record by its number one of its figures
+        {"qty": "6", "cost": 450},  # figures and no record
+        {"thing": "Mesa 4", "qty": "6"},  # a name a person said, not one the server gave
+        {"thing_id": str(uuid.uuid4()), "qty": "6", "note": "ventana"},  # a text of its own beside the figures
+        {"thing_id": str(uuid.uuid4()), "qty": "seis"},  # a quantity that is no figure: as sent
+        {"thing_id": str(uuid.uuid4()), "qty": "6e2"},  # nor a figure written as no screen writes one
+        {"thing_id": str(uuid.uuid4()), "qty": True},  # a yes or no is no figure
+        {"thing_id": str(uuid.uuid4()), "note": "6"},  # a text whose schema takes no number, though it reads as one
+    ],
+)
+def test_a_line_of_figures_and_no_single_record_is_not_named(stock, line):
+    """Which of its data names such a line, only its app knows: the screen says how many the list carries."""
+    assert said_items(stock, [line], SpokenWords(stock, "en"))[1] is False
 
 
 class SaidThingRefIn(Schema):
