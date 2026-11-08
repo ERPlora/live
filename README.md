@@ -346,7 +346,7 @@ puntuación: invisible, sin casilla ni puzle (Ioan, 2026-10-22). Hoy lo usa el S
 
 Un reinicio del escritor, un mantenimiento de AWS o el cambio de Blue/Green cortan las conexiones o dejan la base en solo
 lectura unos segundos. Un proyecto lo pide nombrando `LIVE["database_cut"]`; sin ese ajuste, un corte sigue siendo el error
-que era (así sigue el Hub hasta hub#831):
+que era. El SaaS lo pide desde saas#284 y el Hub desde hub#831:
 
 ```python
 LIVE = {"database_cut": {"wait_seconds": 20, "no_wait_prefixes": ("/internal/", "/webhooks/", "/readyz")}}
