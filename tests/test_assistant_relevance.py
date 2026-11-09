@@ -314,8 +314,11 @@ MENU = [tool("menu.menu.aaa", "Does it to a menu."),
         ("importa los menús", "es", {"import"}),
         ("súbeme los menús", "es", {"import"}),
         ("import the menus", "en", {"import"}),
-        ("cambia el nombre del menú", "es", {"rename"}),
+        ("cambia el nombre del menú", "es", {"rename", "set", "update"}),
+        ("change the name of the menu", "en", {"rename", "set", "update"}),
         ("rename the menu", "en", {"rename"}),
+        ("ordena el menú", "es", {"update"}),
+        ("reorder the menu", "en", {"update"}),
         ("apunta un menú", "es", {"add", "create"}),
         ("empieza un menú", "es", {"open", "start"}),
         ("start a menu", "en", {"open", "start"}),
@@ -397,6 +400,15 @@ def test_a_yes_or_no_question_asks_to_know(asked, language):
     names = ranked([*HUB_SLICE, SALE_SETTINGS, *NOISE], asked, language)
     assert "sale.sale.complete" not in names[:3]
     assert names.index("sale.settings.get") < names.index("sale.sale.complete")
+
+
+def test_what_can_be_refunded_reaches_the_options_not_the_history():
+    tools = [
+        tool("sale.refund.options", "What a sale can still give back, for each tender and each line.", "query"),
+        tool("sale.refund.list", "List the refunds of a sale, newest first.", "query"),
+        *NOISE,
+    ]
+    assert ranked(tools, "Check what can be refunded", "en")[0] == "sale.refund.options"
 
 
 def test_a_que_inside_a_sentence_asks_nothing():

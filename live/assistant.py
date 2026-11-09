@@ -164,16 +164,17 @@ VERBS = {
                "registra", "registrar", "reservar", "nuevo", "nueva", "add", "create", "new", "register", "book"),
     "add": ("anade", "anadir", "agrega", "agregar", "apunta", "apuntar", "mete", "meter", "ponle", "add"),
     "update": ("cambia", "cambiar", "modifica", "modificar", "actualiza", "actualizar", "edita", "editar", "pon",
-               "ponle", "poner", "sube", "subir", "configura", "configurar", "ajusta", "ajustar", "update", "change",
-               "edit", "set", "set up", "configure", "cambia el nombre", "cambiale el nombre", "cambiar el nombre",
-               "ponle de nombre", "ponle el nombre", "ponle nombre", "pon de nombre", "change the name",
-               "change its name"),
+               "ponle", "poner", "sube", "subir", "configura", "configurar", "ajusta", "ajustar", "ordena", "ordenar",
+               "update", "change", "edit", "set", "set up", "configure", "reorder", "cambia el nombre",
+               "cambiale el nombre", "cambiar el nombre", "ponle de nombre", "ponle el nombre", "ponle nombre",
+               "pon de nombre", "change the name", "change its name"),
     "change": ("cambia", "cambiar", "change"),
     "rename": ("renombra", "renombrar", "rename", "cambia el nombre", "cambiale el nombre", "cambiar el nombre",
                "ponle de nombre", "ponle el nombre", "ponle nombre", "pon de nombre", "change the name",
                "change its name"),
-    "set": ("pon", "ponle", "poner", "asigna", "asignar", "cambia", "cambiar", "ponle de nombre", "ponle el nombre",
-            "ponle nombre", "pon de nombre", "set", "assign", "change"),
+    "set": ("pon", "ponle", "poner", "asigna", "asignar", "cambia", "cambiar", "cambia el nombre",
+            "cambiale el nombre", "cambiar el nombre", "ponle de nombre", "ponle el nombre", "ponle nombre",
+            "pon de nombre", "set", "assign", "change", "change the name", "change its name"),
     "delete": ("borra", "borrar", "borremos", "borrad", "elimina", "eliminar", "quita", "quitar", "delete", "remove",
                "get rid"),
     "remove": ("borra", "borrar", "borremos", "borrad", "elimina", "eliminar", "quita", "quitar", "delete", "remove",
@@ -185,6 +186,7 @@ VERBS = {
              "busca", "buscar", "list", "show", "find", "search", "how many"),
     "count": ("cuantos", "cuantas", "contar", "count", "how many"),
     "get": ("dame", "datos", "detalle", "get", "detail"),
+    "options": ("que se puede", "what can"),
     "check": ("cuadra", "cuadran", "cuadrar", "cuadre", "comprueba", "comprobar", "reconcilia", "add up", "adds up",
               "reconcile"),
     "stats": ("cuadra", "cuadran", "cuadrar", "cuadre", "cuantos", "cuantas", "add up", "adds up", "how many"),
@@ -210,7 +212,7 @@ VERBS = {
 _PHRASE_NAMES = frozenset({"nombre", "name", "datos", "modulo", "app", "aplicacion"})
 #: The actions that only read: a question that asks for none of the others asks to know, not to do. Asked of nothing
 #: named, they bring no tool: «¿cuántos…?» is no list of everything.
-READ_VERBS = frozenset({"list", "get", "count", "check", "stats"})
+READ_VERBS = frozenset({"list", "get", "options", "count", "check", "stats"})
 #: The actions that turn something on or off: of a setting a write takes («turn off the alerts»), they change it.
 SWITCHES = frozenset({"enable", "disable"})
 #: The actions that change what a write takes.
