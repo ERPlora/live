@@ -460,6 +460,7 @@ def test_a_reason_after_a_command_is_no_question():
         ("trasládalos a la mesa 2", "es", "transfer"),
         ("hay que trasladar la mesa 1 a la terraza", "es", "transfer"),
         ("transfiere la cuenta de la mesa 1 a la 2", "es", "transfer"),
+        ("hay que transferir la cuenta de la mesa 1 a la 2", "es", "transfer"),
         ("transfer the check of table 1 to table 2", "en", "transfer"),
     ],
 )
@@ -476,6 +477,7 @@ def test_the_words_of_a_dining_room_ask_for_their_action(said, language, action)
         ("siéntame la cuenta aparcada en la 5", {"open", "restore"}),
         ("seat the parked check at table 9", {"open", "restore"}),
         ("restaura la cuenta aparcada", {"restore"}),
+        ("hay que restaurar la cuenta aparcada", {"restore"}),
         ("restore the parked check", {"restore"}),
     ],
 )
