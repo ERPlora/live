@@ -232,11 +232,13 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   pierde la consonante doblada con su final («tagged» → «tag»). Las palabras de dos cosas no comparten raíz: «tablet» no
   es «table», «compartido» no es «company», «peluquería» no es «peluquero», «carta» no es «cart», «contrato» y
   «contraseña» no son «control», «recibo» no es «recibir», «registro» no es «register», «settings» no es «set», «comensal»
-  no es «comentario» ni «comenzar», y «ficha»
+  no es «comentario» ni «comenzar», «disponible» no es «dispositivo» (live#47), y «ficha»
   (la del cliente) no es «fichar» salvo al empezar una orden («ficha la entrada de Ana»; igual «reserva una mesa»).
 - **Verbos** (`VERBS`): una frase de varias palabras cuenta seguida y sus palabras no piden otra cosa («get rid of» es
   borrar, nunca `get`; «set up» configura, nunca `set`; «add up» y «¿cuadran?» comprueban, no añaden; «cambia el
-  nombre» y «ponle de nombre» renombran). «Ponle», «añade», «apunta» y «mete» añaden (`add`); «exporta», «descarga»,
+  nombre» y «ponle de nombre» renombran; también con lo que se nombra en medio, «pon al dispositivo que uso ahora el
+  nombre «Barra»» o «cámbiale a la tablet el nombre», siempre que el nombre lleve su artículo y no diga por dónde se
+  busca la cosa: «con el nombre», «de nombre» no renombran; live#47). «Ponle», «añade», «apunta» y «mete» añaden (`add`); «exporta», «descarga»,
   «download» exportan; «importa», «súbeme», «upload» importan; «borremos todos sus datos» y «erase» borran del todo
   (`erase`); «empieza» y «start» abren; «sienta», «sentar» y «seat» abren una mesa o vuelven a sentar una cuenta aparcada
   (`open`, `restore`: decide la cosa nombrada), y sus formas se nombran juntas aunque la raíz las separe («sienta»,

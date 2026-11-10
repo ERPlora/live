@@ -167,15 +167,16 @@ VERBS = {
                "ponle", "poner", "sube", "subir", "configura", "configurar", "ajusta", "ajustar", "ordena", "ordenar",
                "update", "change", "edit", "set", "set up", "configure", "reorder", "cambia el nombre",
                "cambiale el nombre", "cambiar el nombre", "ponle de nombre", "ponle el nombre", "ponle nombre",
-               "pon de nombre", "change the name", "change its name"),
+               "pon de nombre", "pon el nombre", "poner el nombre", "change the name", "change its name"),
     "change": ("cambia", "cambiar", "change"),
     "reorder": ("ordena", "ordenar", "reorder"),
     "rename": ("renombra", "renombrar", "rename", "cambia el nombre", "cambiale el nombre", "cambiar el nombre",
-               "ponle de nombre", "ponle el nombre", "ponle nombre", "pon de nombre", "change the name",
-               "change its name"),
+               "ponle de nombre", "ponle el nombre", "ponle nombre", "pon de nombre", "pon el nombre",
+               "poner el nombre", "change the name", "change its name"),
     "set": ("pon", "ponle", "poner", "asigna", "asignar", "cambia", "cambiar", "cambia el nombre",
             "cambiale el nombre", "cambiar el nombre", "ponle de nombre", "ponle el nombre", "ponle nombre",
-            "pon de nombre", "set", "assign", "change", "change the name", "change its name"),
+            "pon de nombre", "pon el nombre", "poner el nombre", "set", "assign", "change", "change the name",
+            "change its name"),
     "delete": ("borra", "borrar", "borremos", "borrad", "elimina", "eliminar", "quita", "quitar", "delete", "remove",
                "get rid"),
     "remove": ("borra", "borrar", "borremos", "borrad", "elimina", "eliminar", "quita", "quitar", "delete", "remove",
@@ -215,6 +216,17 @@ VERBS = {
 }
 #: The words of a verb's phrase that still name what they name: «cambia el nombre» changes a name.
 _PHRASE_NAMES = frozenset({"nombre", "name", "datos", "modulo", "app", "aplicacion"})
+#: The phrases of ``VERBS`` that put a name on something («ponle el nombre», «change its name»), by their verb and what
+#: follows it: said with what is named in between («pon al dispositivo que uso ahora el nombre «Barra»»), they count
+#: as said in a row (ERPlora/live#47). Only a name with its article: «de nombre» and «nombre» alone may say what a thing
+#: is called («el menú de nombre «Carta»»).
+_NAMING: dict[str, tuple[tuple[str, ...], ...]] = {}
+for _phrase in VERBS["rename"]:
+    _head, *_rest = _phrase.split()
+    if len(_rest) == 2 and _rest[0] in {"el", "the", "its"}:
+        _NAMING[_head] = (*_NAMING.get(_head, ()), tuple(_rest))
+#: The words before a name that make it what a thing is found by, not the name put on it («con el nombre»).
+_FOUND_BY = frozenset({"con", "por", "de", "del", "with", "by", "of", "under"})
 #: The actions that only read: a question that asks for none of the others asks to know, not to do. Asked of nothing
 #: named, they bring no tool: «¿cuántos…?» is no list of everything.
 READ_VERBS = frozenset({"list", "get", "options", "count", "check", "stats"})
@@ -353,14 +365,14 @@ _WHOLE = frozenset({"personal"})
 #: no «company», «peluquería» (the business) no «peluquero» (its staff), «carta» (the menu) no «cart», «contrato» and
 #: «contraseña» no «control», «recibo» (a receipt) no «recibir», «ficha» (a customer's card) no «fichar»,
 #: «settings» no «set», «registro» (a record) no «register» (the till), «comensal» (a diner) no «comentario» nor
-#: «comenzar».
+#: «comenzar», «disponible» (available) no «dispositivo» (a device).
 _APART_WORDS = {"ficha": "ficha", "carta": "carta", "recibo": "recibo", "registro": "registro", "fiche": "fichar",
                 "ficho": "fichar"}
 _APART_PREFIXES = (
     ("peluqueri", "peluqueri"), ("contrasen", "contrasen"), ("compart", "compart"), ("contract", "contrat"),
     ("contrat", "contrat"), ("receipt", "receipt"), ("fichaj", "fichar"), ("fichar", "fichar"), ("fichad", "fichar"),
     ("fichand", "fichar"), ("ficham", "fichar"), ("fichal", "fichar"), ("tablet", "tablet"), ("setting", "setting"),
-    ("comensal", "comensal"),
+    ("comensal", "comensal"), ("dispon", "dispon"),
 )
 #: A noun that is a command at the start of a sentence, followed by these: «ficha la entrada de Ana» clocks in, «abre
 #: la ficha de Ana» is her card; «reserva una mesa» books, «cancela la reserva» names one.
@@ -618,6 +630,24 @@ def _objects(
     return found, after
 
 
+def _split_naming(sentences: list[list[str]]) -> set[tuple[str, str]]:
+    """The naming phrases (``_NAMING``) of ``sentences`` said with words between their verb and the name («pon al
+    dispositivo el nombre»; its pronouns too: «cámbiale a la tablet el nombre»), each with its verb as said; never a
+    name that finds the thing (``_FOUND_BY``: «con el nombre»)."""
+    found: set[tuple[str, str]] = set()
+    for words in sentences:
+        for at, word in enumerate(words):
+            head = word if word in _NAMING else _unclitic(word)
+            for rest in _NAMING.get(head or "", ()):
+                size = len(rest)
+                if any(
+                    tuple(words[later : later + size]) == rest and words[later - 1] not in _FOUND_BY
+                    for later in range(at + 2, len(words) - size + 1)
+                ):
+                    found.add((word, " ".join((head, *rest))))
+    return found
+
+
 def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked:
     """What ``texts`` ask (``Asked``): what each of their words names (``_concept``, with the project's ``synonyms``; a
     word of a verb's phrase names nothing, nor a verb but by its synonyms: «show me», «dame»), the actions they ask for
@@ -637,6 +667,9 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
         joined = [f" {' '.join(words)} " for words in sentences]
         found = {phrase for phrase in _PHRASES if any(f" {phrase} " in one for one in joined)}
         verbal = {word for phrase in found for word in phrase.split()}
+        for said_as, phrase in _split_naming(sentences):
+            found.add(phrase)
+            verbal |= {said_as, *phrase.split()}
         said = {verb for verb, forms in VERBS.items() if not found.isdisjoint(forms)}
         acting: dict[str, frozenset[str]] = {}
         for words in sentences:
