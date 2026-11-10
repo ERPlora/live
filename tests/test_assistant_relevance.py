@@ -314,8 +314,11 @@ MENU = [tool("menu.menu.aaa", "Does it to a menu."),
         ("importa los menús", "es", {"import"}),
         ("súbeme los menús", "es", {"import"}),
         ("import the menus", "en", {"import"}),
-        ("cambia el nombre del menú", "es", {"rename"}),
+        ("cambia el nombre del menú", "es", {"rename", "set", "update"}),
+        ("change the name of the menu", "en", {"rename", "set", "update"}),
         ("rename the menu", "en", {"rename"}),
+        ("ordena el menú", "es", {"update"}),
+        ("reorder the menu", "en", {"update"}),
         ("apunta un menú", "es", {"add", "create"}),
         ("empieza un menú", "es", {"open", "start"}),
         ("start a menu", "en", {"open", "start"}),
@@ -397,6 +400,38 @@ def test_a_yes_or_no_question_asks_to_know(asked, language):
     names = ranked([*HUB_SLICE, SALE_SETTINGS, *NOISE], asked, language)
     assert "sale.sale.complete" not in names[:3]
     assert names.index("sale.settings.get") < names.index("sale.sale.complete")
+
+
+def test_what_can_be_refunded_reaches_the_options_not_the_history():
+    tools = [
+        tool("sale.refund.options", "What a sale can still give back, for each tender and each line.", "query"),
+        tool("sale.refund.list", "List the refunds of a sale, newest first.", "query"),
+        *NOISE,
+    ]
+    assert ranked(tools, "Check what can be refunded", "en")[0] == "sale.refund.options"
+
+
+def test_a_reorder_reaches_the_operation_that_reorders():
+    """«Reorder» and «ordena» put things in a new order: the operation that does only that (``reorder``) comes before
+    the write that changes anything of them (``update``), which they reach where nothing reorders («ordena el menú»,
+    ``test_the_action_asked_is_the_one_people_mean``)."""
+    tools = [
+        tool("combo.group.reorder", "Put the courses of a menu in a new order (the order the till asks them in): give "
+             "every course id, in order."),
+        tool("combo.group.update", "Change a course: its name, minimum and maximum picks, or whether a choice may "
+             "repeat. Only the fields sent change; it keeps its place."),
+        tool("combo.option.reorder", "Put the choices of a course in a new order (the order the till shows them in): "
+             "give every choice id, in order."),
+        tool("combo.option.update", "Change a choice: its supplement, mark it sold out or back on offer, or replace "
+             "its product. It keeps its place."),
+        *NOISE,
+    ]
+    for asked, language, thing in (("reorder the courses of the menu", "en", "group"),
+                                   ("reorder the choices of the first course", "en", "option"),
+                                   ("ordena los platos del menú", "es", "group")):
+        names = ranked(tools, asked, language)
+        assert names.index(f"combo.{thing}.reorder") < names.index(f"combo.{thing}.update"), (asked, names[:4])
+    assert ranked(tools, "reorder the courses of the menu", "en")[0] == "combo.group.reorder"
 
 
 def test_a_que_inside_a_sentence_asks_nothing():
