@@ -198,7 +198,9 @@ VERBS = {
     "void": ("anula", "anular", "void"),
     "cancel": ("cancela", "cancelar", "anula", "anular", "cancel"),
     "close": ("cierra", "cerrar", "close"),
-    "open": ("abre", "abrir", "empieza", "inicia", "open", "start", "begin"),
+    # Seating a party opens its check; a check taken to another table is transferred (ERPlora/live#48).
+    "open": ("abre", "abrir", "empieza", "inicia", "sienta", "sentar", "open", "start", "begin", "seat"),
+    "transfer": ("traslada", "trasladar", "transfiere", "transferir", "transfer"),
     "start": ("empieza", "inicia", "start", "begin"),
     "enable": ("activa", "activar", "activame", "enciende", "encender", "habilita", "habilitar", "enable", "activate",
                "turn on", "switch on", "quiero el modulo", "quiero la app", "quiero la aplicacion", "pon la app",
@@ -335,6 +337,7 @@ SYNONYMS = (
     ("devolucion", "reembolso", "refund"),
     ("aparcar", "aparcada", "park"),
     ("etiqueta", "tag"),
+    ("comensal", "guest"),
     ("ajustes", "ajuste", "configuracion", "configurar", "configura", "settings", "setting", "setup", "configure",
      "set up"),
 )
@@ -346,13 +349,15 @@ _WHOLE = frozenset({"personal"})
 #: Words kept apart from another's stem (as said, or without their plural «s»): «tablet» is no «table», «compartido»
 #: no «company», «peluquería» (the business) no «peluquero» (its staff), «carta» (the menu) no «cart», «contrato» and
 #: «contraseña» no «control», «recibo» (a receipt) no «recibir», «ficha» (a customer's card) no «fichar»,
-#: «settings» no «set», «registro» (a record) no «register» (the till).
+#: «settings» no «set», «registro» (a record) no «register» (the till), «comensal» (a diner) no «comentario» nor
+#: «comenzar».
 _APART_WORDS = {"ficha": "ficha", "carta": "carta", "recibo": "recibo", "registro": "registro", "fiche": "fichar",
                 "ficho": "fichar"}
 _APART_PREFIXES = (
     ("peluqueri", "peluqueri"), ("contrasen", "contrasen"), ("compart", "compart"), ("contract", "contrat"),
     ("contrat", "contrat"), ("receipt", "receipt"), ("fichaj", "fichar"), ("fichar", "fichar"), ("fichad", "fichar"),
     ("fichand", "fichar"), ("ficham", "fichar"), ("fichal", "fichar"), ("tablet", "tablet"), ("setting", "setting"),
+    ("comensal", "comensal"),
 )
 #: A noun that is a command at the start of a sentence, followed by these: «ficha la entrada de Ana» clocks in, «abre
 #: la ficha de Ana» is her card; «reserva una mesa» books, «cancela la reserva» names one.

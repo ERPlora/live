@@ -450,6 +450,85 @@ def test_a_reason_after_a_command_is_no_question():
 
 
 @pytest.mark.parametrize(
+    ("said", "language", "action"),
+    [
+        ("sienta a dos personas en la mesa 3", "es", "open"),
+        ("siéntalos en la mesa 3", "es", "open"),
+        ("hay que sentar a cuatro en la terraza", "es", "open"),
+        ("seat two people at table 3", "en", "open"),
+        ("traslada la cuenta de la mesa 1 a la 2", "es", "transfer"),
+        ("trasládalos a la mesa 2", "es", "transfer"),
+        ("hay que trasladar la mesa 1 a la terraza", "es", "transfer"),
+        ("transfiere la cuenta de la mesa 1 a la 2", "es", "transfer"),
+        ("transfer the check of table 1 to table 2", "en", "transfer"),
+    ],
+)
+def test_the_words_of_a_dining_room_ask_for_their_action(said, language, action):
+    """Seating a party opens its check and a check taken to another table is transferred (ERPlora/live#48): «sienta»,
+    «traslada» and «transfiere» are what a waiter says, with their pronouns too."""
+    assert action in assistant.asked([said]).verbs
+
+
+class SeatIn(Schema):
+    table: str | None = None
+    zone: str | None = None
+    guests_count: int | None = None
+
+
+class TransferIn(Schema):
+    table: str | None = None
+    to_table: str | None = None
+
+
+class GuestsIn(Schema):
+    table: str | None = None
+    guests_count: int
+
+
+#: What a waiter does to a table's check, against the till's checks that open, are retitled and take lines.
+DINING_ROOM = [
+    tool("sale.order.add", "Add lines to an open check.", asks={"es": ("apunta dos cafés en la cuenta de Ana",)}),
+    tool("sale.order.open", "Open a check (an open ticket), empty or with lines."),
+    tool("sale.order.set_label", "Retitle an open check."),
+    tool("sale.order.set_note", "Write a note on an open check."),
+    tool("table.session.open", "Seat a party at a free or reserved table: its check opens in Sales titled with the "
+         "table.", input=SeatIn),
+    tool("table.session.set_guests", "Correct how many guests sit at a table's open check.", input=GuestsIn),
+    tool("table.session.transfer", "Move a table's check to a free or reserved table: same check of Sales.",
+         input=TransferIn),
+    *NOISE,
+]
+#: The Hub's own words (``base.assistant.SYNONYMS``): a «cuenta» is a table's check, ``sale.order``.
+CHECK = (("cuenta", "check", "tab", "order"),)
+
+
+@pytest.mark.parametrize(
+    ("asked", "language", "first"),
+    [
+        ("sienta a dos personas en la mesa 3", "es", "table.session.open"),
+        ("traslada la segunda cuenta de la mesa 1 a la mesa 2", "es", "table.session.transfer"),
+        ("transfer the second check of table 1 to table 2", "en", "table.session.transfer"),
+        ("en la mesa 1 corrige los comensales a tres", "es", "table.session.set_guests"),
+        ("en la mesa 1 corrige los comensales a tres, ha llegado uno más", "es", "table.session.set_guests"),
+    ],
+)
+def test_what_a_waiter_does_to_a_table_comes_before_the_tills_checks(asked, language, first):
+    """«Traslada» and «comensales» reach the table's operation as «guests» does; Sales' writes of a check (named by
+    «cuenta») came first, as no action and no thing of the table was asked (live#48)."""
+    names = ranked(DINING_ROOM, asked, language, synonyms=CHECK)
+    assert names[0] == first, names[:4]
+
+
+def test_seating_a_party_is_opening_its_table():
+    """«Sienta a dos… y apunta… en la cuenta» asks what «abre a dos… y apunta…» does: open the table and note on the
+    check (Sales' ``add``). Without «sienta» as an open, the seat came behind every write of the check (live#48)."""
+    seat = ranked(DINING_ROOM, "sienta a dos personas en la mesa 3 y apunta un cumpleaños en la cuenta", synonyms=CHECK)
+    opened = ranked(DINING_ROOM, "abre a dos personas en la mesa 3 y apunta un cumpleaños en la cuenta", synonyms=CHECK)
+    assert seat == opened
+    assert "table.session.open" in seat[:3], seat[:4]
+
+
+@pytest.mark.parametrize(
     ("said", "english"),
     [
         ("los avisos", "alert"), ("las notificaciones", "alert"), ("the notices", "notification"),
@@ -458,6 +537,7 @@ def test_a_reason_after_a_command_is_no_question():
         ("mi foto de perfil", "avatar"), ("la ficha", "card"), ("recibir", "receive"), ("la devolución", "refund"),
         ("el reembolso", "refund"), ("las cuentas aparcadas", "park"),
         ("las etiquetas", "tag"), ("el portátil", "device"), ("este ordenador", "device"), ("la tablet", "device"),
+        ("los comensales", "guest"), ("un comensal", "guest"),
     ],
 )
 def test_the_words_of_one_thing_name_it_in_either_language(said, english):
@@ -472,6 +552,8 @@ def test_the_words_of_one_thing_name_it_in_either_language(said, english):
         ("peluquería", "peluquero"), ("carta", "carrito"), ("carta", "cart"), ("contratos", "control"),
         ("contraseña", "control"), ("ficha", "fichar"), ("fichas", "fichaje"), ("recibo", "recibir"),
         ("receipt", "receive"), ("settings", "set"), ("registros", "register"),
+        # «Comensal» (a diner) is no «comentario» (a comment) nor «comenzar» (to begin): all three cut to «comen».
+        ("comensales", "comentarios"), ("comensal", "comentario"), ("comensales", "comenzar"),
     ],
 )
 def test_words_of_two_things_are_never_one_stem(one, other):
@@ -495,6 +577,7 @@ def test_words_of_two_things_are_never_one_stem(one, other):
         ("bill billing billed", "bill"),
         ("setting settings", "setting"),
         ("registro registros", "registro"),
+        ("comensal comensales", "comensal"),
     ],
 )
 def test_the_forms_of_a_word_kept_apart_still_join(words, stem):
