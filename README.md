@@ -231,13 +231,17 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   «cobra», «sube», «di», «descarga»); un verbo guarda raíz de tres letras («sube», «subir» → «sub»); un verbo inglés
   pierde la consonante doblada con su final («tagged» → «tag»). Las palabras de dos cosas no comparten raíz: «tablet» no
   es «table», «compartido» no es «company», «peluquería» no es «peluquero», «carta» no es «cart», «contrato» y
-  «contraseña» no son «control», «recibo» no es «recibir», «registro» no es «register», «settings» no es «set», y «ficha»
+  «contraseña» no son «control», «recibo» no es «recibir», «registro» no es «register», «settings» no es «set», «comensal»
+  no es «comentario» ni «comenzar», y «ficha»
   (la del cliente) no es «fichar» salvo al empezar una orden («ficha la entrada de Ana»; igual «reserva una mesa»).
 - **Verbos** (`VERBS`): una frase de varias palabras cuenta seguida y sus palabras no piden otra cosa («get rid of» es
   borrar, nunca `get`; «set up» configura, nunca `set`; «add up» y «¿cuadran?» comprueban, no añaden; «cambia el
   nombre» y «ponle de nombre» renombran). «Ponle», «añade», «apunta» y «mete» añaden (`add`); «exporta», «descarga»,
   «download» exportan; «importa», «súbeme», «upload» importan; «borremos todos sus datos» y «erase» borran del todo
-  (`erase`); «empieza» y «start» abren; «ponme la app», «instala» encienden; «how many» y «cuántos» cuentan (`count`, `list`, `stats`). «How», «which»,
+  (`erase`); «empieza» y «start» abren; «sienta», «sentar» y «seat» abren una mesa o vuelven a sentar una cuenta aparcada
+  (`open`, `restore`: decide la cosa nombrada), y sus formas se nombran juntas aunque la raíz las separe («sienta»,
+  «sentar»); «traslada», «transfiere» y «transfer» transfieren (`transfer`), y los «comensales» son los `guests`
+  (live#48); «ponme la app», «instala» encienden; «how many» y «cuántos» cuentan (`count`, `list`, `stats`). «How», «which»,
   «cómo» y «cuál» ya no son el verbo «listar». Un verbo no nombra cosas salvo por sus sinónimos («cobra» nombra la
   venta; «show me», «dame», «dime», «give me», «tell me» no nombran nada).
 - **Preguntas**: una pregunta (palabra interrogativa con tilde, que empieza por una o por un auxiliar inglés, o con sus

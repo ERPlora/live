@@ -469,6 +469,28 @@ def test_the_words_of_a_dining_room_ask_for_their_action(said, language, action)
     assert action in assistant.asked([said]).verbs
 
 
+@pytest.mark.parametrize(
+    ("said", "actions"),
+    [
+        ("vuelve a sentar la cuenta aparcada en la mesa 9", {"open", "restore"}),
+        ("siéntame la cuenta aparcada en la 5", {"open", "restore"}),
+        ("seat the parked check at table 9", {"open", "restore"}),
+        ("restaura la cuenta aparcada", {"restore"}),
+        ("restore the parked check", {"restore"}),
+    ],
+)
+def test_seating_a_parked_check_restores_it(said, actions):
+    """Seating is opening a table or putting a parked check back at one: the thing named says which."""
+    assert assistant.asked([said]).verbs == actions
+
+
+def test_the_forms_of_seating_are_one_word():
+    """«Sienta» and «sentar» cut to two stems (its «ie»): they, and «seat», still name the same, as asks say it."""
+    names = lambda said: assistant._concept(assistant._plain(said))  # noqa: E731
+    assert names("sienta") == names("sentar") == names("seat")
+    assert names("siéntalos") == names("sienta")
+
+
 class SeatIn(Schema):
     table: str | None = None
     zone: str | None = None
@@ -485,6 +507,11 @@ class GuestsIn(Schema):
     guests_count: int
 
 
+class RestoreIn(Schema):
+    id: str
+    table: str | None = None
+
+
 #: What a waiter does to a table's check, against the till's checks that open, are retitled and take lines.
 DINING_ROOM = [
     tool("sale.order.add", "Add lines to an open check.", asks={"es": ("apunta dos cafés en la cuenta de Ana",)}),
@@ -492,7 +519,11 @@ DINING_ROOM = [
     tool("sale.order.set_label", "Retitle an open check."),
     tool("sale.order.set_note", "Write a note on an open check."),
     tool("table.session.open", "Seat a party at a free or reserved table: its check opens in Sales titled with the "
-         "table.", input=SeatIn),
+         "table.", input=SeatIn,
+         asks={"en": ("a party of two just sat down at table 7",), "es": ("han llegado dos para la mesa 7",)}),
+    tool("table.session.park", "Park a table's open check: the table frees and the check waits, parked."),
+    tool("table.session.restore", "Seat a parked check at a free table again, with its guests.", input=RestoreIn,
+         asks={"en": ("bring the check we parked back to table 2",), "es": ("la cuenta aparcada vuelve a la mesa 2",)}),
     tool("table.session.set_guests", "Correct how many guests sit at a table's open check.", input=GuestsIn),
     tool("table.session.transfer", "Move a table's check to a free or reserved table: same check of Sales.",
          input=TransferIn),
@@ -513,19 +544,22 @@ CHECK = (("cuenta", "check", "tab", "order"),)
     ],
 )
 def test_what_a_waiter_does_to_a_table_comes_before_the_tills_checks(asked, language, first):
-    """«Traslada» and «comensales» reach the table's operation as «guests» does; Sales' writes of a check (named by
-    «cuenta») came first, as no action and no thing of the table was asked (live#48)."""
+    """«Sienta», «traslada» and «comensales» reach the table's operation as «guests» does; Sales' writes of a check
+    (named by «cuenta») came first, as no action and no thing of the table was asked (live#48). Seating people is
+    opening the table, not restoring a parked check."""
     names = ranked(DINING_ROOM, asked, language, synonyms=CHECK)
     assert names[0] == first, names[:4]
 
 
-def test_seating_a_party_is_opening_its_table():
-    """«Sienta a dos… y apunta… en la cuenta» asks what «abre a dos… y apunta…» does: open the table and note on the
-    check (Sales' ``add``). Without «sienta» as an open, the seat came behind every write of the check (live#48)."""
-    seat = ranked(DINING_ROOM, "sienta a dos personas en la mesa 3 y apunta un cumpleaños en la cuenta", synonyms=CHECK)
-    opened = ranked(DINING_ROOM, "abre a dos personas en la mesa 3 y apunta un cumpleaños en la cuenta", synonyms=CHECK)
-    assert seat == opened
-    assert "table.session.open" in seat[:3], seat[:4]
+@pytest.mark.parametrize(
+    ("asked", "language"),
+    [("vuelve a sentar la cuenta aparcada en la mesa 9", "es"), ("seat the parked check at table 9", "en")],
+)
+def test_a_parked_check_seated_again_is_restored(asked, language):
+    """Its check is Sales' (a «cuenta» is ``sale.order``), yet it is parked at a table: seating it is the table's
+    restore, never opening another check."""
+    names = ranked(DINING_ROOM, asked, language, synonyms=CHECK)
+    assert names[0] == "table.session.restore", names[:4]
 
 
 @pytest.mark.parametrize(

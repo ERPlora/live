@@ -198,8 +198,10 @@ VERBS = {
     "void": ("anula", "anular", "void"),
     "cancel": ("cancela", "cancelar", "anula", "anular", "cancel"),
     "close": ("cierra", "cerrar", "close"),
-    # Seating a party opens its check; a check taken to another table is transferred (ERPlora/live#48).
+    # Seating opens a table's check, or puts a parked one back at a table; a check taken to another table is
+    # transferred (ERPlora/live#48).
     "open": ("abre", "abrir", "empieza", "inicia", "sienta", "sentar", "open", "start", "begin", "seat"),
+    "restore": ("sienta", "sentar", "restaura", "restaurar", "seat", "restore"),
     "transfer": ("traslada", "trasladar", "transfiere", "transferir", "transfer"),
     "start": ("empieza", "inicia", "start", "begin"),
     "enable": ("activa", "activar", "activame", "enciende", "encender", "habilita", "habilitar", "enable", "activate",
@@ -338,6 +340,7 @@ SYNONYMS = (
     ("aparcar", "aparcada", "park"),
     ("etiqueta", "tag"),
     ("comensal", "guest"),
+    ("sentar", "sienta", "seat"),
     ("ajustes", "ajuste", "configuracion", "configurar", "configura", "settings", "setting", "setup", "configure",
      "set up"),
 )
