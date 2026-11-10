@@ -169,6 +169,7 @@ VERBS = {
                "cambiale el nombre", "cambiar el nombre", "ponle de nombre", "ponle el nombre", "ponle nombre",
                "pon de nombre", "change the name", "change its name"),
     "change": ("cambia", "cambiar", "change"),
+    "reorder": ("ordena", "ordenar", "reorder"),
     "rename": ("renombra", "renombrar", "rename", "cambia el nombre", "cambiale el nombre", "cambiar el nombre",
                "ponle de nombre", "ponle el nombre", "ponle nombre", "pon de nombre", "change the name",
                "change its name"),
