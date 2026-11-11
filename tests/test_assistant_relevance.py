@@ -692,6 +692,60 @@ def test_a_name_that_finds_the_thing_is_no_rename(said, verbs):
     assert assistant.asked([said]).verbs == verbs
 
 
+@pytest.mark.parametrize(
+    ("said", "verbs"),
+    [
+        ("cambia el precio del café y dime el nombre del cliente", {"change", "list", "set", "update"}),
+        ("change the price of the coffee and tell me the name of the customer", {"change", "set", "update"}),
+        # Dictated, with no «y» between the two commands.
+        ("cambia el precio del café dime el nombre del cliente", {"change", "list", "set", "update"}),
+        # The other command with its pronouns.
+        ("cámbiale el precio al café y búscame el nombre del cliente", {"change", "list", "set", "update"}),
+    ],
+)
+def test_a_name_another_command_asks_for_is_no_rename(said, verbs):
+    """«Cambia el precio … y dime el nombre del cliente» asks for two things: «el nombre» is of «dime», no name put on
+    anything, and «cambia» still changes (ERPlora/live#57, born of live#47's names said apart)."""
+    assert assistant.asked([said]).verbs == verbs
+
+
+def test_a_change_with_a_name_asked_after_it_is_no_rename():
+    """The writes that change come before the rename when the name is asked for by another command (ERPlora/live#57)."""
+    names = ranked(MENU, "cambia el precio del menú y dime el nombre del cliente")
+    assert names.index("menu.menu.update") < names.index("menu.menu.rename"), names[:6]
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        # A verb's word said of the thing named (after an article, or a «que» that says which) starts no command.
+        "ponle a la lista de precios el nombre «Verano»",
+        "change on the list its name to Summer",
+        "pon a la tablet que cobra en la barra el nombre «Barra»",
+        # Nor a word of a verb that names a thing (``_NOT_VERBS``).
+        "ponle a la mesa nueva el nombre «Terraza»",
+        # Nor the verb's word after one of those («la nueva lista» is a list, no «lista las…»).
+        "ponle a la nueva lista de precios el nombre «Verano»",
+        "change on the new list its name to Summer",
+    ],
+)
+def test_a_verbs_word_said_of_the_thing_named_still_renames(said):
+    assert {"rename", "set", "update"} <= assistant.asked([said]).verbs
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        *(f"ponle a {which} lista de precios el nombre «Verano»" for which in ("mi", "tu", "su", "nuestra", "esta", "esa")),
+        *(f"change on {which} list its name to Summer" for which in ("my", "your", "our", "this", "that")),
+    ],
+)
+def test_a_verbs_word_after_whose_or_which_thing_it_is_still_renames(said):
+    """«Esta lista», «mi lista», «this list» say which thing is named, like an article: no other command starts there
+    (the Hub's price lists are «lista de precios»; a name said apart renamed them before ERPlora/live#57)."""
+    assert {"rename", "set", "update"} <= assistant.asked([said]).verbs
+
+
 def test_being_available_is_no_device():
     """«Quiero volver a tener Reservas disponible» names no device: the app's own «disponible» brings it, before every
     device (ERPlora/live#47: 34th in the Hub, behind ``base.device.*``)."""
