@@ -240,8 +240,8 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   nombre «Barra»» o «cámbiale a la tablet el nombre», siempre que el nombre lleve su artículo y no diga por dónde se
   busca la cosa: «con el nombre», «de nombre» no renombran; live#47) y de que en medio no empiece otra orden: en
   «cambia el precio del café y dime el nombre del cliente» el nombre es de «dime» y «cambia» sigue cambiando; un verbo
-  tras un artículo o «que» es de la cosa, «ponle a la lista de precios el nombre «Verano»» renombra; live#57). «Ponle»,
-  «añade», «apunta» y «mete» añaden
+  tras un artículo, «mi», «esta» o «que» es de la cosa, «ponle a la lista de precios el nombre «Verano»» renombra;
+  live#57). «Ponle», «añade», «apunta» y «mete» añaden
   (`add`); «exporta», «descarga», «download» exportan; «importa», «súbeme», «upload» importan; «borremos todos sus
   datos» y «erase» borran del todo
   (`erase`); «empieza» y «start» abren; «sienta», «sentar» y «seat» abren una mesa o vuelven a sentar una cuenta aparcada

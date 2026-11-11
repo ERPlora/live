@@ -261,8 +261,9 @@ _HOW_TO_LEADS = frozenset({"dime", "explicame", "ensename", "sabes", "tell", "ex
 #: Articles an English command puts between «do» and what it does («do a refund»).
 _ARTICLES = frozenset({"a", "an", "the", "un", "una", "el", "la"})
 #: Words after which a verb's word says what the thing is, not another command: an article («ponle a la lista de precios
-#: el nombre») or «que» («pon a la tablet que cobra en la barra el nombre»).
-_DESCRIBING = _ARTICLES | {"que"}
+#: el nombre»), whose or which one it is («a mi lista», «a esta lista», «this list») or «que» («pon a la tablet que
+#: cobra en la barra el nombre»).
+_DESCRIBING = _ARTICLES | {"que", "mi", "tu", "su", "nuestra", "esta", "esa", "my", "your", "our", "this", "that"}
 #: How a question that asks to do starts («can you charge table 4?»): a request, not a question.
 _REQUESTS = frozenset({("can", "you"), ("could", "you"), ("would", "you"), ("will", "you"), ("me", "puedes"),
                        ("me", "podrias"), ("nos", "puedes"), ("please",), ("puedes",), ("podrias",), ("por", "favor")})
@@ -637,9 +638,10 @@ def _objects(
 def _starts_command(words: list[str], at: int) -> bool:
     """Whether another command starts at ``words[at]``, inside a sentence: a verb of ``VERBS`` («y dime», «búscame») or
     what only asks (``_FILLERS``: «and tell me»); never a verb's word said of the thing (after ``_DESCRIBING``: «a la
-    lista de precios») nor one that names a thing (``_NOT_VERBS``: «la mesa nueva»)."""
+    lista de precios») nor one that names a thing (``_NOT_VERBS``: «la mesa nueva») or comes after one («la nueva
+    lista»)."""
     word = words[at]
-    if words[at - 1] in _DESCRIBING or word in _NOT_VERBS:
+    if words[at - 1] in _DESCRIBING | _NOT_VERBS or word in _NOT_VERBS:
         return False
     return bool(_verbs_of(word)) or any(" ".join(words[at : at + len(one.split())]) == one for one in _FILLERS)
 

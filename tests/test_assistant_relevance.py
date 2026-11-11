@@ -724,9 +724,25 @@ def test_a_change_with_a_name_asked_after_it_is_no_rename():
         "pon a la tablet que cobra en la barra el nombre «Barra»",
         # Nor a word of a verb that names a thing (``_NOT_VERBS``).
         "ponle a la mesa nueva el nombre «Terraza»",
+        # Nor the verb's word after one of those («la nueva lista» is a list, no «lista las…»).
+        "ponle a la nueva lista de precios el nombre «Verano»",
+        "change on the new list its name to Summer",
     ],
 )
 def test_a_verbs_word_said_of_the_thing_named_still_renames(said):
+    assert {"rename", "set", "update"} <= assistant.asked([said]).verbs
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        *(f"ponle a {which} lista de precios el nombre «Verano»" for which in ("mi", "tu", "su", "nuestra", "esta", "esa")),
+        *(f"change on {which} list its name to Summer" for which in ("my", "your", "our", "this", "that")),
+    ],
+)
+def test_a_verbs_word_after_whose_or_which_thing_it_is_still_renames(said):
+    """«Esta lista», «mi lista», «this list» say which thing is named, like an article: no other command starts there
+    (the Hub's price lists are «lista de precios»; a name said apart renamed them before ERPlora/live#57)."""
     assert {"rename", "set", "update"} <= assistant.asked([said]).verbs
 
 
