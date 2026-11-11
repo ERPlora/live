@@ -323,6 +323,15 @@ MENU = [tool("menu.menu.aaa", "Does it to a menu."),
         ("empieza un menú", "es", {"open", "start"}),
         ("start a menu", "en", {"open", "start"}),
         ("ponle de nombre «Carta de verano» al menú", "es", {"rename"}),
+        # The name put with what it names in between (ERPlora/live#47): as a rename as «ponle el nombre» in a row.
+        ("pon al menú que estamos usando ahora el nombre «Carta de verano»", "es", {"rename", "set", "update"}),
+        ("ponle al menú el nombre «Carta de verano»", "es", {"rename", "set", "update"}),
+        ("cámbiale al menú de la terraza el nombre", "es", {"rename", "set", "update"}),
+        ("hay que ponerle al menú el nombre «Carta de verano»", "es", {"rename", "set", "update"}),
+        ("pon el nombre «Carta de verano» al menú", "es", {"rename"}),
+        # In English too: «change … the name», «change … its name».
+        ("change for this menu the name to Summer", "en", {"rename", "set", "update"}),
+        ("change on the menu we use now its name to Summer", "en", {"rename", "set", "update"}),
         # «Quiero empezar con…» starts from something (a template): it opens nothing.
         ("quiero empezar con el menú", "es", {"aaa"}),
     ],
@@ -592,6 +601,8 @@ def test_the_words_of_one_thing_name_it_in_either_language(said, english):
         ("comensales", "comentarios"), ("comensal", "comentario"), ("comensales", "comenzar"),
         # «Listo» (ready, done) is no «lista» nor «listar» (the command to list): all of them cut to «list» (live#54).
         ("listo", "lista"), ("listos", "listar"),
+        # «Disponible» (available) is no «dispositivo» (a device): both cut to «dispo» (ERPlora/live#47).
+        ("disponible", "dispositivo"), ("disponibles", "dispositivos"), ("disponibilidad", "dispositivo"),
     ],
 )
 def test_words_of_two_things_are_never_one_stem(one, other):
@@ -617,6 +628,7 @@ def test_words_of_two_things_are_never_one_stem(one, other):
         ("registro registros", "registro"),
         ("comensal comensales", "comensal"),
         ("listo listos", "listo"),
+        ("disponible disponibles disponibilidad", "dispon"),
     ],
 )
 def test_the_forms_of_a_word_kept_apart_still_join(words, stem):
@@ -632,6 +644,59 @@ ATTENDANCE_AND_CUSTOMER = [
 def test_the_customers_card_is_not_clocking_in():
     assert ranked(ATTENDANCE_AND_CUSTOMER, "abre la ficha de Marta")[0] == "customer.customer.get"
     assert ranked(ATTENDANCE_AND_CUSTOMER, "ficha la entrada de Ana")[0] == "attendance.record.clock_in"
+
+
+class NameIn(Schema):
+    name: str
+
+
+#: A device renamed among the writes that take a ``name`` and change it (``update``/``set``), as the Hub's forty.
+DEVICES = [
+    tool("base.app.enable", "Turns on one of this business's apps, with the apps it needs.",
+         asks={"es": ("vuelve a dejar disponible la app de tareas",)}),
+    tool("base.device.list", "Lists the devices that use this business: tablets, laptops, phones.", "query"),
+    tool("base.device.prune", "Removes the devices that have not been used for a month."),
+    tool("base.device.rename", "Names a device of this business («Barra», «Cocina»).", input=NameIn),
+    *(tool(f"appointment.thing{i:02}.{action}", f"{action.capitalize()}s an appointment thing.", input=NameIn)
+      for i in range(25) for action in ("set", "update")),
+]
+
+
+@pytest.mark.parametrize(
+    "asked",
+    [
+        "pon al dispositivo que estoy usando ahora el nombre «Barra»",
+        "ponle a esta tablet el nombre «Barra»",
+        "ponle de nombre «Barra» al dispositivo",
+    ],
+)
+def test_a_name_put_on_a_device_renames_it(asked):
+    """«Pon al dispositivo … el nombre «Barra»» renames it, as «ponle de nombre» does: the words between the verb and
+    the name do not make it any change that takes a ``name`` (ERPlora/live#47, 43rd of 40 in the Hub)."""
+    names = ranked(DEVICES, asked)
+    assert names[0] == "base.device.rename", names[:4]
+
+
+@pytest.mark.parametrize(
+    ("said", "verbs"),
+    [
+        # A name the thing is found by is no name put on it.
+        ("pon el precio del menú con el nombre «Café» a 3 €", {"set", "update"}),
+        ("change the price of the menu with the name Coffee", {"change", "set", "update"}),
+        ("cambia la reserva bajo el nombre de García a las nueve", {"change", "set", "update"}),
+        ("change the booking under the name Smith to nine", {"change", "set", "update"}),
+        ("ponle al menú de nombre «Carta» un precio", {"add", "set", "update"}),
+    ],
+)
+def test_a_name_that_finds_the_thing_is_no_rename(said, verbs):
+    assert assistant.asked([said]).verbs == verbs
+
+
+def test_being_available_is_no_device():
+    """«Quiero volver a tener Reservas disponible» names no device: the app's own «disponible» brings it, before every
+    device (ERPlora/live#47: 34th in the Hub, behind ``base.device.*``)."""
+    names = ranked(DEVICES, "quiero volver a tener Reservas disponible")
+    assert names[0] == "base.app.enable", names[:4]
 
 
 def test_receiving_goods_is_not_a_receipt():
