@@ -796,14 +796,12 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
         for of in acting.values():
             said |= of
         # A word that asks (a verb) names a thing only through its synonyms («cobra»: a sale); «show», «dame» none. So
-        # does a verb not asked («sin cobrar»: still a sale); what someone will do names what any word does.
+        # does a verb not asked («sin cobrar»: still a sale); what someone will do is no verb asked, and names as any
+        # word does.
         naming = [
             word for words in sentences for at, word in enumerate(words)
             if (word not in verbal or word in _PHRASE_NAMES) and len(word) >= 3 and word not in STOP_WORDS
-            and (
-                ((word not in acting or _foretold(words, at)) and not _unasked(words, at))
-                or len(_concept(word, extra)) > 1
-            )
+            and ((word not in acting and not _unasked(words, at)) or len(_concept(word, extra)) > 1)
         ]
         concepts |= {_concept(word, extra) for word in naming}
         concepts |= {group for phrase, group in phrases_named if any(phrase in one for one in joined)}
@@ -948,7 +946,11 @@ def _relevant(
     by_app = set() if names_a_thing else {
         concept for concept in concepts if any(not concept.isdisjoint(app_words(label, language)) for label in every_app)
     }
-    apps_named = switching and any(named(app_words(label, language)) for label in every_app)
+    # An app switched is the one the command acts on («activa las ventas»), not one named for what something is
+    # («vuelve a activar Mayorista para las próximas ventas»: a price list, ERPlora/live#50).
+    apps_named = switching and any(
+        not concept.isdisjoint(app_words(label, language)) for concept in said.objects for label in every_app
+    )
     # What a command acts on, when a tool does that to it or it is an app named by its name: then the writes of other
     # things are not what it asks («reserva una mesa» is no staff's create; «create a 10% discount» has no tool that
     # creates a discount, so the creates stay).

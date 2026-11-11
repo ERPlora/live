@@ -850,12 +850,35 @@ def test_what_is_approved_confirmed_or_switched_comes_first(asked, language, fir
     assert names[0] == first, names[:4]
 
 
+#: A price list and a payment method named only by their names, beside an app named by its own name («las ventas»).
+SWITCHED_BY_NAME = [*APPROVED_OR_SWITCHED, tool("sale.sale.list", "Lists the sales of a day.", "query")]
+
+
+@pytest.mark.parametrize(
+    ("asked", "language", "first"),
+    [
+        ("vuelve a activar Mayorista para las próximas ventas", "es", "pricing.price_list.activate"),
+        ("activate Wholesale again for the new sales", "en", "pricing.price_list.activate"),
+        ("activa las ventas", "es", "base.app.enable"),
+        ("desactiva las ventas", "es", "base.app.disable"),
+        ("turn off the sales", "en", "base.app.disable"),
+    ],
+)
+def test_an_app_is_switched_when_it_is_what_the_command_switches(asked, language, first):
+    """An app named is switched when it is what the command acts on («activa las ventas»); named for what something is
+    («vuelve a activar Mayorista para las próximas ventas»: a price list named by its name), it is not the thing switched
+    on, and the activation of the thing comes first (ERPlora/live#50; before, turning an app on did)."""
+    names = ranked(SWITCHED_BY_NAME, asked, language, synonyms=HUB_WORDS)
+    assert names[0] == first, names[:4]
+
+
 @pytest.mark.parametrize(
     ("said", "language"),
     [
         ("sí, confírmalo", "es"), ("confirma", "es"), ("vale, confirmo", "es"), ("claro, confírmalo", "es"),
-        ("adelante, confirma", "es"), ("confirma todo", "es"), ("confirma eso", "es"), ("confírmalo, por favor", "es"),
-        ("yes, confirm it", "en"), ("ok, confirm", "en"), ("sure, confirm that", "en"), ("confirm it, please", "en"),
+        ("adelante, confirma", "es"), ("confirma todo", "es"), ("confirma eso", "es"), ("confírmalo por favor", "es"),
+        ("sí confírmalo", "es"), ("yes, confirm it", "en"), ("ok, confirm", "en"), ("sure, confirm that", "en"),
+        ("please confirm it", "en"),
     ],
 )
 def test_a_yes_that_confirms_asks_nothing_of_its_own(said, language):

@@ -255,12 +255,24 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   que use mascarilla»), y «retira» y «retirar» lo quitan, lo retiran o lo retiran
   como permiso (`delete`, `remove`, `retire`, `withdraw`: decide la cosa nombrada, «retira la mesa 90», «retira el
   dispositivo», «retira su consentimiento»; en inglés, «retire» y «withdraw»), también con sus pronombres
-  («anótalo», «retírala»; live#64); «ponme la app», «instala» encienden; «how many» y «cuántos» cuentan (`count`, `list`, `stats`). «How», «which»,
+  («anótalo», «retírala»; live#64); «aprueba», «rechaza», «solicita» (y «solicito», «pido»; nunca «pide» ni «pedir»,
+  que en una mesa son lo que pide el cliente), «confirma» y «da de baja» piden su acción (`approve`, `reject`,
+  `request`, `confirm`, y `terminate` o `withdraw`: dar de baja a alguien del negocio o de la publicidad; su «baja»
+  sigue nombrando la baja), en infinitivo, como orden, en primera persona y con sus pronombres («apruébasela», «dale de
+  baja»); «desactiva», «deshabilita», «activa», «reactiva» y «habilita» apagan o encienden y también desactivan o
+  activan (`disable` y `deactivate`, `enable` y `activate`: decide la cosa nombrada; «activo» no, que es lo que algo
+  está), y una app se enciende o se apaga cuando es lo que la orden activa («activa las ventas»), no cuando se nombra
+  para qué es otra cosa («vuelve a activar Mayorista para las próximas ventas»: la tarifa; live#50); «ponme la app»,
+  «instala» encienden; «how many» y «cuántos» cuentan (`count`, `list`, `stats`). «How», «which»,
   «cómo» y «cuál» ya no son el verbo «listar». Un verbo no nombra cosas salvo por sus sinónimos («cobra» nombra la
   venta; «show me», «dame», «dime», «give me», «tell me» no nombran nada). Un infinitivo tras «sin», también con sus
   pronombres, dice lo que no se hace y no se pide («borra el grupo sin cambiar los pedidos», «sin quitarle el PIN»; como
   «without changing» en inglés; live#60): ni verbo, ni objeto de la orden, ni frase de renombrar, y nombra solo por sus
   sinónimos («sin cobrar» sigue nombrando la venta); el mismo verbo dicho en otro sitio de la frase sí se pide.
+  Tampoco se pide lo que alguien dice que hará, tras «'ll» o «will» («knock 60% off the wine, I'll approve it», «we
+  will open»): nombra como cualquier palabra. Y un «sí» que solo confirma («sí, confírmalo», «vale, confirmo», «yes,
+  confirm it») contesta a lo pedido antes y no pide ni nombra nada: tras «cancela la reserva de Ana», la cancelación
+  sigue primera (live#50).
 - **Preguntas**: una pregunta (palabra interrogativa con tilde, que empieza por una o por un auxiliar inglés, o con sus
   signos) pide saber aunque nombre un verbo («do I need a customer to charge?»): sus lecturas van primero y lo que nombra
   ese verbo es de lo que pregunta (`Asked.about`: «what can customers pay with?» → las formas de pago). Nunca es pregunta
