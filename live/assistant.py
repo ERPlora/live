@@ -427,17 +427,18 @@ _WHOLE = frozenset({"personal"})
 #: «contraseña» no «control», «recibo» (a receipt) no «recibir», «ficha» (a customer's card) no «fichar»,
 #: «settings» no «set», «registro» (a record) no «register» (the till), «comensal» (a diner) no «comentario» nor
 #: «comenzar», «listo» (ready, done) no «lista» (to list, a list), «disponible» (available) no «dispositivo»
-#: (a device), «sella» (to seal) no «sell», «existir» (to exist, «existing») no «existencias» (the stock, which keep
-#: their stem), «producción» («production») no «producto» and «comprobar» (to check) no «compra» (ERPlora/live#71).
+#: (a device), «sella» (to seal) no «sell» nor «sellable», «existir» (to exist, «existing») no «existencias» (the
+#: stock, which keep their stem), «producción» («production») no «producto» and «comprobar» (to check) no «compra»
+#: (ERPlora/live#71).
 _APART_WORDS = {"ficha": "ficha", "carta": "carta", "recibo": "recibo", "registro": "registro", "fiche": "fichar",
                 "ficho": "fichar", "listo": "listo", "selle": "sellar", "sellen": "sellar"}
 _APART_PREFIXES = (
     ("peluqueri", "peluqueri"), ("contrasen", "contrasen"), ("compart", "compart"), ("contract", "contrat"),
     ("contrat", "contrat"), ("receipt", "receipt"), ("fichaj", "fichar"), ("fichar", "fichar"), ("fichad", "fichar"),
     ("fichand", "fichar"), ("ficham", "fichar"), ("fichal", "fichar"), ("tablet", "tablet"), ("setting", "setting"),
-    ("comensal", "comensal"), ("dispon", "dispon"), ("sella", "sellar"), ("sello", "sellar"), ("existenci", "exist"),
-    ("exist", "existir"), ("produccion", "produccion"), ("production", "produccion"), ("comprob", "comprobar"),
-    ("comprue", "comprobar"),
+    ("comensal", "comensal"), ("dispon", "dispon"), ("sellab", "sellab"), ("sella", "sellar"), ("sello", "sellar"),
+    ("existenci", "exist"), ("exist", "existir"), ("produccion", "produccion"), ("production", "produccion"),
+    ("comprob", "comprobar"), ("comprue", "comprobar"),
 )
 #: A noun that is a command at the start of a sentence, followed by these: «ficha la entrada de Ana» clocks in, «abre
 #: la ficha de Ana» is her card; «reserva una mesa» books, «cancela la reserva» names one.
