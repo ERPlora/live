@@ -1012,23 +1012,68 @@ def products_app(label: str, language: str) -> frozenset[str]:
 
 
 @pytest.mark.parametrize(
-    ("asked", "first", "switch", "of_it"),
+    ("asked", "first"),
     [
-        ("vuelve a activar la regla de los productos", "tax.rule.activate", "base.app.enable",
-         "inventory.product.set_image"),
-        ("desactiva la regla española de los productos sin perder su porcentaje", "tax.rule.deactivate",
-         "base.app.disable", "inventory.product.set_image"),
-        ("desactiva la regla de la cocina", "tax.rule.deactivate", "base.app.disable", "kitchen.station.deactivate"),
+        ("vuelve a activar la regla de los productos", "tax.rule.activate"),
+        ("desactiva la regla española de los productos sin perder su porcentaje", "tax.rule.deactivate"),
+        ("desactiva la regla de la cocina", "tax.rule.deactivate"),
     ],
 )
-def test_what_a_thing_switched_is_of_is_neither_the_app_switched_nor_the_thing_changed(asked, first, switch, of_it):
+def test_what_a_thing_switched_is_of_does_not_take_its_place(asked, first):
     """«Vuelve a activar la regla de los productos» reactivates the rule: «los productos» only say of what it is, so the
-    rule (of Taxes, by its menu) is still the thing the switch names, and what it is of gets nothing for the switch —
-    neither a write that takes a product nor the kitchen's own tools as the thing —, behind turning Taxes on
-    (ERPlora/live#73; before, turning the app on came first, and putting a product's image before the rule)."""
+    rule (of Taxes, by its menu) is still the thing the switch names (ERPlora/live#73; before, turning the app on and
+    putting a product's image came first)."""
     offered_ = ranked(RULE_OF_AN_APP, asked, app_words=products_app)
     assert offered_[0] == first, offered_[:4]
-    assert offered_.index(switch) < offered_.index(of_it), offered_[:4]
+
+
+def test_the_app_of_what_a_thing_switched_is_of_is_not_the_thing():
+    """«La regla de la cocina»: the kitchen, named only to say of what the rule is, does not make its own tools the
+    thing switched; they come behind turning Taxes on (ERPlora/live#73)."""
+    offered_ = ranked(RULE_OF_AN_APP, "desactiva la regla de la cocina", app_words=products_app)
+    assert offered_.index("base.app.disable") < offered_.index("kitchen.station.deactivate"), offered_[:4]
+
+
+class InventoryConfigIn(Schema):
+    track_stock: bool | None = None
+    low_stock_threshold: int | None = None
+
+
+#: The Hub's inventory settings beside its products, the app of clocking in («Control horario») and the apps' switches.
+STOCK_SETTINGS = [
+    tool("inventory.config.update", "Change how the inventory works: whether stock is tracked, the low stock threshold.",
+         input=InventoryConfigIn),
+    tool("inventory.product.update", "Change a product: its data, active or not.", input=ProductIn),
+    tool("inventory.stock.count", "Count the stock of a product.", "query"),
+    tool("attendance.person.list", "List the people who clock in.", "query"),
+    tool("base.app.enable", "Turns on one of this business's apps, with the apps it needs."),
+    tool("base.app.disable", "Turns off one of this business's apps."),
+    *NOISE,
+]
+
+
+def stock_apps(label: str, language: str) -> frozenset[str]:
+    names_ = {"inventory": "inventory productos products", "attendance": "attendance control horario"}
+    return frozenset(assistant.stems(names_.get(label, label)))
+
+
+@pytest.mark.parametrize("asked", ["desactiva el aviso de stock bajo", "turn on the tracking of stock"])
+def test_what_a_switch_is_of_still_says_which_datum_it_changes(asked):
+    """«El aviso de stock bajo», «the tracking of stock»: what the thing switched is of says which datum of a write it
+    is (``low_stock_threshold``, ``track_stock``), so the write that takes it is what the switch changes, and the app
+    of the stock is not the one switched (ERPlora/live#73; its review: taking that datum away too left the inventory's
+    settings behind turning an app on)."""
+    names_ = ranked(STOCK_SETTINGS, asked, app_words=stock_apps)
+    assert names_[0] == "inventory.config.update", names_[:4]
+
+
+def test_an_app_that_switches_nothing_named_by_a_word_of_its_name_is_not_the_thing():
+    """«Activa el control de stock del café»: «control», a word of «Control horario», names an app that turns nothing
+    on, so the stock is still what it is of and the clocking in's tools are not the thing switched: they stay behind
+    the stock's (ERPlora/live#73)."""
+    names_ = ranked(STOCK_SETTINGS, "activa el control de stock del café", app_words=stock_apps)
+    assert names_.index("inventory.stock.count") < names_.index("attendance.person.list"), names_[:4]
+    assert names_.index("inventory.config.update") < names_.index("attendance.person.list"), names_[:4]
 
 
 class FlowSwitchIn(Schema):

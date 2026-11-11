@@ -975,17 +975,23 @@ def _relevant(
     helps = frozenset(howto) if said.howto else frozenset()
     always = tuple(always)
 
-    def named(words: frozenset[str], among: frozenset[frozenset[str]] = concepts) -> int:
-        return sum(1 for concept in among if not concept.isdisjoint(words))
+    def named(words: frozenset[str]) -> int:
+        return sum(1 for concept in concepts if not concept.isdisjoint(words))
 
     # The things the catalogue's tools are of. A question that names none of them but an app by its name («la cocina»:
     # the kitchen app, of tickets and stations) makes that app the thing; beside a thing named («el registro de
-    # eventos») the app's name only breaks ties. Of a switch, only what it switches counts: what says of what that is
-    # («vuelve a activar la regla de los productos»: the rule, of Taxes by its menu) is no thing beside it
-    # (ERPlora/live#73).
+    # eventos») the app's name only breaks ties. Of a switch that names an app that does it, what only says of what the
+    # thing switched is is no thing beside it («vuelve a activar la regla de los productos»: Taxes, by its menu, brings
+    # rules back); of another, it still names the thing («activa el control de stock»: ERPlora/live#73).
     things = frozenset().union(*(_things(op) for op in tools.values())) if concepts else frozenset()
     every_app = {op.app_label for op in tools.values()} if concepts else set()
-    switched = concepts - said.of_another if switching else concepts
+    switched = concepts
+    if switching and any(
+        not concept.isdisjoint(app_words(op.app_label, language)) and not verbs.isdisjoint(_acts(op))
+        for concept in said.direct
+        for op in tools.values()
+    ):
+        switched = concepts - said.of_another
     names_a_thing = any(not concept.isdisjoint(things) for concept in switched)
     by_app = set() if names_a_thing else {
         concept for concept in switched if any(not concept.isdisjoint(app_words(label, language)) for label in every_app)
@@ -1039,7 +1045,7 @@ def _relevant(
             else:
                 writes = matched - READ_VERBS
                 points += 7 if takes and writes else 3 if writes and not aimed_at else 1 if app_named else 0
-        elif switching and not _CHANGES.isdisjoint(acts) and named(_taken(op.input), switched):
+        elif switching and takes and not _CHANGES.isdisjoint(acts):
             points += 7
         if op.kind == "query":
             if about and any(not concept.isdisjoint(named_entity) for concept in about):
