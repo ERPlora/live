@@ -263,7 +263,9 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   activan (`disable` y `deactivate`, `enable` y `activate`: decide la cosa nombrada; «activo» no, que es lo que algo
   está), y una app se enciende o se apaga cuando la orden la nombra («activa las ventas», «activa otra vez las
   ventas»), no cuando se nombra para qué es otra cosa, tras «para» o «for» («vuelve a activar Mayorista para las
-  próximas ventas»: la tarifa; live#50); «ponme la app»,
+  próximas ventas»: la tarifa; live#50), ni cuando solo dice de qué es otra cosa, tras «de», «del» u «of» detrás de una
+  palabra que nombra («vuelve a activar la regla de los productos», «the rule of the products»: la regla; nunca «la app
+  de clientes» ni «el módulo de reservas», que son la app; `Asked.of_another`, live#73); «ponme la app»,
   «instala» encienden; «how many» y «cuántos» cuentan (`count`, `list`, `stats`). «How», «which»,
   «cómo» y «cuál» ya no son el verbo «listar». Un verbo no nombra cosas salvo por sus sinónimos («cobra» nombra la
   venta; «show me», «dame», «dime», «give me», «tell me» no nombran nada). Un infinitivo tras «sin», también con sus
@@ -296,7 +298,10 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   altas, porque ninguna herramienta crea un descuento); una lectura sin cosa nombrada suma 1 solo si se nombra su app
   (los «cuántos» no levantan todas las listas), y un dato por el que filtra no es lo que lee. Encender o apagar algo
   que una escritura toma la cambia («turn off the alerts» → `accounts.preferences.update`); una escritura de una cosa
-  nombrada tras el verbo trae la lectura que la encuentra («borra el cliente Ana»).
+  nombrada tras el verbo trae la lectura que la encuentra («borra el cliente Ana»). Al encender o apagar, lo que solo
+  dice de qué es la cosa no cuenta como cosa nombrada ni como el dato que se cambia: en «vuelve a activar la regla de
+  los productos», «la regla» sigue siendo la cosa (también la de una app que la nombra en su menú) y una escritura que
+  toma un producto no suma por el interruptor (live#73).
 - **Sinónimos del proyecto** (`synonyms=`): `SYNONYMS` guarda solo lo que una palabra significa en cualquier negocio.
   Lo que significa solo en un proyecto lo pasa ese proyecto en cada turno y en su QA, nunca se fija en `live`: «cuenta»
   es la cuenta de una mesa en el Hub (`(("cuenta", "check", "tab", "order"),)`) y la cuenta de la persona en el SaaS

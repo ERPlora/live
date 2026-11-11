@@ -982,9 +982,9 @@ class ProductImageIn(Schema):
     image: str | None = None
 
 
-#: A tax rule named beside the thing it is of: the Hub's Taxes, whose «regla» is no synonym of «rule» but names the app
-#: by its menu («Reglas»; its asks say the rest), and Products, beside the switches of an app and a write that takes a
-#: product.
+#: A tax rule named beside what it is of: the Hub's Taxes, whose «regla» is no synonym of «rule» but names the app by
+#: its menu («Reglas»; its asks say the rest), Products and the Kitchen, beside the switches of an app, a write that
+#: takes a product and the kitchen's own deactivation.
 RULE_OF_AN_APP = [
     *APPROVED_OR_SWITCHED,
     tool("inventory.product.set_image", "Put a product's image.", input=ProductImageIn),
@@ -996,8 +996,9 @@ RULE_OF_AN_APP = [
          asks={"es": ("desactiva la regla de IVA de los libros", "deja de aplicar por ahora la regla fiscal del 10 %",
                       "desactiva de momento la regla de impuestos de España para la comida")}),
     tool("tax.rule.list", "List the tax rules.", "query"),
+    tool("kitchen.station.deactivate", "Stop sending orders to a kitchen station."),
 ]
-PRODUCTS_APP = {"inventory": "inventory products productos", "tax": "tax taxes impuestos reglas", "sale": "sale sales ventas",
+PRODUCTS_APP = {"inventory": "inventory products productos", "tax": "tax taxes impuestos reglas", "kitchen": "kitchen cocina", "sale": "sale sales ventas",
                 "reservation": "reservation reservations reservas"}
 
 
@@ -1006,21 +1007,23 @@ def products_app(label: str, language: str) -> frozenset[str]:
 
 
 @pytest.mark.parametrize(
-    ("asked", "first", "switch"),
+    ("asked", "first", "switch", "of_it"),
     [
-        ("vuelve a activar la regla de los productos", "tax.rule.activate", "base.app.enable"),
+        ("vuelve a activar la regla de los productos", "tax.rule.activate", "base.app.enable",
+         "inventory.product.set_image"),
         ("desactiva la regla española de los productos sin perder su porcentaje", "tax.rule.deactivate",
-         "base.app.disable"),
+         "base.app.disable", "inventory.product.set_image"),
+        ("desactiva la regla de la cocina", "tax.rule.deactivate", "base.app.disable", "kitchen.station.deactivate"),
     ],
 )
-def test_what_a_thing_switched_is_of_is_neither_the_app_switched_nor_the_thing_changed(asked, first, switch):
+def test_what_a_thing_switched_is_of_is_neither_the_app_switched_nor_the_thing_changed(asked, first, switch, of_it):
     """«Vuelve a activar la regla de los productos» reactivates the rule: «los productos» only say of what it is, so the
-    rule (of Taxes, by its menu) is still the thing the switch names, and a write that takes a product gets nothing for
-    the switch, behind turning Taxes on (ERPlora/live#73; before, turning the app on came first, and putting a
-    product's image before the rule)."""
+    rule (of Taxes, by its menu) is still the thing the switch names, and what it is of gets nothing for the switch —
+    neither a write that takes a product nor the kitchen's own tools as the thing —, behind turning Taxes on
+    (ERPlora/live#73; before, turning the app on came first, and putting a product's image before the rule)."""
     offered_ = ranked(RULE_OF_AN_APP, asked, app_words=products_app)
     assert offered_[0] == first, offered_[:4]
-    assert offered_.index(switch) < offered_.index("inventory.product.set_image"), offered_[:4]
+    assert offered_.index(switch) < offered_.index(of_it), offered_[:4]
 
 
 class FlowSwitchIn(Schema):
