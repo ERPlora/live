@@ -353,9 +353,9 @@ _WHOLE = frozenset({"personal"})
 #: no «company», «peluquería» (the business) no «peluquero» (its staff), «carta» (the menu) no «cart», «contrato» and
 #: «contraseña» no «control», «recibo» (a receipt) no «recibir», «ficha» (a customer's card) no «fichar»,
 #: «settings» no «set», «registro» (a record) no «register» (the till), «comensal» (a diner) no «comentario» nor
-#: «comenzar».
+#: «comenzar», «listo» (ready, done) no «lista» (to list, a list).
 _APART_WORDS = {"ficha": "ficha", "carta": "carta", "recibo": "recibo", "registro": "registro", "fiche": "fichar",
-                "ficho": "fichar"}
+                "ficho": "fichar", "listo": "listo"}
 _APART_PREFIXES = (
     ("peluqueri", "peluqueri"), ("contrasen", "contrasen"), ("compart", "compart"), ("contract", "contrat"),
     ("contrat", "contrat"), ("receipt", "receipt"), ("fichaj", "fichar"), ("fichar", "fichar"), ("fichad", "fichar"),

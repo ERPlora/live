@@ -590,6 +590,8 @@ def test_the_words_of_one_thing_name_it_in_either_language(said, english):
         ("receipt", "receive"), ("settings", "set"), ("registros", "register"),
         # «Comensal» (a diner) is no «comentario» (a comment) nor «comenzar» (to begin): all three cut to «comen».
         ("comensales", "comentarios"), ("comensal", "comentario"), ("comensales", "comenzar"),
+        # «Listo» (ready, done) is no «lista» nor «listar» (the command to list): all of them cut to «list» (live#54).
+        ("listo", "lista"), ("listos", "listar"),
     ],
 )
 def test_words_of_two_things_are_never_one_stem(one, other):
@@ -614,6 +616,7 @@ def test_words_of_two_things_are_never_one_stem(one, other):
         ("setting settings", "setting"),
         ("registro registros", "registro"),
         ("comensal comensales", "comensal"),
+        ("listo listos", "listo"),
     ],
 )
 def test_the_forms_of_a_word_kept_apart_still_join(words, stem):
@@ -636,6 +639,39 @@ def test_receiving_goods_is_not_a_receipt():
              tool("purchase.order.receive", "Receives the goods of a purchase order into the stock.")]
     assert ranked(tools, "recibe la mercancía del proveedor")[0] == "purchase.order.receive"
     assert ranked(tools, "imprime el recibo")[0] == "kitchen.ticket.print"
+
+
+#: The kitchen's two writes of a dish done, with the Hub's descriptions, amid the slice's lists.
+KITCHEN_AMID_LISTS = [
+    tool("kitchen.item.bump", "Mark dishes ready: some of a ticket, or all of it on one station («the burgers of "
+         "table 4 are ready»). The first one starts the ticket; with nothing left to do it goes to the pass.",
+         asks={"es": ("el plato de la mesa 2 ya está listo", "marca como hechas las patatas de la plancha")}),
+    tool("kitchen.item.recall", "Bring back dishes marked ready by mistake; a ticket at the pass goes back to "
+         "preparing.", asks={"es": ("me he equivocado con el plato de la 4: déjalo otra vez pendiente",)}),
+    *HUB_SLICE,
+    *NOISE,
+]
+
+
+@pytest.mark.parametrize(
+    ("asked", "kitchen"),
+    [
+        ("marca como listos los dos cafés de la mesa 4", "kitchen.item.bump"),
+        ("el café de la mesa 4 ya está listo", "kitchen.item.bump"),
+        ("devuelve a pendientes los cafés que acabo de marcar listos", "kitchen.item.recall"),
+    ],
+)
+def test_dishes_said_ready_are_the_kitchens_not_a_list(asked, kitchen):
+    """«Listo» and «listos» say a dish is done: they reach the kitchen's writes before any tool that lists (each
+    ``*.list`` was a thing named, and the kitchen's tools fell out of the ones offered, live#54)."""
+    names = ranked(KITCHEN_AMID_LISTS, asked)
+    assert kitchen in names, names[:4]
+    assert not any(name.endswith(".list") for name in names[: names.index(kitchen)]), names[:4]
+
+
+def test_a_list_is_still_said_lista():
+    """«Lista» is the command to list and a list («las listas de precios»): «listo», kept apart, takes none of it."""
+    assert assistant.stems("lista listas listar") == {"list"}
 
 
 def test_what_a_word_names_may_be_the_projects_own():
