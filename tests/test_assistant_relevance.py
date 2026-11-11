@@ -744,7 +744,12 @@ def test_a_leave_given_still_names_the_leave():
 
 @pytest.mark.parametrize(
     "said",
-    ["la mesa 4 pide la cuenta", "cancela la cuenta de la mesa 5, que se fueron sin pedir", "¿qué suele pedir Ana?"],
+    [
+        "la mesa 4 pide la cuenta",
+        "cancela la cuenta de la mesa 5, que se fueron sin pedir",
+        "¿qué suele pedir Ana?",
+        "la mesa 4 quiere pedir la cuenta",
+    ],
 )
 def test_what_a_customer_orders_is_no_request(said):
     """«Pide» and «pedir» are, at a table, what a customer orders («pide la cuenta», «se fueron sin pedir»): only
@@ -862,14 +867,55 @@ SWITCHED_BY_NAME = [*APPROVED_OR_SWITCHED, tool("sale.sale.list", "Lists the sal
         ("activa las ventas", "es", "base.app.enable"),
         ("desactiva las ventas", "es", "base.app.disable"),
         ("turn off the sales", "en", "base.app.disable"),
+        # With words between the verb and the app, or the app named in the sentence before: still the app's switch.
+        ("activa otra vez las ventas", "es", "base.app.enable"),
+        ("activa también las ventas", "es", "base.app.enable"),
+        ("quiero activar ya mismo las ventas", "es", "base.app.enable"),
+        ("desactiva de momento las ventas", "es", "base.app.disable"),
+        ("ya no usamos las ventas, desactívalas", "es", "base.app.disable"),
+        ("deactivate the sales for now", "en", "base.app.disable"),
     ],
 )
 def test_an_app_is_switched_when_it_is_what_the_command_switches(asked, language, first):
-    """An app named is switched when it is what the command acts on («activa las ventas»); named for what something is
-    («vuelve a activar Mayorista para las próximas ventas»: a price list named by its name), it is not the thing switched
-    on, and the activation of the thing comes first (ERPlora/live#50; before, turning an app on did)."""
+    """An app named is switched when it is what the command switches («activa las ventas», «activa otra vez las
+    ventas»); named for what something is, after «para» or «for» («vuelve a activar Mayorista para las próximas
+    ventas»: a price list named by its name), it is not the thing switched on, and the activation of the thing comes
+    first (ERPlora/live#50; before, turning an app on did)."""
     names = ranked(SWITCHED_BY_NAME, asked, language, synonyms=HUB_WORDS)
     assert names[0] == first, names[:4]
+
+
+@pytest.mark.parametrize(
+    ("asked", "language", "first"),
+    [
+        ("desactiva las ventas", "es", "base.app.disable"),
+        ("hay que desactivar las ventas", "es", "base.app.disable"),
+        ("deactivate the sales", "en", "base.app.disable"),
+        ("desactiva al empleado Pablo", "es", "staff.member.deactivate"),
+    ],
+)
+def test_an_app_is_switched_off_also_when_a_project_makes_the_verb_a_thing(asked, language, first):
+    """A project may say «desactiva» names a deactivation (its ``synonyms``, as the Hub's do): the verb is then the
+    thing the command acts on, and an app named by its name is still the one switched off (ERPlora/live#50)."""
+    synonyms = (*HUB_WORDS, ("desactiva", "desactivar", "deactivate"))
+    names = ranked(SWITCHED_BY_NAME, asked, language, synonyms=synonyms)
+    assert names[0] == first, names[:4]
+
+
+@pytest.mark.parametrize(
+    ("said", "direct"),
+    [
+        ("vuelve a activar Mayorista para las próximas ventas", False),
+        ("activate Wholesale again for the new sales", False),
+        ("activa otra vez las ventas", True),
+        ("activa las ventas para el turno de noche", True),
+    ],
+)
+def test_a_thing_named_after_para_is_named_for_what_another_is(said, direct):
+    """``Asked.direct`` holds what is named outside what something is for: «ventas» after «para» or «for» is not."""
+    heard = assistant.asked([said])
+    assert any("venta" in concept or "sale" in concept for concept in heard.concepts)  # positive control: it is named
+    assert any("venta" in concept or "sale" in concept for concept in heard.direct) is direct
 
 
 @pytest.mark.parametrize(

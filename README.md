@@ -261,8 +261,9 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   sigue nombrando la baja), en infinitivo, como orden, en primera persona y con sus pronombres («apruébasela», «dale de
   baja»); «desactiva», «deshabilita», «activa», «reactiva» y «habilita» apagan o encienden y también desactivan o
   activan (`disable` y `deactivate`, `enable` y `activate`: decide la cosa nombrada; «activo» no, que es lo que algo
-  está), y una app se enciende o se apaga cuando es lo que la orden activa («activa las ventas»), no cuando se nombra
-  para qué es otra cosa («vuelve a activar Mayorista para las próximas ventas»: la tarifa; live#50); «ponme la app»,
+  está), y una app se enciende o se apaga cuando la orden la nombra («activa las ventas», «activa otra vez las
+  ventas»), no cuando se nombra para qué es otra cosa, tras «para» o «for» («vuelve a activar Mayorista para las
+  próximas ventas»: la tarifa; live#50); «ponme la app»,
   «instala» encienden; «how many» y «cuántos» cuentan (`count`, `list`, `stats`). «How», «which»,
   «cómo» y «cuál» ya no son el verbo «listar». Un verbo no nombra cosas salvo por sus sinónimos («cobra» nombra la
   venta; «show me», «dame», «dime», «give me», «tell me» no nombran nada). Un infinitivo tras «sin», también con sus

@@ -267,6 +267,9 @@ _OWN_OBJECT = frozenset({"el", "la", "los", "las", "the"})
 _WITHOUT = frozenset({"sin"})
 #: The words after which a verb says what someone will do, not what is asked («I'll approve it», «we will open»).
 _FUTURE = frozenset({"ll", "will"})
+#: The words after which a thing is named for what another is («para las próximas ventas», «for the new sales»): to the
+#: end of their sentence, it is not what a command switches (ERPlora/live#50).
+_FOR_WHAT = frozenset({"para", "for"})
 #: The action a yes to what was asked before says («sí, confírmalo»), and the words it is said with besides greetings.
 _CONFIRMS = frozenset({"confirm"})
 _YES = frozenset({"si", "yes", "claro", "adelante", "sure", "it", "that", "todo", "eso", "por", "favor", "please"})
@@ -573,7 +576,9 @@ class Asked(NamedTuple):
     without asking for it names, «pay» in «what can customers pay with?»), whether it asks how something is done
     (``howto``) and what each command acts on (``objects``: the first thing it names from its verb on — «crea la
     carpeta Facturas» creates a folder; «cobra la mesa» charges a sale, the verb's own thing), of which ``records``
-    the ones a word after the verb names («borra el cliente Ana»: a customer to find)."""
+    the ones a word after the verb names («borra el cliente Ana»: a customer to find). ``direct`` are the things named
+    outside what something is for (``_FOR_WHAT``: «ventas» in «activa las ventas», not in «para las próximas
+    ventas»)."""
 
     concepts: frozenset[frozenset[str]]
     verbs: frozenset[str]
@@ -582,6 +587,7 @@ class Asked(NamedTuple):
     howto: bool
     objects: frozenset[frozenset[str]] = frozenset()
     records: frozenset[frozenset[str]] = frozenset()
+    direct: frozenset[frozenset[str]] = frozenset()
 
 
 def _phrase_verbs(phrase: str) -> frozenset[str]:
@@ -768,6 +774,7 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
     about: set[frozenset[str]] = set()
     objects: set[frozenset[str]] = set()
     records: set[frozenset[str]] = set()
+    direct: set[frozenset[str]] = set()
     reading = howto = False
     for text in texts:
         # A yes to what was asked before asks for nothing of its own: the write it agrees to is in the texts before.
@@ -799,11 +806,12 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
         # does a verb not asked («sin cobrar»: still a sale); what someone will do is no verb asked, and names as any
         # word does.
         naming = [
-            word for words in sentences for at, word in enumerate(words)
+            (word, _FOR_WHAT.isdisjoint(words[:at])) for words in sentences for at, word in enumerate(words)
             if (word not in verbal or word in _PHRASE_NAMES) and len(word) >= 3 and word not in STOP_WORDS
             and ((word not in acting and not _unasked(words, at)) or len(_concept(word, extra)) > 1)
         ]
-        concepts |= {_concept(word, extra) for word in naming}
+        concepts |= {_concept(word, extra) for word, _ in naming}
+        direct |= {_concept(word, extra) for word, outside in naming if outside}
         concepts |= {group for phrase, group in phrases_named if any(phrase in one for one in joined)}
         acted, named_after = _objects(heard, acting, verbal, extra)
         objects |= acted
@@ -822,7 +830,14 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
         howto = howto or doing is not None
         verbs |= said
     return Asked(
-        frozenset(concepts), frozenset(verbs), reading, frozenset(about), howto, frozenset(objects), frozenset(records)
+        frozenset(concepts),
+        frozenset(verbs),
+        reading,
+        frozenset(about),
+        howto,
+        frozenset(objects),
+        frozenset(records),
+        frozenset(direct),
     )
 
 
@@ -946,10 +961,11 @@ def _relevant(
     by_app = set() if names_a_thing else {
         concept for concept in concepts if any(not concept.isdisjoint(app_words(label, language)) for label in every_app)
     }
-    # An app switched is the one the command acts on («activa las ventas»), not one named for what something is
-    # («vuelve a activar Mayorista para las próximas ventas»: a price list, ERPlora/live#50).
+    # An app switched is one the command names («activa las ventas», «activa otra vez las ventas», «ya no usamos la
+    # cocina, desactívala»), not one named for what something is («vuelve a activar Mayorista para las próximas ventas»:
+    # a price list, ERPlora/live#50).
     apps_named = switching and any(
-        not concept.isdisjoint(app_words(label, language)) for concept in said.objects for label in every_app
+        not concept.isdisjoint(app_words(label, language)) for concept in said.direct for label in every_app
     )
     # What a command acts on, when a tool does that to it or it is an app named by its name: then the writes of other
     # things are not what it asks («reserva una mesa» is no staff's create; «create a 10% discount» has no tool that
