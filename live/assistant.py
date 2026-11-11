@@ -260,6 +260,9 @@ _GREETINGS = frozenset({"hola", "hey", "hi", "hello", "oye", "vale", "ok", "okay
 _HOW_TO_LEADS = frozenset({"dime", "explicame", "ensename", "sabes", "tell", "explain", "show", "me", "us", "please"})
 #: Articles an English command puts between «do» and what it does («do a refund»).
 _ARTICLES = frozenset({"a", "an", "the", "un", "una", "el", "la"})
+#: Words after which a verb's word says what the thing is, not another command: an article («ponle a la lista de precios
+#: el nombre») or «que» («pon a la tablet que cobra en la barra el nombre»).
+_DESCRIBING = _ARTICLES | {"que"}
 #: How a question that asks to do starts («can you charge table 4?»): a request, not a question.
 _REQUESTS = frozenset({("can", "you"), ("could", "you"), ("would", "you"), ("will", "you"), ("me", "puedes"),
                        ("me", "podrias"), ("nos", "puedes"), ("please",), ("puedes",), ("podrias",), ("por", "favor")})
@@ -631,19 +634,33 @@ def _objects(
     return found, after
 
 
+def _starts_command(words: list[str], at: int) -> bool:
+    """Whether another command starts at ``words[at]``, inside a sentence: a verb of ``VERBS`` («y dime», «búscame») or
+    what only asks (``_FILLERS``: «and tell me»); never a verb's word said of the thing (after ``_DESCRIBING``: «a la
+    lista de precios») nor one that names a thing (``_NOT_VERBS``: «la mesa nueva»)."""
+    word = words[at]
+    if words[at - 1] in _DESCRIBING or word in _NOT_VERBS:
+        return False
+    return bool(_verbs_of(word)) or any(" ".join(words[at : at + len(one.split())]) == one for one in _FILLERS)
+
+
 def _split_naming(sentences: list[list[str]]) -> set[tuple[str, str]]:
     """The naming phrases (``_NAMING``) of ``sentences`` said with words between their verb and the name («pon al
     dispositivo el nombre»; its pronouns too: «cámbiale a la tablet el nombre»), each with its verb as said; never a
-    name that finds the thing (``_FOUND_BY``: «con el nombre»)."""
+    name that finds the thing (``_FOUND_BY``: «con el nombre») nor one after another command starts
+    (``_starts_command``: «cambia el precio y dime el nombre del cliente», ERPlora/live#57)."""
     found: set[tuple[str, str]] = set()
     for words in sentences:
         for at, word in enumerate(words):
             head = word if word in _NAMING else _unclitic(word)
-            for rest in _NAMING.get(head or "", ()):
+            if head not in _NAMING:
+                continue
+            end = next((later for later in range(at + 1, len(words)) if _starts_command(words, later)), len(words))
+            for rest in _NAMING[head]:
                 size = len(rest)
                 if any(
                     tuple(words[later : later + size]) == rest and words[later - 1] not in _FOUND_BY
-                    for later in range(at + 2, len(words) - size + 1)
+                    for later in range(at + 2, end - size + 1)
                 ):
                     found.add((word, " ".join((head, *rest))))
     return found
