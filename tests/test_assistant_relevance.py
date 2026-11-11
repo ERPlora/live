@@ -836,6 +836,18 @@ def test_a_verb_with_its_own_object_puts_no_name_said_later(said):
     assert assistant.asked([said]).verbs == {"change", "list", "set", "update"}
 
 
+@pytest.mark.parametrize(
+    ("said", "verbs"),
+    [
+        # A naming verb that ends the sentence has no word after it to be its own object.
+        ("el nombre de la tablet lo quiero cambiar", {"change", "set", "update"}),
+        ("that name I want to change", {"change", "set", "update"}),
+    ],
+)
+def test_a_naming_verb_that_ends_the_sentence_is_read(said, verbs):
+    assert assistant.asked([said]).verbs == verbs
+
+
 def test_being_available_is_no_device():
     """«Quiero volver a tener Reservas disponible» names no device: the app's own «disponible» brings it, before every
     device (ERPlora/live#47: 34th in the Hub, behind ``base.device.*``)."""
