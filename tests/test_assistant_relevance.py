@@ -329,6 +329,9 @@ MENU = [tool("menu.menu.aaa", "Does it to a menu."),
         ("cámbiale al menú de la terraza el nombre", "es", {"rename", "set", "update"}),
         ("hay que ponerle al menú el nombre «Carta de verano»", "es", {"rename", "set", "update"}),
         ("pon el nombre «Carta de verano» al menú", "es", {"rename"}),
+        # In English too: «change … the name», «change … its name».
+        ("change for this menu the name to Summer", "en", {"rename", "set", "update"}),
+        ("change on the menu we use now its name to Summer", "en", {"rename", "set", "update"}),
         # «Quiero empezar con…» starts from something (a template): it opens nothing.
         ("quiero empezar con el menú", "es", {"aaa"}),
     ],
@@ -680,6 +683,8 @@ def test_a_name_put_on_a_device_renames_it(asked):
         # A name the thing is found by is no name put on it.
         ("pon el precio del menú con el nombre «Café» a 3 €", {"set", "update"}),
         ("change the price of the menu with the name Coffee", {"change", "set", "update"}),
+        ("cambia la reserva bajo el nombre de García a las nueve", {"change", "set", "update"}),
+        ("change the booking under the name Smith to nine", {"change", "set", "update"}),
         ("ponle al menú de nombre «Carta» un precio", {"add", "set", "update"}),
     ],
 )

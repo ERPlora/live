@@ -226,7 +226,7 @@ for _phrase in VERBS["rename"]:
     if len(_rest) == 2 and _rest[0] in {"el", "the", "its"}:
         _NAMING[_head] = (*_NAMING.get(_head, ()), tuple(_rest))
 #: The words before a name that make it what a thing is found by, not the name put on it («con el nombre»).
-_FOUND_BY = frozenset({"con", "por", "de", "del", "with", "by", "of", "under"})
+_FOUND_BY = frozenset({"con", "por", "de", "del", "bajo", "with", "by", "of", "under"})
 #: The actions that only read: a question that asks for none of the others asks to know, not to do. Asked of nothing
 #: named, they bring no tool: «¿cuántos…?» is no list of everything.
 READ_VERBS = frozenset({"list", "get", "options", "count", "check", "stats"})
