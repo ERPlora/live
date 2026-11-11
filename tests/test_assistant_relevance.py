@@ -918,6 +918,81 @@ def test_a_thing_named_after_para_is_named_for_what_another_is(said, direct):
     assert any("venta" in concept or "sale" in concept for concept in heard.direct) is direct
 
 
+def names(concepts: frozenset[frozenset[str]], word: str) -> bool:
+    return any(not concept.isdisjoint(assistant.stems(word)) for concept in concepts)
+
+
+@pytest.mark.parametrize(
+    ("said", "word", "direct"),
+    [
+        # What says of what the thing named is: after «de», «del» or «of» and their articles, behind a word that names.
+        ("vuelve a activar la regla de los productos", "productos", False),
+        ("desactiva la regla española de los productos", "productos", False),
+        ("desactiva la tarifa del producto", "producto", False),
+        ("vuelve a activar la regla de IVA de los productos", "productos", False),
+        ("reactivate the rule of the products", "products", False),
+        # An app named as one is the app («la app de clientes»), in either language; a «de» behind the verb, or after
+        # the app named, says nothing of another thing.
+        ("activa la app de clientes", "clientes", True),
+        ("activa la aplicación de clientes", "clientes", True),
+        ("desactiva el módulo de reservas", "reservas", True),
+        ("turn on the module of bookings", "bookings", True),
+        ("desactiva de momento las ventas", "ventas", True),
+        ("activa las ventas del turno de noche", "ventas", True),
+    ],
+)
+def test_what_says_of_what_a_thing_is_is_not_named_directly(said, word, direct):
+    """``Asked.direct`` holds no thing named only to say of what another is: «los productos» in «vuelve a activar la
+    regla de los productos» is what the rule is of, not what the command switches (ERPlora/live#73)."""
+    heard = assistant.asked([said])
+    assert names(heard.concepts, word)  # positive control: it is named
+    assert names(heard.direct, word) is direct
+
+
+class ProductImageIn(Schema):
+    product: str
+    image: str | None = None
+
+
+#: A tax rule named beside the app its rule is of: the Hub's Taxes and Products, whose «regla» is no synonym of «rule»
+#: (the Hub's asks say it), beside the switches of an app and a write that takes a product.
+RULE_OF_AN_APP = [
+    *APPROVED_OR_SWITCHED,
+    tool("inventory.product.set_image", "Put a product's image.", input=ProductImageIn),
+    tool("tax.rule.activate", "Bring a deactivated tax rule back so it applies to new operations again.",
+         asks={"es": ("reactiva la regla de IVA de los libros",
+                      "vuelve a poner en marcha en España la regla de impuestos de la comida",
+                      "recupera la regla fiscal de Portugal que está desactivada")}),
+    tool("tax.rule.deactivate", "Deactivate a tax rule so it no longer applies to new operations.",
+         asks={"es": ("desactiva la regla de IVA de los libros", "deja de aplicar por ahora la regla fiscal del 10 %",
+                      "desactiva de momento la regla de impuestos de España para la comida")}),
+    tool("tax.rule.list", "List the tax rules.", "query"),
+]
+PRODUCTS_APP = {"inventory": "inventory products productos", "tax": "tax taxes impuestos", "sale": "sale sales ventas",
+                "reservation": "reservation reservations reservas"}
+
+
+def products_app(label: str, language: str) -> frozenset[str]:
+    return frozenset(assistant.stems(PRODUCTS_APP.get(label, label)))
+
+
+@pytest.mark.parametrize(
+    ("asked", "first", "switch"),
+    [
+        ("vuelve a activar la regla de los productos", "tax.rule.activate", "base.app.enable"),
+        ("desactiva la regla española de los productos sin perder su porcentaje", "tax.rule.deactivate",
+         "base.app.disable"),
+    ],
+)
+def test_what_a_thing_switched_is_of_is_neither_the_app_switched_nor_the_thing_changed(asked, first, switch):
+    """«Vuelve a activar la regla de los productos» reactivates the rule: the app of the products is not the one turned
+    on, nor a write that takes a product what the command changes (ERPlora/live#73; before, turning the app on and
+    putting a product's image came first)."""
+    offered_ = ranked(RULE_OF_AN_APP, asked, app_words=products_app)
+    assert offered_[0] == first, offered_[:4]
+    assert switch in offered_ and "inventory.product.set_image" in offered_  # positive control: both are offered
+
+
 @pytest.mark.parametrize(
     ("said", "language"),
     [

@@ -270,6 +270,9 @@ _FUTURE = frozenset({"ll", "will"})
 #: The words after which a thing is named for what another is («para las próximas ventas», «for the new sales»): to the
 #: end of their sentence, it is not what a command switches (ERPlora/live#50).
 _FOR_WHAT = frozenset({"para", "for"})
+#: The words after which a thing is named to say of what the thing named before them is («la regla de los productos»,
+#: «la regla española del Café», «the rule of the products»): it is not what a command switches (ERPlora/live#73).
+_OF = frozenset({"de", "del", "of"})
 #: The action a yes to what was asked before says («sí, confírmalo»), and the words it is said with besides greetings.
 _CONFIRMS = frozenset({"confirm"})
 _YES = frozenset({"si", "yes", "claro", "adelante", "sure", "it", "that", "todo", "eso", "por", "favor", "please"})
@@ -578,7 +581,8 @@ class Asked(NamedTuple):
     carpeta Facturas» creates a folder; «cobra la mesa» charges a sale, the verb's own thing), of which ``records``
     the ones a word after the verb names («borra el cliente Ana»: a customer to find). ``direct`` are the things named
     outside what something is for (``_FOR_WHAT``: «ventas» in «activa las ventas», not in «para las próximas
-    ventas»)."""
+    ventas») and not to say of what another is (``_of_another``: «los productos» in «vuelve a activar la regla de los
+    productos»)."""
 
     concepts: frozenset[frozenset[str]]
     verbs: frozenset[str]
@@ -714,6 +718,24 @@ def _unasked(words: list[str], at: int) -> bool:
     return at > 0 and words[at - 1] in _WITHOUT and bool(_verbs_of(word)) and infinitive
 
 
+#: The stems of an operation's entity that name an app («base.app.enable»): an app named by its name is that entity.
+_APP_THING = frozenset(stem(word) for word in ("app", "aplicacion", "modulo", "module"))
+
+
+def _of_another(words: list[str], at: int, extra: tuple) -> bool:
+    """Whether the word ``words[at]`` says of what another thing is: after ``_OF`` and its articles, behind a word that
+    names («la regla de los productos», «la regla española de los productos», «la regla de IVA de los productos», «the
+    rule of the products»), never behind an app named as one («la app de clientes», «el módulo de reservas»: that is the
+    app) nor behind a word that names nothing («desactiva de momento», «da de baja»)."""
+    before = at - 1
+    while before > 0 and words[before] not in _OF and (len(words[before]) < 3 or words[before] in STOP_WORDS):
+        before -= 1
+    if before < 1 or words[before] not in _OF:
+        return False
+    head = words[before - 1]
+    return len(head) >= 3 and head not in STOP_WORDS and _concept(head, extra).isdisjoint(_APP_THING)
+
+
 def _foretold(words: list[str], at: int) -> bool:
     """Whether the word ``words[at]`` says what someone will do (after ``_FUTURE``: «knock 60% off the wine, I'll
     approve it», «it will turn on at nine»): the speaker's own doing, not what the assistant is asked; «will you…?» is
@@ -806,7 +828,9 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
         # does a verb not asked («sin cobrar»: still a sale); what someone will do is no verb asked, and names as any
         # word does.
         naming = [
-            (word, _FOR_WHAT.isdisjoint(words[:at])) for words in sentences for at, word in enumerate(words)
+            (word, _FOR_WHAT.isdisjoint(words[:at]) and not _of_another(words, at, extra))
+            for words in sentences
+            for at, word in enumerate(words)
             if (word not in verbal or word in _PHRASE_NAMES) and len(word) >= 3 and word not in STOP_WORDS
             and ((word not in acting and not _unasked(words, at)) or len(_concept(word, extra)) > 1)
         ]
@@ -854,10 +878,6 @@ def app_words(label: str, language: str) -> frozenset[str]:
             for nav in getattr(config, "navigation", []) or []:
                 words |= stems(str(nav.label))
     return frozenset(words)
-
-
-#: The stems of an operation's entity that name an app («base.app.enable»): an app named by its name is that entity.
-_APP_THING = frozenset(stem(word) for word in ("app", "aplicacion", "modulo", "module"))
 
 
 #: The words of an action that say for what, not what it acts on (``list_for_customer``, ``by_phone``,
@@ -949,8 +969,8 @@ def _relevant(
     helps = frozenset(howto) if said.howto else frozenset()
     always = tuple(always)
 
-    def named(words: frozenset[str]) -> int:
-        return sum(1 for concept in concepts if not concept.isdisjoint(words))
+    def named(words: frozenset[str], among: frozenset[frozenset[str]] = concepts) -> int:
+        return sum(1 for concept in among if not concept.isdisjoint(words))
 
     # The things the catalogue's tools are of. A question that names none of them but an app by its name («la cocina»:
     # the kitchen app, of tickets and stations) makes that app the thing; beside a thing named («el registro de
@@ -1010,7 +1030,7 @@ def _relevant(
             else:
                 writes = matched - READ_VERBS
                 points += 7 if takes and writes else 3 if writes and not aimed_at else 1 if app_named else 0
-        elif switching and takes and not _CHANGES.isdisjoint(acts):
+        elif switching and not _CHANGES.isdisjoint(acts) and named(_taken(op.input), said.direct):
             points += 7
         if op.kind == "query":
             if about and any(not concept.isdisjoint(named_entity) for concept in about):
