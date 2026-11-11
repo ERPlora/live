@@ -954,8 +954,9 @@ class ProductImageIn(Schema):
     image: str | None = None
 
 
-#: A tax rule named beside the app its rule is of: the Hub's Taxes and Products, whose «regla» is no synonym of «rule»
-#: (the Hub's asks say it), beside the switches of an app and a write that takes a product.
+#: A tax rule named beside the thing it is of: the Hub's Taxes, whose «regla» is no synonym of «rule» but names the app
+#: by its menu («Reglas»; its asks say the rest), and Products, beside the switches of an app and a write that takes a
+#: product.
 RULE_OF_AN_APP = [
     *APPROVED_OR_SWITCHED,
     tool("inventory.product.set_image", "Put a product's image.", input=ProductImageIn),
@@ -968,7 +969,7 @@ RULE_OF_AN_APP = [
                       "desactiva de momento la regla de impuestos de España para la comida")}),
     tool("tax.rule.list", "List the tax rules.", "query"),
 ]
-PRODUCTS_APP = {"inventory": "inventory products productos", "tax": "tax taxes impuestos", "sale": "sale sales ventas",
+PRODUCTS_APP = {"inventory": "inventory products productos", "tax": "tax taxes impuestos reglas", "sale": "sale sales ventas",
                 "reservation": "reservation reservations reservas"}
 
 
@@ -985,12 +986,13 @@ def products_app(label: str, language: str) -> frozenset[str]:
     ],
 )
 def test_what_a_thing_switched_is_of_is_neither_the_app_switched_nor_the_thing_changed(asked, first, switch):
-    """«Vuelve a activar la regla de los productos» reactivates the rule: the app of the products is not the one turned
-    on, nor a write that takes a product what the command changes (ERPlora/live#73; before, turning the app on and
-    putting a product's image came first)."""
+    """«Vuelve a activar la regla de los productos» reactivates the rule: «los productos» only say of what it is, so the
+    rule (of Taxes, by its menu) is still the thing the switch names, and a write that takes a product gets nothing for
+    the switch, behind turning Taxes on (ERPlora/live#73; before, turning the app on came first, and putting a
+    product's image before the rule)."""
     offered_ = ranked(RULE_OF_AN_APP, asked, app_words=products_app)
     assert offered_[0] == first, offered_[:4]
-    assert switch in offered_ and "inventory.product.set_image" in offered_  # positive control: both are offered
+    assert offered_.index(switch) < offered_.index("inventory.product.set_image"), offered_[:4]
 
 
 @pytest.mark.parametrize(

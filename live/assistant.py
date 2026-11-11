@@ -974,12 +974,15 @@ def _relevant(
 
     # The things the catalogue's tools are of. A question that names none of them but an app by its name («la cocina»:
     # the kitchen app, of tickets and stations) makes that app the thing; beside a thing named («el registro de
-    # eventos») the app's name only breaks ties.
+    # eventos») the app's name only breaks ties. Of a switch, only what it switches counts: what says of what that is
+    # («vuelve a activar la regla de los productos»: the rule, of Taxes by its menu) is no thing beside it
+    # (ERPlora/live#73).
     things = frozenset().union(*(_things(op) for op in tools.values())) if concepts else frozenset()
     every_app = {op.app_label for op in tools.values()} if concepts else set()
-    names_a_thing = any(not concept.isdisjoint(things) for concept in concepts)
+    switched = said.direct if switching else concepts
+    names_a_thing = any(not concept.isdisjoint(things) for concept in switched)
     by_app = set() if names_a_thing else {
-        concept for concept in concepts if any(not concept.isdisjoint(app_words(label, language)) for label in every_app)
+        concept for concept in switched if any(not concept.isdisjoint(app_words(label, language)) for label in every_app)
     }
     # An app switched is one the command names («activa las ventas», «activa otra vez las ventas», «ya no usamos la
     # cocina, desactívala»), not one named for what something is («vuelve a activar Mayorista para las próximas ventas»:
