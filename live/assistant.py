@@ -269,6 +269,9 @@ _WITHOUT = frozenset({"sin"})
 #: importes»): its infinitive asks for nothing either (ERPlora/live#74). With no «sin» before, «ni» is «not even»
 #: («no sé ni cambiar el precio»), and the verb is asked. English says it with «or» and a gerund ``VERBS`` has not.
 _NOR = frozenset({"ni"})
+#: The word that makes a ``_NOR`` after it «not even» whatever ``_WITHOUT`` came before («tengo una mesa sin cobrar y no
+#: puedo ni cerrar la caja»): the ``_NOR`` goes on from a ``_WITHOUT`` only with none of these between the two.
+_NOT = frozenset({"no"})
 #: The words after which a verb says what someone will do, not what is asked («I'll approve it», «we will open»).
 _FUTURE = frozenset({"ll", "will"})
 #: The words after which a thing is named for what another is («para las próximas ventas», «for the new sales»): to the
@@ -714,12 +717,19 @@ def _starts_command(words: list[str], at: int) -> bool:
 def _unasked(words: list[str], at: int) -> bool:
     """Whether the verb ``words[at]`` says what is not to be done: its infinitive, its pronouns too, after ``_WITHOUT``
     («sin cambiar los pedidos», «sin quitarle el PIN») or after ``_NOR`` going on from a ``_WITHOUT`` before it in the
-    sentence («sin tocar caja ni cambiar importes»)."""
+    sentence («sin tocar caja ni cambiar importes»), with no ``_NOT`` between the two («no puedo ni cerrar la caja»)."""
     word = words[at]
     infinitive = (_unclitic(word) or word).endswith(_INFINITIVE)
     before = words[at - 1] if at > 0 else ""
-    negated = before in _WITHOUT or (before in _NOR and not _WITHOUT.isdisjoint(words[: at - 1]))
+    negated = before in _WITHOUT or (before in _NOR and _goes_on(words[: at - 1]))
     return negated and bool(_verbs_of(word)) and infinitive
+
+
+def _goes_on(words: list[str]) -> bool:
+    """Whether a ``_NOR`` said after ``words`` goes on from a ``_WITHOUT`` among them: the last of ``_WITHOUT`` and
+    ``_NOT`` said is a ``_WITHOUT``."""
+    last = next((word for word in reversed(words) if word in _WITHOUT or word in _NOT), "")
+    return last in _WITHOUT
 
 
 def _foretold(words: list[str], at: int) -> bool:

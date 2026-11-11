@@ -1509,6 +1509,29 @@ def test_a_verb_said_after_ni_with_no_sin_before_is_asked(said):
     assert assistant.asked([said]).verbs == {"change", "set", "update"}
 
 
+@pytest.mark.parametrize(
+    ("said", "verbs"),
+    [
+        # The «sin» before says how a thing is («una mesa sin cobrar»), and «no puedo ni…» is «not even»: asked.
+        ("tengo una mesa sin cobrar y no puedo ni cerrar la caja", {"close"}),
+        ("el café está sin precio y no sé ni cambiar el precio", {"change", "set", "update"}),
+        ("hay un grupo sin opciones y no consigo ni borrarlo", {"delete", "remove"}),
+        # A «sin» after the «no» is the one the «ni» goes on from.
+        ("no me avises y cierra la caja sin contar ni cambiar el fondo", {"close"}),
+    ],
+)
+def test_a_verb_said_after_ni_is_asked_when_a_no_comes_between_it_and_the_sin_before(said, verbs):
+    """«No puedo ni cerrar la caja» asks for help closing the till, whatever was said «sin» something before: a «no»
+    between the «sin» and the «ni» makes the «ni» «not even», so its verb is asked, as with no «sin» at all."""
+    assert assistant.asked([said]).verbs == verbs
+
+
+def test_only_a_verbs_infinitive_after_ni_is_not_asked():
+    """A word of ``VERBS`` that names a thing after «ni» («sin precios ni lista») is read as anywhere, as after «sin»:
+    only an infinitive says what is not to be done."""
+    assert assistant.asked(["borra las tarifas sin precios ni lista"]).verbs == {"delete", "list", "remove"}
+
+
 class SortedIn(Schema):
     name: str | None = None
     sort_order: int | None = None
