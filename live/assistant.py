@@ -155,6 +155,16 @@ def catalog(
 # is what it asks about; a how-to question («how do I…?») is answered from the help (``howto``). The same question
 # always gets the same tools.
 
+#: «Dar de baja», with its pronouns too («dale de baja», «darlos de baja»): a member leaves the business or a customer
+#: a mailing (ERPlora/live#50).
+_DEREGISTERS = tuple(
+    f"{head} de baja"
+    for head in (
+        "da", "dar", "doy",
+        *(f"{verb}{pronoun}" for verb in ("da", "dar") for pronoun in ("me", "le", "lo", "la", "nos", "les", "los",
+                                                                      "las")),
+    )
+)
 #: What a person says (Spanish or English) → the action of the operations that does it: the last part of an
 #: operation's name or one of its words (``bulk_create``, ``set_image``). A phrase counts when its words come in a row,
 #: and its words then ask for no other action and name nothing (``_PHRASE_NAMES`` aside): «get rid of» is no ``get``,
@@ -183,13 +193,13 @@ VERBS = {
             "pon de nombre", "pon el nombre", "poner el nombre", "set", "assign", "change", "change the name",
             "change its name"),
     # Taking away deletes, retires or withdraws: the thing named says which («retira la mesa», «retira el dispositivo»,
-    # «retira su consentimiento»; ERPlora/live#64).
+    # «retira su consentimiento»; ERPlora/live#64), as «se da de baja de la publicidad» withdraws (live#50).
     "delete": ("borra", "borrar", "borremos", "borrad", "elimina", "eliminar", "quita", "quitar", "retira", "retirar",
                "delete", "remove", "get rid"),
     "remove": ("borra", "borrar", "borremos", "borrad", "elimina", "eliminar", "quita", "quitar", "retira", "retirar",
                "delete", "remove", "get rid"),
     "retire": ("retira", "retirar", "retire"),
-    "withdraw": ("retira", "retirar", "withdraw"),
+    "withdraw": ("retira", "retirar", "withdraw", *_DEREGISTERS),
     "erase": ("erase", "wipe", "borra sus datos", "borra todos sus datos", "borra los datos", "borrar sus datos",
               "borrar todos sus datos", "borrar los datos", "borrad todos sus datos", "borremos todos sus datos",
               "borremos sus datos"),
@@ -214,17 +224,29 @@ VERBS = {
     "restore": ("sienta", "sentar", "restaura", "restaurar", "seat", "restore"),
     "transfer": ("traslada", "trasladar", "transfiere", "transferir", "transfer"),
     "start": ("empieza", "inicia", "start", "begin"),
-    "enable": ("activa", "activar", "activame", "enciende", "encender", "habilita", "habilitar", "enable", "activate",
-               "turn on", "switch on", "quiero el modulo", "quiero la app", "quiero la aplicacion", "pon la app",
-               "ponme la app", "pon el modulo", "ponme el modulo", "instala", "instalar", "install"),
-    "disable": ("desactiva", "desactivar", "apaga", "apagar", "deshabilita", "deshabilitar", "disable", "deactivate",
-                "turn off", "switch off"),
+    "enable": ("activa", "activar", "activame", "reactiva", "reactivar", "enciende", "encender", "habilita",
+               "habilitar", "enable", "activate", "reactivate", "turn on", "switch on", "quiero el modulo",
+               "quiero la app", "quiero la aplicacion", "pon la app", "ponme la app", "pon el modulo",
+               "ponme el modulo", "instala", "instalar", "install"),
+    "disable": ("desactiva", "desactivar", "desactivo", "apaga", "apagar", "deshabilita", "deshabilitar", "disable",
+                "deactivate", "turn off", "switch off"),
+    # Switching a thing on or off is also activating or deactivating it, as a member, a price list or a rule are: the
+    # thing named says which. «Activo» is left out: far more often it is what a thing is («los clientes activos»).
+    "activate": ("activa", "activar", "reactiva", "reactivar", "habilita", "habilitar", "activate", "reactivate"),
+    "deactivate": ("desactiva", "desactivar", "desactivo", "deshabilita", "deshabilitar", "deactivate"),
+    "approve": ("aprueba", "aprobar", "apruebo", "approve"),
+    "reject": ("rechaza", "rechazar", "rechazo", "reject"),
+    # «Pide» and «pedir» are left out: at a table they are what a customer orders («pide la cuenta»).
+    "request": ("solicita", "solicitar", "solicito", "pido", "request"),
+    "confirm": ("confirma", "confirmar", "confirmo", "confirm"),
+    "terminate": (*_DEREGISTERS, "terminate"),
     "invite": ("invita", "invitar", "invite"),
     "print": ("imprime", "imprimir", "saca", "sacar", "print"),
     "refund": ("devuelve", "devolver", "reembolsa", "reembolsar", "refund"),
 }
-#: The words of a verb's phrase that still name what they name: «cambia el nombre» changes a name.
-_PHRASE_NAMES = frozenset({"nombre", "name", "datos", "modulo", "app", "aplicacion"})
+#: The words of a verb's phrase that still name what they name: «cambia el nombre» changes a name, «da de baja» names
+#: the leave («baja») a member or a stock takes.
+_PHRASE_NAMES = frozenset({"nombre", "name", "datos", "modulo", "app", "aplicacion", "baja"})
 #: The phrases of ``VERBS`` that put a name on something («ponle el nombre», «change its name»), by their verb and what
 #: follows it: said with what is named in between («pon al dispositivo que uso ahora el nombre «Barra»»), they count
 #: as said in a row (ERPlora/live#47). Only a name with its article: «de nombre» and «nombre» alone may say what a thing
@@ -243,6 +265,11 @@ _OWN_OBJECT = frozenset({"el", "la", "los", "las", "the"})
 #: The word after which a verb's infinitive says what is not to be done («sin cambiar los pedidos», «sin borrarlo»), as
 #: English says it with «without» and a form ``VERBS`` has not («without changing»): no action asked (ERPlora/live#60).
 _WITHOUT = frozenset({"sin"})
+#: The words after which a verb says what someone will do, not what is asked («I'll approve it», «we will open»).
+_FUTURE = frozenset({"ll", "will"})
+#: The action a yes to what was asked before says («sí, confírmalo»), and the words it is said with besides greetings.
+_CONFIRMS = frozenset({"confirm"})
+_YES = frozenset({"si", "yes", "claro", "adelante", "sure", "it", "that", "todo", "eso", "por", "favor", "please"})
 _INFINITIVE = ("ar", "er", "ir")
 #: The actions that only read: a question that asks for none of the others asks to know, not to do. Asked of nothing
 #: named, they bring no tool: «¿cuántos…?» is no list of everything.
@@ -681,6 +708,24 @@ def _unasked(words: list[str], at: int) -> bool:
     return at > 0 and words[at - 1] in _WITHOUT and bool(_verbs_of(word)) and infinitive
 
 
+def _foretold(words: list[str], at: int) -> bool:
+    """Whether the word ``words[at]`` says what someone will do (after ``_FUTURE``: «knock 60% off the wine, I'll
+    approve it», «it will turn on at nine»): the speaker's own doing, not what the assistant is asked; «will you…?» is
+    a request."""
+    return at > 0 and words[at - 1] in _FUTURE
+
+
+def _without_yes(sentences: list[list[str]]) -> list[list[str]]:
+    """The sentences of a text but its yes to what was asked before: a verb that confirms with no thing of its own and
+    the words it is said with («sí, confírmalo», «vale, confirmo», «yes, confirm it»), never one that names what it
+    confirms («confírmala para mañana»)."""
+    yes = [words for words in sentences if all(word in _YES or word in _GREETINGS or _verbs_of(word) == _CONFIRMS
+                                               for word in words)]
+    if not any(_verbs_of(word) == _CONFIRMS for words in yes for word in words):
+        return sentences
+    return [words for words in sentences if words not in yes]
+
+
 def _split_naming(sentences: list[list[str]]) -> set[tuple[str, str]]:
     """The naming phrases (``_NAMING``) of ``sentences`` said with words between their verb and the name («pon al
     dispositivo el nombre»; its pronouns too: «cámbiale a la tablet el nombre»), each with its verb as said; never of a
@@ -694,7 +739,7 @@ def _split_naming(sentences: list[list[str]]) -> set[tuple[str, str]]:
         for at, word in enumerate(words):
             head = word if word in _NAMING else _unclitic(word)
             own_object = at + 1 < len(words) and words[at + 1] in _OWN_OBJECT
-            if head not in _NAMING or _unasked(words, at) or own_object:
+            if head not in _NAMING or _unasked(words, at) or _foretold(words, at) or own_object:
                 continue
             end = next(
                 (later for later in range(at + 1, len(words)) if _starts_command(words, later) or _unasked(words, later)),
@@ -725,9 +770,14 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
     records: set[frozenset[str]] = set()
     reading = howto = False
     for text in texts:
-        sentences = _sentences(text)
-        # What asks to be done: every word but a verb that says what is not to be done («sin cambiar», ``_unasked``).
-        heard = [[word for at, word in enumerate(words) if not _unasked(words, at)] for words in sentences]
+        # A yes to what was asked before asks for nothing of its own: the write it agrees to is in the texts before.
+        sentences = _without_yes(_sentences(text))
+        # What asks to be done: every word but a verb that says what is not to be done («sin cambiar», ``_unasked``) or
+        # what someone will do («I'll approve it», ``_foretold``).
+        heard = [
+            [word for at, word in enumerate(words) if not _unasked(words, at) and not _foretold(words, at)]
+            for words in sentences
+        ]
         joined = [f" {' '.join(words)} " for words in heard]
         found = {phrase for phrase in _PHRASES if any(f" {phrase} " in one for one in joined)}
         verbal = {word for phrase in found for word in phrase.split()}
@@ -746,11 +796,14 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
         for of in acting.values():
             said |= of
         # A word that asks (a verb) names a thing only through its synonyms («cobra»: a sale); «show», «dame» none. So
-        # does a verb not asked («sin cobrar»: still a sale).
+        # does a verb not asked («sin cobrar»: still a sale); what someone will do names what any word does.
         naming = [
             word for words in sentences for at, word in enumerate(words)
             if (word not in verbal or word in _PHRASE_NAMES) and len(word) >= 3 and word not in STOP_WORDS
-            and ((word not in acting and not _unasked(words, at)) or len(_concept(word, extra)) > 1)
+            and (
+                ((word not in acting or _foretold(words, at)) and not _unasked(words, at))
+                or len(_concept(word, extra)) > 1
+            )
         ]
         concepts |= {_concept(word, extra) for word in naming}
         concepts |= {group for phrase, group in phrases_named if any(phrase in one for one in joined)}
