@@ -677,14 +677,20 @@ def _split_naming(sentences: list[list[str]]) -> set[tuple[str, str]]:
     dispositivo el nombre»; its pronouns too: «cámbiale a la tablet el nombre»), each with its verb as said; never of a
     verb with its own object (``_OWN_OBJECT``: «cambia el precio del café muestra el nombre del cliente»,
     ERPlora/live#59), a name that finds the thing (``_FOUND_BY``: «con el nombre») nor one after another command starts
-    (``_starts_command``: «cambia el precio y dime el nombre del cliente», ERPlora/live#57)."""
+    (``_starts_command``: «cambia el precio y dime el nombre del cliente», ERPlora/live#57) or after a verb that says
+    what is not to be done (``_unasked``: «ponle otro precio sin cambiarle el nombre», ERPlora/live#60), which puts no
+    name either («sin ponerle al menú el nombre»)."""
     found: set[tuple[str, str]] = set()
     for words in sentences:
         for at, word in enumerate(words):
             head = word if word in _NAMING else _unclitic(word)
-            if head not in _NAMING or (at + 1 < len(words) and words[at + 1] in _OWN_OBJECT):
+            own_object = at + 1 < len(words) and words[at + 1] in _OWN_OBJECT
+            if head not in _NAMING or _unasked(words, at) or own_object:
                 continue
-            end = next((later for later in range(at + 1, len(words)) if _starts_command(words, later)), len(words))
+            end = next(
+                (later for later in range(at + 1, len(words)) if _starts_command(words, later) or _unasked(words, later)),
+                len(words),
+            )
             for rest in _NAMING[head]:
                 size = len(rest)
                 if any(
@@ -716,7 +722,7 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
         joined = [f" {' '.join(words)} " for words in heard]
         found = {phrase for phrase in _PHRASES if any(f" {phrase} " in one for one in joined)}
         verbal = {word for phrase in found for word in phrase.split()}
-        for said_as, phrase in _split_naming(heard):
+        for said_as, phrase in _split_naming(sentences):
             found.add(phrase)
             verbal |= {said_as, *phrase.split()}
         said = {verb for verb, forms in VERBS.items() if not found.isdisjoint(forms)}

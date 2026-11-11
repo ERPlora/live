@@ -859,6 +859,8 @@ def test_a_naming_verb_that_ends_the_sentence_is_read(said, verbs):
         # A verb said in words, and a name put apart, are no more asked after «sin».
         ("desactiva el horario de Ana sin cambiar el nombre", {"disable"}),
         ("activa la tarifa sin ponerle al menú el nombre «Verano»", {"enable"}),
+        # Each ending of an infinitive: «-ar», «-er» («ponerle») and «-ir».
+        ("cobra la mesa 4 sin imprimir el ticket", {"complete"}),
     ],
 )
 def test_a_verb_said_after_sin_is_not_asked(said, verbs):
@@ -872,6 +874,22 @@ def test_a_verb_asked_and_said_after_sin_is_still_asked():
     """What «sin» leaves out is the word after it, not every time it is said: «cambiar el precio» is asked, «sin
     cambiar el nombre» is no rename."""
     assert assistant.asked(["quiero cambiar el precio sin cambiar el nombre"]).verbs == {"change", "set", "update"}
+
+
+@pytest.mark.parametrize(
+    ("said", "asked"),
+    [
+        ("ponle al café otro precio sin cambiarle el nombre", "ponle al café otro precio"),
+        ("ponle precio nuevo al café sin cambiar el nombre", "ponle precio nuevo al café"),
+        ("ponle otro precio sin cambiarle al café el nombre", "ponle otro precio"),
+    ],
+)
+def test_a_name_not_to_be_changed_is_not_put_by_the_verb_asked_before(said, asked):
+    """«Ponle al café otro precio sin cambiarle el nombre» renames nothing: the name said after the verb that is not
+    asked is not the one «ponle» puts, as it was not when that verb started another command (ERPlora/live#57)."""
+    heard = assistant.asked([said]).verbs
+    assert "rename" not in heard
+    assert heard == assistant.asked([asked]).verbs
 
 
 def test_a_read_said_after_sin_asks_to_know_nothing():
