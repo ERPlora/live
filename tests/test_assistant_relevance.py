@@ -998,8 +998,13 @@ RULE_OF_AN_APP = [
     tool("tax.rule.list", "List the tax rules.", "query"),
     tool("kitchen.station.deactivate", "Stop sending orders to a kitchen station."),
 ]
-PRODUCTS_APP = {"inventory": "inventory products productos", "tax": "tax taxes impuestos reglas", "kitchen": "kitchen cocina", "sale": "sale sales ventas",
-                "reservation": "reservation reservations reservas"}
+PRODUCTS_APP = {
+    "inventory": "inventory products productos",
+    "tax": "tax taxes impuestos reglas",
+    "kitchen": "kitchen cocina",
+    "sale": "sale sales ventas",
+    "reservation": "reservation reservations reservas",
+}
 
 
 def products_app(label: str, language: str) -> frozenset[str]:
@@ -1053,7 +1058,8 @@ def automations_app(label: str, language: str) -> frozenset[str]:
 
 
 @pytest.mark.parametrize(
-    "asked", ["vuelve a encender la automatización de reseñas", "enciende la automatización que salta al cobrar una venta"]
+    "asked",
+    ["vuelve a encender la automatización de reseñas", "enciende la automatización que salta al cobrar una venta"],
 )
 def test_a_thing_a_project_names_by_its_phrase_is_still_what_a_switch_names(asked):
     """A thing named by a phrase of the project's synonyms («la automatización») is what a switch names, beside what
