@@ -941,7 +941,8 @@ def relevant(
     (``Asked.objects``: «crea la carpeta Facturas» creates a folder, not an invoice); «activa la app» is
     ``base.app.enable``, never an operation of the app named after it, and so is «activa los clientes», an app named
     by its name. Of no thing named, it adds 7 to a write that takes a datum the question names («cambia el precio»: a
-    write that takes a ``price``; «turn off the alerts»: a write that takes them, as turning on or off changes it), 3 to
+    write that takes a ``price``; «turn off the alerts»: a write that takes them, as turning on or off changes it, but
+    not what only says of what the thing an app named switches is, ``Asked.of_another``), 3 to
     any other write unless a tool does that to what the command acts on, or it is an app named by its name («reserva
     una mesa»: no write of the staff; «abre la cocina»: no other app's open), 1 to
     a read of the app named and nothing to any other read: «¿cuántos…?» is no list of everything, and what a read is
@@ -981,8 +982,9 @@ def _relevant(
     # The things the catalogue's tools are of. A question that names none of them but an app by its name («la cocina»:
     # the kitchen app, of tickets and stations) makes that app the thing; beside a thing named («el registro de
     # eventos») the app's name only breaks ties. Of a switch that names an app that does it, what only says of what the
-    # thing switched is is no thing beside it («vuelve a activar la regla de los productos»: Taxes, by its menu, brings
-    # rules back); of another, it still names the thing («activa el control de stock»: ERPlora/live#73).
+    # thing switched is is no thing beside it nor a datum the switch changes («vuelve a activar la regla de los
+    # productos»: Taxes, by its menu, brings rules back); of another, it still names both («activa el control de
+    # stock»: ERPlora/live#73).
     things = frozenset().union(*(_things(op) for op in tools.values())) if concepts else frozenset()
     every_app = {op.app_label for op in tools.values()} if concepts else set()
     switched = concepts
