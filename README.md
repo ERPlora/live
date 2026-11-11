@@ -1,16 +1,16 @@
 # erplora-live
 
-Paquete Python compartido por `hub-next` y `saas-next` (fase 1, ronda 11). Reúne lo que las dos
+Paquete Python compartido por el Hub (`ERPlora/hub`) y el SaaS (`ERPlora/saas`) (nació en la fase 1, ronda 11). Reúne lo que las dos
 plataformas hacen igual: operaciones declaradas con `@operation` (lecturas en `queries.py`,
 escrituras en `services.py`), rutas django-ninja ligadas a esas operaciones, outbox y aviso tras el
 COMMIT (`LISTEN/NOTIFY`), consultas vivas por SSE (`/api/live`), servido de la SPA con el
 manifiesto de Vite y CSP con nonce. El diseño está en
-`../../docs/plans/vamos-a-centrarnos-en-cryptic-abelson.md` (§4.1 y §4.2).
+`plans/vamos-a-centrarnos-en-cryptic-abelson.md` del repo `ERPlora/docs` (§4.1 y §4.2).
 
 Es un repo propio (`ERPlora/live`, distribución `erplora-live`) con su `uv.lock`; el paquete importable
 se llama `live`.
-Lo usan los dos proyectos por igual: `hub-next` enchufa su ámbito (fase 1: el primer rótulo del Host;
-fase 2: `use_hub`) y `saas-next` el suyo (el usuario); el resto (`live.spa`, `live.csp`, los checks y el
+Lo usan los dos proyectos por igual: el Hub enchufa su ámbito (en la fase 1 era el primer rótulo del Host;
+desde la tenencia, `use_hub`) y el SaaS el suyo (el usuario); el resto (`live.spa`, `live.csp`, los checks y el
 `runserver`) es común. Nace como repo git propio (PLAN §16.4); el monorepo va a una issue.
 
 ## Contrato (resumen; detalle en el plan §4.1 y en PLAN §16.2)
@@ -40,9 +40,9 @@ fase 2: `use_hub`) y `saas-next` el suyo (el usuario); el resto (`live.spa`, `li
 - **Transacciones anidadas** (`live.operations.atomic`, `current_alias`): lo que un `services.py` envuelve en un
   savepoint va con `atomic()` (gestor de contexto o decorador, `savepoint` y `durable` como en Django), nunca con un
   `transaction.atomic()` desnudo, cuyo alias es `default`: con `LIVE["operation_database"]` la transacción de la
-  operación no está en `default` (hub-next, fase 2: la BD del hub) y un `try: with transaction.atomic(): create…
+  operación no está en `default` (en el Hub, la BD del hub) y un `try: with transaction.atomic(): create…
   except IntegrityError:` abriría otra transacción en `default` y el error abortaría la de la operación. `atomic()`
-  abre en `current_alias()`: lo que dice `LIVE["current_database"]` (ruta a una función sin argumentos; hub-next:
+  abre en `current_alias()`: lo que dice `LIVE["current_database"]` (ruta a una función sin argumentos; en el Hub:
   `base.tenancy.context.current_alias`, el alias del `use_hub` activo y `HubContextMissing` sin contexto, nunca
   `default` por omisión), si no el alias de la operación en curso y, fuera de una, `default` (el SaaS, sin tenencia).
   Dentro de una operación `database=False` es `LiveMisuse`. Lo lee al entrar en el bloque (un decorador, en cada
@@ -61,17 +61,17 @@ fase 2: `use_hub`) y `saas-next` el suyo (el usuario); el resto (`live.spa`, `li
   releídos y envío solo si cambia el hash; red de seguridad cada 300 s y `resync` al reconectar el
   `LISTEN` (uno por proceso, fuera de PgBouncer). Sin Redis ni Channels.
 - **Eventos de fin de sesión** (`LIVE["session_events"]`, opcional; FIX-LIVE-SESSION-CLOSED-WAKES-ONLY-SESSION-LIST):
-  los eventos que pueden haber terminado la sesión con la que se abrió un stream (en `saas-next`,
+  los eventos que pueden haber terminado la sesión con la que se abrió un stream (en el SaaS,
   `accounts.session.closed`: salir, una contraseña nueva, «Cerrar las demás sesiones»). Ninguna consulta viva tiene
   que declararlos: al llegar uno al canal, cada stream relee su contexto una vez (el `refresh` del builder, en el
   mismo hilo, idioma y `enter` que una re-ejecución) y se cierra con `bye` si lanza `Unauthorized`; sus consultas no
   se re-ejecutan por él. Una ráfaga sigue siendo una pasada, y si en esa pasada se re-ejecuta alguna consulta (la que
-  sí lo declara), su `refresh` es la relectura. Se nombran uno a uno, nunca por su forma: en `hub-next`,
+  sí lo declara), su `refresh` es la relectura. Se nombran uno a uno, nunca por su forma: en el Hub,
   `cash_register.session.closed` y `table.session.closed` son de caja y de mesa. El Hub no lo usa: al revocar
   sesiones despierta con `"*"` (`ALL_EVENTS`), que re-ejecuta todo.
 - **SPA y CSP**: `live.spa` lee el manifiesto de Vite (sin django-vite) y emite `<script type=module>` y
   `modulepreload` con nonce; en DEBUG apunta al servidor de Vite. `spa_assets(request, entry=…)` da
-  otra entrada del mismo build (p. ej. `frontend/public.ts`, la web pública de `saas-next`, ronda 16);
+  otra entrada del mismo build (p. ej. `frontend/public.ts`, la web pública del SaaS, ronda 16);
   sin `entry`, la de `LIVE["spa"]["entry"]`. `LIVE["spa"]["icons"]` (opcional) declara los iconos de la
   pestaña y de la pantalla de inicio (`{"rel": "icon" | "apple-touch-icon", "path": <estático>, "sizes"?}`),
   enlazados por el almacén de estáticos del proyecto y nunca por URL; sin él, ningún `<link>` (sin icono, el
@@ -85,12 +85,12 @@ fase 2: `use_hub`) y `saas-next` el suyo (el usuario); el resto (`live.spa`, `li
 
 ## Apps y metadatos (rondas 15 y 16, PLAN §20 y §21)
 
-Toda app nuestra, de `hub-next` y de `saas-next`, hereda `live.meta.LiveAppConfig` y declara ahí sus
+Toda app nuestra, del Hub y del SaaS, hereda `live.meta.LiveAppConfig` y declara ahí sus
 metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
-`../../docs/superpowers/specs/2026-10-13-app-catalog-and-metadata-design.md`.
+`superpowers/specs/2026-10-13-app-catalog-and-metadata-design.md` del repo `ERPlora/docs`.
 
 - **`kind`**: `"platform"` (por defecto; siempre activa: `base`, `control`, `accounts`…) o `"app"`
-  (un módulo de `hub-next/apps/<id>/`, que un hub enciende y apaga). La carpeta = `label` = prefijo
+  (un módulo de `apps/<id>/` del Hub, que un hub enciende y apaga). La carpeta = `label` = prefijo
   de las operaciones = id en `modules[]` de la foto del SaaS = `slug` de su `Module`; el código nunca
   mira la ruta del paquete.
 - **Toda app**: `permissions` (`<app>.<acción>`) y `role_permissions` (`{"hub_manager":
@@ -191,15 +191,15 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
 - **Routers**: `live.ninja.mount_app_routers(api)` monta en la raíz de la API el `router` del `api.py`
   de toda app nuestra (de plataforma o módulo), en el orden de `INSTALLED_APPS`, y devuelve sus
   etiquetas; la que no tiene `api.py` se salta y un `api.py` sin un `Router` de ninja en `router` lanza
-  `LiveMisuse`. Lo usa `hub-next/config/api.py`; `saas-next` lo adopta en su carril (PLAN §20.7).
+  `LiveMisuse`. Lo usan `config/api.py` del Hub y el del SaaS (PLAN §20.7).
 
 ## Catálogo compartido y markdown (ronda 16, PLAN §21)
 
 - **`live.shared_catalog`**: el contrato del esquema `shared` de la BD `saas`. Modelos abstractos
   `AbstractApp` (`shared.app`) y `AbstractAppDoc` (`shared.app_doc`, clave UUIDv7, FK relativa a
   `App`) y las tablas citadas `APP_TABLE` y `APP_DOC_TABLE`. El SaaS los concreta como dueño
-  (`saas-next/apps`, con la restricción `shared_app_doc_app_lang_unique` y sus migraciones) y el Hub
-  como espejo `managed = False` (`hub-next/shared`). Cambiar una columna es expand/contract entre los
+  (`apps/` del SaaS, con la restricción `shared_app_doc_app_lang_unique` y sus migraciones) y el Hub
+  como espejo `managed = False` (`shared/` del Hub). Cambiar una columna es expand/contract entre los
   dos repos; `tests/test_shared_catalog.py` fija las columnas.
 - **`live.markdown.render_markdown(text, *, image_base="")`**: markdown a HTML limpio (`markdown` +
   `nh3`, la lista blanca del SaaS viejo), ```` ```mermaid ```` como `<pre class="mermaid">`, `id` en
@@ -330,7 +330,7 @@ está en su catálogo.
 ## Slugs reservados
 
 `live.slugs` es la **única** regla del slug de un hub (el primer rótulo de `<slug>.erplora.com`) y la
-**única** lista de nombres reservados, para `hub-next` y `saas-next` (Ioan, 2026-10-13; PLAN §16.14).
+**única** lista de nombres reservados, para el Hub y el SaaS (Ioan, 2026-10-13; PLAN §16.14).
 
 - **Regla**: `HUB_SLUG_RE` (`^[a-z0-9]([a-z0-9-]{1,61}[a-z0-9])?$`): minúsculas, cifras y guiones, sin
   guion al principio ni al final; 3–63 caracteres; nunca empieza por `xn--` (punycode).
