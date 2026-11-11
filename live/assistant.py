@@ -160,9 +160,11 @@ def catalog(
 #: and its words then ask for no other action and name nothing (``_PHRASE_NAMES`` aside): «get rid of» is no ``get``,
 #: «set up» no ``set``, «turn on» no «turno».
 VERBS = {
+    # Noting writes something new down as «apunta» does («anota una cita para Ana»), adds to what there is or writes on
+    # it («anota en la cita de Ana…»): what is named says which (ERPlora/live#64).
     "create": ("crea", "crear", "creame", "alta", "anade", "anadir", "agrega", "agregar", "apunta", "apuntar",
-               "registra", "registrar", "reservar", "nuevo", "nueva", "add", "create", "new", "register", "book"),
-    # Noting writes on what there is or adds to it, as «apunta» adds: «anota en la cita…» (ERPlora/live#64).
+               "anota", "anotar", "registra", "registrar", "reservar", "nuevo", "nueva", "add", "create", "new",
+               "register", "book"),
     "add": ("anade", "anadir", "agrega", "agregar", "apunta", "apuntar", "anota", "anotar", "mete", "meter", "ponle",
             "add"),
     "update": ("cambia", "cambiar", "modifica", "modificar", "actualiza", "actualizar", "edita", "editar", "pon",

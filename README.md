@@ -250,8 +250,9 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   (`erase`); «empieza» y «start» abren; «sienta», «sentar» y «seat» abren una mesa o vuelven a sentar una cuenta aparcada
   (`open`, `restore`: decide la cosa nombrada), y sus formas se nombran juntas aunque la raíz las separe («sienta»,
   «sentar»); «traslada», «transfiere» y «transfer» transfieren (`transfer`), y los «comensales» son los `guests`
-  (live#48); «anota» y «anotar» escriben en algo que ya existe o le añaden (`update`, `add`: «anota en la cita de Ana
-  que use mascarilla», «anótame dos cafés en la cuenta»), y «retira» y «retirar» lo quitan, lo retiran o lo retiran
+  (live#48); «anota» y «anotar» apuntan algo nuevo, le añaden a lo que hay o escriben en ello (`create`, `add`,
+  `update`: decide lo nombrado, «anota una cita para Ana», «anótame dos cafés en la cuenta», «anota en la cita de Ana
+  que use mascarilla»), y «retira» y «retirar» lo quitan, lo retiran o lo retiran
   como permiso (`delete`, `remove`, `retire`, `withdraw`: decide la cosa nombrada, «retira la mesa 90», «retira el
   dispositivo», «retira su consentimiento»; en inglés, «retire» y «withdraw»), también con sus pronombres
   («anótalo», «retírala»; live#64); «ponme la app», «instala» encienden; «how many» y «cuántos» cuentan (`count`, `list`, `stats`). «How», «which»,
