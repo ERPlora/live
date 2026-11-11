@@ -300,7 +300,9 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
 - **Sinónimos del proyecto** (`synonyms=`): `SYNONYMS` guarda solo lo que una palabra significa en cualquier negocio.
   Lo que significa solo en un proyecto lo pasa ese proyecto en cada turno y en su QA, nunca se fija en `live`: «cuenta»
   es la cuenta de una mesa en el Hub (`(("cuenta", "check", "tab", "order"),)`) y la cuenta de la persona en el SaaS
-  (`(("cuenta", "account"),)`). Un grupo admite frases («foto de perfil»).
+  (`(("cuenta", "account"),)`). Un grupo admite frases («foto de perfil»). Una palabra que nombra una cosa en cualquier
+  negocio va en `SYNONYMS` con su inglés aunque un menú la diga: «regla» es `rule` (live#73), y sin eso solo nombraba la
+  app cuyo menú dice «Reglas», que al lado de otra cosa nombrada («la regla de los productos») ya no era la cosa.
 
 **QA del asistente, derivada de las operaciones** (`live.assistant_qa`; plan 2026-10-31 del conocimiento y la QA del
 asistente), en dos capas:
