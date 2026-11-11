@@ -657,6 +657,318 @@ def test_what_is_noted_brings_the_write_that_books_it_and_the_one_that_changes_i
     assert set(names[:2]) == {"appointment.appointment.create", "appointment.appointment.update"}, names[:4]
 
 
+#: What «desactiva» and «activa» ask for: switching a thing off or on, as an app's switch does, or deactivating and
+#: activating it, as a member, a price list or a rule are; the thing named says which.
+SWITCHING_OFF = {"disable", "deactivate"}
+SWITCHING_ON = {"enable", "activate"}
+#: What «da de baja» asks for: a member leaves the business, or a customer leaves a mailing; the thing named says which.
+DEREGISTERING = {"terminate", "withdraw"}
+
+
+@pytest.mark.parametrize(
+    ("said", "language", "actions"),
+    [
+        ("aprueba las vacaciones de Lucía", "es", {"approve"}),
+        ("hay que aprobar la ausencia de Ana", "es", {"approve"}),
+        ("apruebo la ausencia de Ana del lunes", "es", {"approve"}),
+        ("apruébasela a Ana", "es", {"approve"}),
+        ("approve Ana's time off", "en", {"approve"}),
+        ("rechaza la ausencia de Ana", "es", {"reject"}),
+        ("hay que rechazar la ausencia de Ana", "es", {"reject"}),
+        ("rechazo la ausencia de Ana del lunes", "es", {"reject"}),
+        ("recházala a Ana", "es", {"reject"}),
+        ("reject Ana's time off", "en", {"reject"}),
+        ("solicita el lunes libre para Ana", "es", {"request"}),
+        ("quiero solicitar el lunes libre", "es", {"request"}),
+        ("solicito el lunes libre", "es", {"request"}),
+        ("pido yo un día libre el 25", "es", {"request"}),
+        ("solicítalo para el lunes", "es", {"request"}),
+        ("request Monday off for Ana", "en", {"request"}),
+        ("confirma la reserva de Ana", "es", {"confirm"}),
+        ("hay que confirmar la cita de Ana", "es", {"confirm"}),
+        ("confirmo la reserva de Ana", "es", {"confirm"}),
+        ("confírmala para mañana", "es", {"confirm"}),
+        ("confirm Ana's booking", "en", {"confirm"}),
+        ("desactiva a Pablo", "es", SWITCHING_OFF),
+        ("hay que desactivar la tarifa de verano", "es", SWITCHING_OFF),
+        ("desactivo la regla de descuento", "es", SWITCHING_OFF),
+        ("desactívala hasta el verano", "es", SWITCHING_OFF),
+        ("deshabilita el método Bizum", "es", SWITCHING_OFF),
+        ("hay que deshabilitar el método Bizum", "es", SWITCHING_OFF),
+        ("deactivate the summer discount rule", "en", SWITCHING_OFF),
+        ("activa la tarifa de verano", "es", SWITCHING_ON),
+        ("vuelve a activar la regla de descuento", "es", SWITCHING_ON),
+        ("actívala otra vez", "es", SWITCHING_ON),
+        ("reactiva la regla de descuento", "es", SWITCHING_ON),
+        ("hay que reactivar la regla de descuento", "es", SWITCHING_ON),
+        ("vuelve a habilitar el método Bizum", "es", SWITCHING_ON),
+        ("habilita otra vez el método Bizum", "es", SWITCHING_ON),
+        ("activate the summer discount rule", "en", SWITCHING_ON),
+        ("reactivate the summer discount rule", "en", SWITCHING_ON),
+        ("da de baja a Pablo", "es", DEREGISTERING),
+        ("hay que dar de baja a Pablo", "es", DEREGISTERING),
+        ("doy de baja a Pablo hoy", "es", DEREGISTERING),
+        # With each pronoun «dar» carries: me, le, lo, la, nos, les, los, las.
+        ("dame de baja de la publicidad", "es", DEREGISTERING),
+        ("dale de baja hoy", "es", DEREGISTERING),
+        ("dalo de baja hoy", "es", DEREGISTERING),
+        ("hay que darla de baja hoy", "es", DEREGISTERING),
+        ("danos de baja de los avisos", "es", DEREGISTERING),
+        ("dales de baja hoy", "es", DEREGISTERING),
+        ("hay que darlos de baja hoy", "es", DEREGISTERING),
+        ("darlas de baja hoy", "es", DEREGISTERING),
+        ("terminate Pablo from Friday", "en", {"terminate"}),
+    ],
+)
+def test_approving_rejecting_requesting_confirming_and_terminating_ask_for_their_action(said, language, actions):
+    """«Aprueba», «rechaza», «solicita» (and «pido»), «confirma» and «da de baja» (terminating a member or withdrawing
+    from a mailing) ask for their action; «desactiva» and «activa» (and «reactiva», «habilita») switch a thing off or on
+    or deactivate and activate it, which the thing named says — ERPlora/live#50. In the infinitive, as a command, in
+    the first person and with their pronouns; in English, as their actions are called. Before, none was a verb but
+    «desactiva» and «activa», only as a switch."""
+    assert assistant.asked([said]).verbs == actions
+
+
+@pytest.mark.parametrize("said", ["los clientes activos", "¿qué tarifas están activas?", "the active price lists"])
+def test_being_active_is_no_verb(said):
+    """«Activo» is the first person of «activar» and, far more often, what a thing is («los clientes activos»): it asks
+    to switch nothing on (ERPlora/live#50)."""
+    assert assistant.asked([said]).verbs.isdisjoint(SWITCHING_ON)
+
+
+def test_a_leave_given_still_names_the_leave():
+    """«Da de baja» asks to terminate or withdraw, and its «baja» still names the leave a member or a stock takes, as
+    «cambia el nombre» names a name: «da de baja 2 cafés» is still a write-off (ERPlora/live#50)."""
+    assert any("baja" in concept for concept in assistant.asked(["da de baja 2 cafés que se han roto"]).concepts)
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        "la mesa 4 pide la cuenta",
+        "cancela la cuenta de la mesa 5, que se fueron sin pedir",
+        "¿qué suele pedir Ana?",
+        "la mesa 4 quiere pedir la cuenta",
+    ],
+)
+def test_what_a_customer_orders_is_no_request(said):
+    """«Pide» and «pedir» are, at a table, what a customer orders («pide la cuenta», «se fueron sin pedir»): only
+    «solicita», «solicitar», «solicito», «pido» and «request» ask for a request (ERPlora/live#50)."""
+    assert "request" not in assistant.asked([said]).verbs
+
+
+@pytest.mark.parametrize(
+    ("said", "named"),
+    [
+        ("knock 60% off the wine, I'll approve it", "appro"),
+        ("I will approve it tomorrow", "appro"),
+        ("we will open in the morning after all", "open"),
+    ],
+)
+def test_what_someone_will_do_is_not_asked(said, named):
+    """«I'll approve it» says what the speaker will do, not what the assistant is asked: a verb after «'ll» or «will»
+    asks for nothing and names what it names, as any other word (ERPlora/live#50: read as asked, «knock 60% off the
+    wine, I'll approve it» lost the over-the-limit discount to every time off)."""
+    heard = assistant.asked([said])
+    assert heard.verbs == frozenset(), heard.verbs
+    assert any(named in concept for concept in heard.concepts), heard.concepts
+
+
+@pytest.mark.parametrize(
+    ("said", "verbs"),
+    [
+        ("approve it", {"approve"}),
+        ("approve it if you will", {"approve"}),
+        ("will you approve Ana's time off?", {"approve"}),
+        ("the lights will turn on at nine", set()),
+    ],
+)
+def test_a_command_or_a_request_with_will_still_asks(said, verbs):
+    """What «will» leaves out is the verb right after it, one said in words too («will turn on»): a command asks, and
+    «will you…?» is a request."""
+    assert assistant.asked([said]).verbs == verbs
+
+
+def test_a_name_someone_will_put_is_not_put_by_the_verb():
+    """«I'll change on the price list its name» renames nothing either: what someone will do puts no name."""
+    assert "rename" not in assistant.asked(["I'll change on this list its name"]).verbs
+    assert "rename" in assistant.asked(["change on this list its name"]).verbs
+
+
+#: Time off, a member's deactivation and termination, a booking's confirmation, a price list switched off and on and an
+#: app's switch, beside the reads and the other writes of the same things.
+APPROVED_OR_SWITCHED = [
+    tool("appointment.appointment.cancel", "Cancel an appointment."),
+    tool("appointment.appointment.confirm", "Confirm a pending appointment."),
+    tool("appointment.appointment.list", "List the appointments of some days.", "query"),
+    tool("base.app.disable", "Turns off one of this business's apps: it leaves everyone's menu and its screens."),
+    tool("base.app.enable", "Turns on one of this business's apps, with the apps it needs."),
+    tool("customer.consent.grant", "Record that a customer gives their consent to marketing by a channel."),
+    tool("customer.consent.list", "List a customer's consents, given or withdrawn.", "query"),
+    tool("customer.consent.withdraw", "Record that a customer withdraws their consent to marketing by a channel."),
+    tool("pricing.price_list.activate", "Bring a price list back into use for new sales."),
+    tool("pricing.price_list.deactivate", "Stop using a price list for new sales; its prices stay."),
+    tool("pricing.price_list.list", "List the price lists.", "query"),
+    tool("pricing.price_list.update", "Change a price list: its name, its dates."),
+    tool("reservation.reservation.cancel", "Cancel a reservation."),
+    tool("reservation.reservation.confirm", "Confirm a pending reservation."),
+    tool("reservation.reservation.list", "List the reservations of a day.", "query"),
+    tool("reservation.settings.update", "Change how reservations work: their length, their reminders."),
+    tool("staff.member.deactivate", "Deactivate a member of the staff: they no longer sign in; their card stays."),
+    tool("staff.member.list", "List the members of the staff.", "query"),
+    tool("staff.member.terminate", "Terminate a member of the staff from a date: their card is closed."),
+    tool("staff.member.update", "Change a member of the staff."),
+    tool("staff.time_off.approve", "Approve a pending time off of a member of the staff."),
+    tool("staff.time_off.list", "List the time off of the staff.", "query"),
+    tool("staff.time_off.reject", "Reject a pending time off of a member of the staff."),
+    tool("staff.time_off.request", "Request time off for a member of the staff."),
+    *NOISE,
+]
+#: A project's words for time off and for a customer's consent to marketing, as the Hub's own synonyms say them.
+HUB_WORDS = (("ausencia", "ausencias", "vacaciones", "time"), ("publicidad", "promociones", "consent"))
+
+
+@pytest.mark.parametrize(
+    ("asked", "language", "first"),
+    [
+        ("aprueba las vacaciones de Lucía", "es", "staff.time_off.approve"),
+        ("rechaza la ausencia de Ana del lunes", "es", "staff.time_off.reject"),
+        ("solicito unas vacaciones para el lunes", "es", "staff.time_off.request"),
+        ("approve Ana's time off", "en", "staff.time_off.approve"),
+        ("confirma la reserva de Ana", "es", "reservation.reservation.confirm"),
+        ("confirma la cita de Ana de mañana", "es", "appointment.appointment.confirm"),
+        ("desactiva al empleado Pablo", "es", "staff.member.deactivate"),
+        ("da de baja al empleado Pablo", "es", "staff.member.terminate"),
+        ("Carmen se da de baja de la publicidad", "es", "customer.consent.withdraw"),
+        ("desactiva la tarifa de verano", "es", "pricing.price_list.deactivate"),
+        ("vuelve a activar la tarifa de verano", "es", "pricing.price_list.activate"),
+        ("reactivate the summer price list", "en", "pricing.price_list.activate"),
+        ("desactiva la app de reservas", "es", "base.app.disable"),
+        ("activa la app de reservas", "es", "base.app.enable"),
+    ],
+)
+def test_what_is_approved_confirmed_or_switched_comes_first(asked, language, first):
+    """Time off approved, rejected or asked for, a booking confirmed, a member deactivated or terminated and a price
+    list switched off or on: the action of the thing named, before its other writes and its reads; an app named is
+    still switched by its own switch (ERPlora/live#50). Before, the action was no verb and these came behind."""
+    names = ranked(APPROVED_OR_SWITCHED, asked, language, synonyms=HUB_WORDS)
+    assert names[0] == first, names[:4]
+
+
+#: A price list and a payment method named only by their names, beside an app named by its own name («las ventas»).
+SWITCHED_BY_NAME = [*APPROVED_OR_SWITCHED, tool("sale.sale.list", "Lists the sales of a day.", "query")]
+
+
+@pytest.mark.parametrize(
+    ("asked", "language", "first"),
+    [
+        ("vuelve a activar Mayorista para las próximas ventas", "es", "pricing.price_list.activate"),
+        ("activate Wholesale again for the new sales", "en", "pricing.price_list.activate"),
+        ("activa las ventas", "es", "base.app.enable"),
+        ("desactiva las ventas", "es", "base.app.disable"),
+        ("turn off the sales", "en", "base.app.disable"),
+        # With words between the verb and the app, or the app named in the sentence before: still the app's switch.
+        ("activa otra vez las ventas", "es", "base.app.enable"),
+        ("activa también las ventas", "es", "base.app.enable"),
+        ("quiero activar ya mismo las ventas", "es", "base.app.enable"),
+        ("desactiva de momento las ventas", "es", "base.app.disable"),
+        ("ya no usamos las ventas, desactívalas", "es", "base.app.disable"),
+        ("deactivate the sales for now", "en", "base.app.disable"),
+    ],
+)
+def test_an_app_is_switched_when_it_is_what_the_command_switches(asked, language, first):
+    """An app named is switched when it is what the command switches («activa las ventas», «activa otra vez las
+    ventas»); named for what something is, after «para» or «for» («vuelve a activar Mayorista para las próximas
+    ventas»: a price list named by its name), it is not the thing switched on, and the activation of the thing comes
+    first (ERPlora/live#50; before, turning an app on did)."""
+    names = ranked(SWITCHED_BY_NAME, asked, language, synonyms=HUB_WORDS)
+    assert names[0] == first, names[:4]
+
+
+@pytest.mark.parametrize(
+    ("asked", "language", "first"),
+    [
+        ("desactiva las ventas", "es", "base.app.disable"),
+        ("hay que desactivar las ventas", "es", "base.app.disable"),
+        ("deactivate the sales", "en", "base.app.disable"),
+        ("desactiva al empleado Pablo", "es", "staff.member.deactivate"),
+    ],
+)
+def test_an_app_is_switched_off_also_when_a_project_makes_the_verb_a_thing(asked, language, first):
+    """A project may say «desactiva» names a deactivation (its ``synonyms``, as the Hub's do): the verb is then the
+    thing the command acts on, and an app named by its name is still the one switched off (ERPlora/live#50)."""
+    synonyms = (*HUB_WORDS, ("desactiva", "desactivar", "deactivate"))
+    names = ranked(SWITCHED_BY_NAME, asked, language, synonyms=synonyms)
+    assert names[0] == first, names[:4]
+
+
+@pytest.mark.parametrize(
+    ("said", "direct"),
+    [
+        ("vuelve a activar Mayorista para las próximas ventas", False),
+        ("activate Wholesale again for the new sales", False),
+        ("activa otra vez las ventas", True),
+        ("activa las ventas para el turno de noche", True),
+    ],
+)
+def test_a_thing_named_after_para_is_named_for_what_another_is(said, direct):
+    """``Asked.direct`` holds what is named outside what something is for: «ventas» after «para» or «for» is not."""
+    heard = assistant.asked([said])
+    assert any("venta" in concept or "sale" in concept for concept in heard.concepts)  # positive control: it is named
+    assert any("venta" in concept or "sale" in concept for concept in heard.direct) is direct
+
+
+@pytest.mark.parametrize(
+    ("said", "language"),
+    [
+        ("sí, confírmalo", "es"), ("confirma", "es"), ("vale, confirmo", "es"), ("claro, confírmalo", "es"),
+        ("adelante, confirma", "es"), ("confirma todo", "es"), ("confirma eso", "es"), ("confírmalo por favor", "es"),
+        ("sí confírmalo", "es"), ("yes, confirm it", "en"), ("ok, confirm", "en"), ("sure, confirm that", "en"),
+        ("please confirm it", "en"),
+    ],
+)
+def test_a_yes_that_confirms_asks_nothing_of_its_own(said, language):
+    """«Sí, confírmalo» answers what was asked before (a write the person agrees to), as a card's yes does: it asks to
+    confirm nothing and names nothing (ERPlora/live#50)."""
+    heard = assistant.asked([said])
+    assert (heard.verbs, heard.concepts) == (frozenset(), frozenset()), heard
+
+
+@pytest.mark.parametrize(
+    ("said", "language"),
+    [("confírmala para mañana", "es"), ("confirma la reserva de Ana", "es"), ("confirm Ana's booking", "en")],
+)
+def test_a_confirmation_of_a_thing_named_still_asks_to_confirm(said, language):
+    assert "confirm" in assistant.asked([said]).verbs
+
+
+def test_a_yes_said_with_the_write_leaves_the_write():
+    """In one message too: «cancela la reserva de Ana, sí, confírmalo» asks to cancel it, not to confirm it."""
+    assert assistant.asked(["cancela la reserva de Ana, sí, confírmalo"]).verbs == {"cancel"}
+
+
+@pytest.mark.parametrize("said", ["sí, claro", "yes, sure"])
+def test_the_words_of_a_yes_without_a_confirmation_are_read_as_said(said):
+    """Only beside a verb that confirms is a yes left out: «sí, claro» alone is read as any other words."""
+    assert assistant.asked([said]).concepts != frozenset()
+
+
+@pytest.mark.parametrize(
+    ("before", "yes", "language", "first"),
+    [
+        ("cancela la reserva de Ana", "sí, confírmalo", "es", "reservation.reservation.cancel"),
+        ("cancela la cita de Ana de mañana", "vale, confirmo", "es", "appointment.appointment.cancel"),
+        ("cancel Ana's reservation", "yes, confirm it", "en", "reservation.reservation.cancel"),
+    ],
+)
+def test_a_yes_after_a_write_keeps_the_write_asked_first(before, yes, language, first):
+    """A turn ranks the person's last two messages: after «cancela la reserva de Ana», «sí, confírmalo» keeps the
+    cancellation first, never the confirmation of the booking it was not asked to confirm."""
+    tools = {op.name: op for op in APPROVED_OR_SWITCHED}
+    names = [op.name for op in assistant.relevant(tools, [before, yes], language, synonyms=HUB_WORDS)]
+    assert names[0] == first, names[:4]
+
+
 @pytest.mark.parametrize(
     ("said", "english"),
     [
@@ -938,11 +1250,11 @@ def test_a_naming_verb_that_ends_the_sentence_is_read(said, verbs):
         ("borra el grupo Salsas sin cambiar los pedidos", {"delete", "remove"}),
         ("delete the Sauces group without changing the old orders", {"delete", "remove"}),
         # With its pronouns: an infinitive carries them at its end, as a command does.
-        ("desactiva a Lucía en la agenda sin borrarla", {"disable"}),
-        ("desactiva esa placa sin quitarle el PIN", {"disable"}),
+        ("desactiva a Lucía en la agenda sin borrarla", SWITCHING_OFF),
+        ("desactiva esa placa sin quitarle el PIN", SWITCHING_OFF),
         # A verb said in words, and a name put apart, are no more asked after «sin».
-        ("desactiva el horario de Ana sin cambiar el nombre", {"disable"}),
-        ("activa la tarifa sin ponerle al menú el nombre «Verano»", {"enable"}),
+        ("desactiva el horario de Ana sin cambiar el nombre", SWITCHING_OFF),
+        ("activa la tarifa sin ponerle al menú el nombre «Verano»", SWITCHING_ON),
         # Each ending of an infinitive: «-ar», «-er» («ponerle») and «-ir».
         ("cobra la mesa 4 sin imprimir el ticket", {"complete"}),
     ],
