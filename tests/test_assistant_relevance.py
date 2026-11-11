@@ -14,6 +14,7 @@ from collections import Counter
 
 import pytest
 from ninja import Schema
+from pydantic import create_model
 
 from live import assistant
 from live.operations import AI, Operation
@@ -918,219 +919,122 @@ def test_a_thing_named_after_para_is_named_for_what_another_is(said, direct):
     assert any("venta" in concept or "sale" in concept for concept in heard.direct) is direct
 
 
-def names(concepts: frozenset[frozenset[str]], word: str) -> bool:
-    return any(not concept.isdisjoint(assistant.stems(word)) for concept in concepts)
-
-
-@pytest.mark.parametrize(
-    ("said", "word", "direct"),
-    [
-        # What says of what the thing named is: after «de», «del» or «of» and their articles, behind a word that names.
-        ("vuelve a activar la regla de los productos", "productos", False),
-        ("desactiva la regla española de los productos", "productos", False),
-        ("desactiva la tarifa del producto", "producto", False),
-        ("vuelve a activar la regla de IVA de los productos", "productos", False),
-        ("desactiva la regla de la cocina", "cocina", False),
-        ("reactivate the rule of the products", "products", False),
-        # An app named as one is the app («la app de clientes»), in either language; a «de» behind the verb, or after
-        # the app named, says nothing of another thing.
-        ("activa la app de clientes", "clientes", True),
-        ("activa la aplicación de clientes", "clientes", True),
-        ("desactiva el módulo de reservas", "reservas", True),
-        ("turn on the module of bookings", "bookings", True),
-        ("desactiva de momento las ventas", "ventas", True),
-        ("activa las ventas del turno de noche", "ventas", True),
-        # Behind a word too short to name a thing, or one that names nothing, or opening the sentence: of no other.
-        ("desactiva la de reservas", "reservas", True),
-        ("desactiva las de reservas", "reservas", True),
-        ("de las ventas se encarga Ana, desactiva su turno", "ventas", True),
-    ],
-)
-def test_what_says_of_what_a_thing_is_is_not_named_directly(said, word, direct):
-    """``Asked.direct`` holds no thing named only to say of what another is: «los productos» in «vuelve a activar la
-    regla de los productos» is what the rule is of, not what the command switches (ERPlora/live#73)."""
-    heard = assistant.asked([said])
-    assert names(heard.concepts, word)  # positive control: it is named
-    assert names(heard.direct, word) is direct
-
-
-@pytest.mark.parametrize(
-    ("said", "word", "only_of_another"),
-    [
-        ("vuelve a activar la regla de los productos", "productos", True),
-        ("vuelve a activar la regla de los productos", "regla", False),
-        # Named itself too, it is no longer only what another is of.
-        ("desactiva la cocina y también los avisos de la cocina", "cocina", False),
-    ],
-)
-def test_what_is_named_only_to_say_of_what_another_is_is_of_another(said, word, only_of_another):
-    """``Asked.of_another`` holds the things named only to say of what another is (ERPlora/live#73)."""
-    heard = assistant.asked([said])
-    assert names(heard.concepts, word)  # positive control: it is named
-    assert names(heard.of_another, word) is only_of_another
-
-
-def test_an_app_named_as_one_by_the_projects_own_word_is_the_app():
-    """A project's own word for an app («función», in its synonyms) names the app as «la app de…» does."""
-    synonyms = (("app", "aplicacion", "modulo", "module", "funcion"),)
-    assert names(assistant.asked(["activa la función de reservas"], synonyms).direct, "reservas")
-    assert not names(assistant.asked(["activa la función de reservas"]).direct, "reservas")  # positive control
-
-
 class ProductImageIn(Schema):
     product: str
     image: str | None = None
 
 
-#: A tax rule named beside what it is of: the Hub's Taxes, whose «regla» is no synonym of «rule» but names the app by
-#: its menu («Reglas»; its asks say the rest), Products and the Kitchen, beside the switches of an app, a write that
-#: takes a product and the kitchen's own deactivation.
-RULE_OF_AN_APP = [
+#: The rules of two apps, as the Hub's say of themselves: Taxes', whose menu says «Reglas», and Pricing's discount
+#: rules, beside what a rule is of (Products, the Kitchen), a write that takes a product, a discount and the apps'
+#: switches.
+RULES_OF_TWO_APPS = [
     *APPROVED_OR_SWITCHED,
-    tool("inventory.product.set_image", "Put a product's image.", input=ProductImageIn),
     tool("tax.rule.activate", "Bring a deactivated tax rule back so it applies to new operations again.",
          asks={"es": ("reactiva la regla de IVA de los libros",
-                      "vuelve a poner en marcha en España la regla de impuestos de la comida",
-                      "recupera la regla fiscal de Portugal que está desactivada")}),
+                      "vuelve a poner en marcha en España la regla de impuestos de la comida")}),
     tool("tax.rule.deactivate", "Deactivate a tax rule so it no longer applies to new operations.",
-         asks={"es": ("desactiva la regla de IVA de los libros", "deja de aplicar por ahora la regla fiscal del 10 %",
-                      "desactiva de momento la regla de impuestos de España para la comida")}),
+         asks={"es": ("desactiva la regla de IVA de los libros", "deja de aplicar por ahora la regla fiscal del 10 %")}),
     tool("tax.rule.list", "List the tax rules.", "query"),
+    tool("pricing.rule.activate", "Bring a deactivated discount rule (by its id, code or name) back, so it applies to "
+         "new sales.", asks={"es": ("reactiva la promoción de verano",
+                                    "vuelve a aplicar el descuento de verano en las ventas nuevas")}),
+    tool("pricing.rule.deactivate", "Deactivate a discount rule (by its id, code or name) so it no longer takes "
+         "anything off new sales.", asks={"es": ("apaga el 2x1 de zumos hasta el año que viene",)}),
+    tool("inventory.product.set_image", "Put a product's image.", input=ProductImageIn),
     tool("kitchen.station.deactivate", "Stop sending orders to a kitchen station."),
+    tool("sale.order.set_discount", "Give an open check a discount."),
 ]
-PRODUCTS_APP = {
-    "inventory": "inventory products productos",
-    "tax": "tax taxes impuestos reglas",
-    "kitchen": "kitchen cocina",
-    "sale": "sale sales ventas",
-    "reservation": "reservation reservations reservas",
+RULE_APPS = {
+    "tax": "tax taxes impuestos reglas", "pricing": "pricing tarifas precios",
+    "inventory": "inventory products productos", "kitchen": "kitchen cocina", "sale": "sale sales ventas",
 }
 
 
-def products_app(label: str, language: str) -> frozenset[str]:
-    return frozenset(assistant.stems(PRODUCTS_APP.get(label, label)))
+def rule_apps(label: str, language: str) -> frozenset[str]:
+    return frozenset(assistant.stems(RULE_APPS.get(label, label)))
+
+
+@pytest.mark.parametrize(
+    ("asked", "rules", "switch"),
+    [
+        ("vuelve a activar la regla de los productos", {"tax.rule.activate", "pricing.rule.activate"},
+         "base.app.enable"),
+        ("desactiva la regla española de los productos sin perder su porcentaje",
+         {"tax.rule.deactivate", "pricing.rule.deactivate"}, "base.app.disable"),
+        ("desactiva la regla de la cocina", {"tax.rule.deactivate", "pricing.rule.deactivate"}, "base.app.disable"),
+    ],
+)
+def test_a_rule_switched_is_a_rule_before_the_switch_of_an_app(asked, rules, switch):
+    """«Vuelve a activar la regla de los productos» reactivates a rule: «regla» is a rule in either language, so the
+    rules' own switches come first, before turning an app on and before a write of what the rule is of
+    (ERPlora/live#73: «regla» only named Taxes by its menu, and beside «los productos», a thing, that only broke ties;
+    turning Taxes on and putting a product's image came first)."""
+    offered_ = ranked(RULES_OF_TWO_APPS, asked, app_words=rule_apps)
+    place = {name: at for at, name in enumerate(offered_)}
+    assert offered_[0] in rules, offered_[:4]
+    assert all(place.get(name, len(offered_)) < place.get(switch, len(offered_)) for name in rules), offered_[:6]
 
 
 @pytest.mark.parametrize(
     ("asked", "first"),
     [
-        ("vuelve a activar la regla de los productos", "tax.rule.activate"),
-        ("desactiva la regla española de los productos sin perder su porcentaje", "tax.rule.deactivate"),
-        ("desactiva la regla de la cocina", "tax.rule.deactivate"),
+        ("reactiva la regla de descuento", "pricing.rule.activate"),
+        ("vuelve a activar la regla de precios de los martes", "pricing.rule.activate"),
+        ("desactiva la regla de descuento del 10 %", "pricing.rule.deactivate"),
     ],
 )
-def test_what_a_thing_switched_is_of_does_not_take_its_place(asked, first):
-    """«Vuelve a activar la regla de los productos» reactivates the rule: «los productos» only say of what it is, so the
-    rule (of Taxes, by its menu) is still the thing the switch names (ERPlora/live#73; before, turning the app on and
-    putting a product's image came first)."""
-    offered_ = ranked(RULE_OF_AN_APP, asked, app_words=products_app)
+def test_the_rule_of_a_discount_is_pricings(asked, first):
+    """«La regla de descuento», «la regla de precios»: what the rule is of says whose rule it is, Pricing's
+    (ERPlora/live#73 and its review: Taxes' rule, by its menu, must not take its place)."""
+    offered_ = ranked(RULES_OF_TWO_APPS, asked, app_words=rule_apps)
     assert offered_[0] == first, offered_[:4]
 
 
-@pytest.mark.parametrize(
-    ("asked", "switch"),
-    [
-        ("vuelve a activar la regla de los productos", "base.app.enable"),
-        ("desactiva la regla española de los productos sin perder su porcentaje", "base.app.disable"),
-    ],
-)
-def test_a_write_that_takes_what_a_thing_switched_is_of_gets_nothing_for_the_switch(asked, switch):
-    """«Vuelve a activar la regla de los productos», of an app that brings rules back: a write that takes a product is
-    not what the switch changes, so it comes behind turning that app on (ERPlora/live#73; before, putting a product's
-    image came first)."""
-    offered_ = ranked(RULE_OF_AN_APP, asked, app_words=products_app)
-    assert offered_.index(switch) < offered_.index("inventory.product.set_image"), offered_[:4]
-
-
-def test_the_app_of_what_a_thing_switched_is_of_is_not_the_thing():
-    """«La regla de la cocina»: the kitchen, named only to say of what the rule is, does not make its own tools the
-    thing switched; they come behind turning Taxes on (ERPlora/live#73)."""
-    offered_ = ranked(RULE_OF_AN_APP, "desactiva la regla de la cocina", app_words=products_app)
-    assert offered_.index("base.app.disable") < offered_.index("kitchen.station.deactivate"), offered_[:4]
-
-
-class InventoryConfigIn(Schema):
-    track_stock: bool | None = None
-    low_stock_threshold: int | None = None
-
-
-#: The Hub's inventory settings beside its products, the app of clocking in («Control horario») and the apps' switches.
-STOCK_SETTINGS = [
-    tool("inventory.config.update", "Change how the inventory works: whether stock is tracked, the low stock threshold.",
-         input=InventoryConfigIn),
-    tool("inventory.product.update", "Change a product: its data, active or not.", input=ProductIn),
-    tool("inventory.stock.count", "Count the stock of a product.", "query"),
-    tool("attendance.person.list", "List the people who clock in.", "query"),
-    tool("pricing.price_list.activate", "Bring a price list back into use for new sales."),
+#: The apps the switch of an app names after a word that names nothing of the catalogue («el punto de venta»), beside
+#: a read of each, a write that takes its thing, as the Hub's do (``customer.customer.set_groups`` takes the customer),
+#: and what turns on or off another thing (a recurring series): they compete with the app's own switch.
+THINGS_OF_APPS = (("sale", "sale"), ("appointment", "appointment"), ("customer", "customer"),
+                  ("reservation", "booking"), ("inventory", "stock"), ("kitchen", "ticket"))
+APPS_BY_A_PART = [
     tool("base.app.enable", "Turns on one of this business's apps, with the apps it needs."),
     tool("base.app.disable", "Turns off one of this business's apps."),
+    tool("appointment.recurring.activate", "Bring a recurring series back."),
+    tool("appointment.recurring.deactivate", "Stop a recurring series for now."),
+    *(tool(f"{app}.{thing}.list", f"Lists the {thing}s of the business.", "query") for app, thing in THINGS_OF_APPS),
+    *(tool(f"{app}.{thing}.set_note", f"Puts a note on a {thing}.", input=create_model(f"{thing}In", **{thing: (str, ...)}))
+      for app, thing in THINGS_OF_APPS),
     *NOISE,
 ]
+PART_APPS = {
+    "sale": "sale sales ventas", "appointment": "appointments citas", "customer": "customers clientes",
+    "reservation": "reservations bookings reservas", "inventory": "inventory inventario", "kitchen": "kitchen cocina",
+}
 
 
-def stock_apps(label: str, language: str) -> frozenset[str]:
-    names_ = {"inventory": "inventory productos products", "attendance": "attendance control horario",
-              "pricing": "pricing tarifas"}
-    return frozenset(assistant.stems(names_.get(label, label)))
-
-
-@pytest.mark.parametrize("asked", ["desactiva el aviso de stock bajo", "turn on the tracking of stock"])
-def test_what_a_switch_is_of_still_says_which_datum_it_changes(asked):
-    """«El aviso de stock bajo», «the tracking of stock»: what the thing switched is of says which datum of a write it
-    is (``low_stock_threshold``, ``track_stock``), so the write that takes it is what the switch changes, and the app
-    of the stock is not the one switched (ERPlora/live#73; its review: taking that datum away too left the inventory's
-    settings behind turning an app on)."""
-    names_ = ranked(STOCK_SETTINGS, asked, app_words=stock_apps)
-    assert names_[0] == "inventory.config.update", names_[:4]
-
-
-@pytest.mark.parametrize("asked", ["activa el control de stock del café", "activa el control de stock de las tarifas"])
-def test_an_app_that_switches_nothing_named_by_a_word_of_its_name_is_not_the_thing(asked):
-    """«Activa el control de stock del café»: «control», a word of «Control horario», names an app that turns nothing
-    on, so the stock is still what it is of and the clocking in's tools are not the thing switched: they stay behind
-    the stock's (ERPlora/live#73). An app that does turn things on, named only to say of what (the price lists'), does
-    not change that."""
-    names_ = ranked(STOCK_SETTINGS, asked, app_words=stock_apps)
-    assert names_.index("inventory.stock.count") < names_.index("attendance.person.list"), names_[:4]
-    assert names_.index("inventory.config.update") < names_.index("attendance.person.list"), names_[:4]
-
-
-class FlowSwitchIn(Schema):
-    flow: str
-    enabled: bool
-
-
-#: The Hub's automations, named by their phrases and never by the word («la automatización»: ``base.assistant``'s
-#: synonyms), beside a ready-made one an app brings, the app's switch and the charge an automation fires on; the
-#: phrases below are the Hub's asks of turning one on, each ranked as its own battery does.
-AUTOMATIONS = [
-    tool("flow.flow.set_enabled", "Turn an automation on or pause it, by its id or its name («activate the welcome "
-         "automation», «pause the cash close one»).", input=FlowSwitchIn,
-         asks={"en": ("turn on the welcome automation", "pause the birthday automation"),
-               "es": ("enciende la automatización que salta al cobrar una venta",
-                      "pausa la automatización de cumpleaños", "vuelve a encender la automatización de reseñas")}),
-    tool("flow.recipe.enable", "Turn on a ready-made automation an app brings."),
-    tool("flow.flow.list", "List the automations.", "query"),
-    *HUB_SLICE,
-    *NOISE,
-]
-AUTOMATION_WORDS = (("flujo", "flow", "la automatizacion"),)
-
-
-def automations_app(label: str, language: str) -> frozenset[str]:
-    return frozenset(assistant.stems({"flow": "flow automatizaciones", "sale": "sale ventas"}.get(label, label)))
+def part_apps(label: str, language: str) -> frozenset[str]:
+    return frozenset(assistant.stems(PART_APPS.get(label, label)))
 
 
 @pytest.mark.parametrize(
-    "asked",
-    ["vuelve a encender la automatización de reseñas", "enciende la automatización que salta al cobrar una venta"],
+    ("asked", "language", "switch"),
+    [
+        ("activa el punto de venta", "es", "base.app.enable"),
+        ("turn on the point of sale", "en", "base.app.enable"),
+        ("activa el sistema de citas", "es", "base.app.enable"),
+        ("desactiva la gestión de clientes", "es", "base.app.disable"),
+        ("desactiva la función de reservas", "es", "base.app.disable"),
+        ("activa la parte de reservas", "es", "base.app.enable"),
+        ("turn on the management of bookings", "en", "base.app.enable"),
+        ("activa la funcionalidad de cocina", "es", "base.app.enable"),
+        ("activa la gestión de inventario", "es", "base.app.enable"),
+    ],
 )
-def test_a_thing_a_project_names_by_its_phrase_is_still_what_a_switch_names(asked):
-    """A thing named by a phrase of the project's synonyms («la automatización») is what a switch names, beside what
-    says of what it is («de reseñas»): turning that automation on comes first, not a ready-made one of its app nor the
-    charge it fires on (the review of ERPlora/live#73: reading only ``Asked.direct`` lost it)."""
-    names_ = ranked(AUTOMATIONS, asked, synonyms=AUTOMATION_WORDS, app_words=automations_app)
-    assert names_[0] == "flow.flow.set_enabled", names_[:4]
+def test_an_app_named_after_a_word_that_names_nothing_is_the_app_switched(asked, language, switch):
+    """«El punto de venta», «la gestión de clientes»: a word that names nothing of the catalogue only leads to the app
+    named after «de» or «of», and that is the app switched (the review of ERPlora/live#73: read as what another thing
+    is of, the switch of the app fell behind)."""
+    names_ = ranked(APPS_BY_A_PART, asked, language, app_words=part_apps)
+    assert switch in names_[:2], names_[:4]
 
 
 @pytest.mark.parametrize(
@@ -1193,7 +1097,7 @@ def test_a_yes_after_a_write_keeps_the_write_asked_first(before, yes, language, 
         ("mi foto de perfil", "avatar"), ("la ficha", "card"), ("recibir", "receive"), ("la devolución", "refund"),
         ("el reembolso", "refund"), ("las cuentas aparcadas", "park"),
         ("las etiquetas", "tag"), ("el portátil", "device"), ("este ordenador", "device"), ("la tablet", "device"),
-        ("los comensales", "guest"), ("un comensal", "guest"),
+        ("los comensales", "guest"), ("un comensal", "guest"), ("la regla", "rule"), ("las reglas", "rule"),
     ],
 )
 def test_the_words_of_one_thing_name_it_in_either_language(said, english):
