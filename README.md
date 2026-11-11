@@ -238,10 +238,13 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   borrar, nunca `get`; «set up» configura, nunca `set`; «add up» y «¿cuadran?» comprueban, no añaden; «cambia el
   nombre» y «ponle de nombre» renombran; también con lo que se nombra en medio, «pon al dispositivo que uso ahora el
   nombre «Barra»» o «cámbiale a la tablet el nombre», siempre que el nombre lleve su artículo y no diga por dónde se
-  busca la cosa: «con el nombre», «de nombre» no renombran; live#47) y de que en medio no empiece otra orden: en
-  «cambia el precio del café y dime el nombre del cliente» el nombre es de «dime» y «cambia» sigue cambiando; un verbo
-  tras un artículo, «mi», «esta» o «que» es de la cosa, «ponle a la lista de precios el nombre «Verano»» renombra;
-  live#57). «Ponle», «añade», «apunta» y «mete» añaden
+  busca la cosa: «con el nombre», «de nombre» no renombran; live#47), de que el verbo no lleve detrás su propio objeto
+  («cambia el precio del café muestra el nombre del cliente»: lo nombrado va tras «a», «al», «for», «on»; live#59) y
+  de que en medio no empiece otra orden: en «cámbiale al café el precio y dime el nombre del cliente» el nombre es de
+  «dime» y «cambia» sigue cambiando; otra orden empieza tras «y», «e», «luego», «después», «también», «and», «then»,
+  «also» o con sus pronombres («dime», «búscame», «dame», «show me», «tell me»), y en cualquier otro sitio un verbo es
+  de la cosa: «ponle a la primera lista el nombre «Verano»», «change for the price list the name» y «change for
+  register 2 the name» renombran; live#57, live#59). «Ponle», «añade», «apunta» y «mete» añaden
   (`add`); «exporta», «descarga», «download» exportan; «importa», «súbeme», «upload» importan; «borremos todos sus
   datos» y «erase» borran del todo
   (`erase`); «empieza» y «start» abren; «sienta», «sentar» y «seat» abren una mesa o vuelven a sentar una cuenta aparcada

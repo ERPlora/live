@@ -227,6 +227,10 @@ for _phrase in VERBS["rename"]:
         _NAMING[_head] = (*_NAMING.get(_head, ()), tuple(_rest))
 #: The words before a name that make it what a thing is found by, not the name put on it («con el nombre»).
 _FOUND_BY = frozenset({"con", "por", "de", "del", "bajo", "with", "by", "of", "under"})
+#: The articles that open a verb's own object right after it («cambia el precio…», «change the price…»): such a verb
+#: puts no name said later. What a name said apart is put on goes after «a», «al», «for», «on» («ponle a la lista el
+#: nombre»).
+_OWN_OBJECT = frozenset({"el", "la", "los", "las", "the"})
 #: The actions that only read: a question that asks for none of the others asks to know, not to do. Asked of nothing
 #: named, they bring no tool: «¿cuántos…?» is no list of everything.
 READ_VERBS = frozenset({"list", "get", "options", "count", "check", "stats"})
@@ -260,10 +264,12 @@ _GREETINGS = frozenset({"hola", "hey", "hi", "hello", "oye", "vale", "ok", "okay
 _HOW_TO_LEADS = frozenset({"dime", "explicame", "ensename", "sabes", "tell", "explain", "show", "me", "us", "please"})
 #: Articles an English command puts between «do» and what it does («do a refund»).
 _ARTICLES = frozenset({"a", "an", "the", "un", "una", "el", "la"})
-#: Words after which a verb's word says what the thing is, not another command: an article («ponle a la lista de precios
-#: el nombre»), whose or which one it is («a mi lista», «a esta lista», «this list») or «que» («pon a la tablet que
-#: cobra en la barra el nombre»).
-_DESCRIBING = _ARTICLES | {"que", "mi", "tu", "su", "nuestra", "esta", "esa", "my", "your", "our", "this", "that"}
+#: Words after which a verb starts another command inside a sentence («y muestra», «and show», «luego busca»).
+_THEN = frozenset({"y", "e", "luego", "despues", "tambien", "and", "then", "also"})
+#: The pronouns an English command says after it («show me», «find us»), as a Spanish one carries them at its end.
+_PRONOUNS_AFTER = frozenset({"me", "us"})
+#: Commands said with their pronouns whose verb no other word of ``VERBS`` says: «dame» (give me).
+_WITH_PRONOUNS = frozenset({"dame"})
 #: How a question that asks to do starts («can you charge table 4?»): a request, not a question.
 _REQUESTS = frozenset({("can", "you"), ("could", "you"), ("would", "you"), ("will", "you"), ("me", "puedes"),
                        ("me", "podrias"), ("nos", "puedes"), ("please",), ("puedes",), ("podrias",), ("por", "favor")})
@@ -636,26 +642,35 @@ def _objects(
 
 
 def _starts_command(words: list[str], at: int) -> bool:
-    """Whether another command starts at ``words[at]``, inside a sentence: a verb of ``VERBS`` («y dime», «búscame») or
-    what only asks (``_FILLERS``: «and tell me»); never a verb's word said of the thing (after ``_DESCRIBING``: «a la
-    lista de precios») nor one that names a thing (``_NOT_VERBS``: «la mesa nueva») or comes after one («la nueva
-    lista»)."""
+    """Whether another command starts at ``words[at]``, inside a sentence: what only asks (``_FILLERS``: «tell me»),
+    or a verb of ``VERBS`` where one starts — after ``_THEN`` («y muestra», «and show») or said with its pronouns
+    («dime», «búscame», ``_WITH_PRONOUNS``; «show me», ``_PRONOUNS_AFTER``). Anywhere else a verb's word is of the
+    thing named («la primera lista», «de muestra», «the price list», «register 2»: ERPlora/live#59), and a word that
+    names a thing (``_NOT_VERBS``: «baja y alta», «old and new») never starts one."""
+    if any(" ".join(words[at : at + len(one.split())]) == one for one in _FILLERS):
+        return True
     word = words[at]
-    if words[at - 1] in _DESCRIBING | _NOT_VERBS or word in _NOT_VERBS:
+    if word in _NOT_VERBS or not _verbs_of(word):
         return False
-    return bool(_verbs_of(word)) or any(" ".join(words[at : at + len(one.split())]) == one for one in _FILLERS)
+    return (
+        words[at - 1] in _THEN
+        or _unclitic(word) is not None
+        or word in _WITH_PRONOUNS
+        or (at + 1 < len(words) and words[at + 1] in _PRONOUNS_AFTER)
+    )
 
 
 def _split_naming(sentences: list[list[str]]) -> set[tuple[str, str]]:
     """The naming phrases (``_NAMING``) of ``sentences`` said with words between their verb and the name («pon al
-    dispositivo el nombre»; its pronouns too: «cámbiale a la tablet el nombre»), each with its verb as said; never a
-    name that finds the thing (``_FOUND_BY``: «con el nombre») nor one after another command starts
+    dispositivo el nombre»; its pronouns too: «cámbiale a la tablet el nombre»), each with its verb as said; never of a
+    verb with its own object (``_OWN_OBJECT``: «cambia el precio del café muestra el nombre del cliente»,
+    ERPlora/live#59), a name that finds the thing (``_FOUND_BY``: «con el nombre») nor one after another command starts
     (``_starts_command``: «cambia el precio y dime el nombre del cliente», ERPlora/live#57)."""
     found: set[tuple[str, str]] = set()
     for words in sentences:
         for at, word in enumerate(words):
             head = word if word in _NAMING else _unclitic(word)
-            if head not in _NAMING:
+            if head not in _NAMING or (at + 1 < len(words) and words[at + 1] in _OWN_OBJECT):
                 continue
             end = next((later for later in range(at + 1, len(words)) if _starts_command(words, later)), len(words))
             for rest in _NAMING[head]:

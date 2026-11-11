@@ -686,6 +686,14 @@ def test_a_name_put_on_a_device_renames_it(asked):
         ("cambia la reserva bajo el nombre de García a las nueve", {"change", "set", "update"}),
         ("change the booking under the name Smith to nine", {"change", "set", "update"}),
         ("ponle al menú de nombre «Carta» un precio", {"add", "set", "update"}),
+        # Also said apart, after «a», «al», «for» (ERPlora/live#59: «pon el precio…» is a verb with its own object).
+        ("ponle al menú con el nombre «Café» un precio de 3 €", {"add", "set", "update"}),
+        ("change for the menu with the name Coffee the price to 3", {"change", "set", "update"}),
+        ("cámbiale a la reserva bajo el nombre de García la hora", {"change", "set", "update"}),
+        ("change for the booking under the name Smith the time", {"change", "set", "update"}),
+        ("cámbiale a la reserva buscada por el nombre de García la hora", {"change", "set", "update"}),
+        ("change for the booking found by the name Smith the time", {"change", "set", "update"}),
+        ("change for the tablet the colour of the name to red", {"change", "set", "update"}),
     ],
 )
 def test_a_name_that_finds_the_thing_is_no_rename(said, verbs):
@@ -744,6 +752,100 @@ def test_a_verbs_word_after_whose_or_which_thing_it_is_still_renames(said):
     """«Esta lista», «mi lista», «this list» say which thing is named, like an article: no other command starts there
     (the Hub's price lists are «lista de precios»; a name said apart renamed them before ERPlora/live#57)."""
     assert {"rename", "set", "update"} <= assistant.asked([said]).verbs
+
+
+@pytest.mark.parametrize(
+    ("said", "verbs"),
+    [
+        # After an ordinal, «de», «for», «on» or another noun, a verb's word («lista», «muestra», «list», «register»)
+        # is of the thing named.
+        ("ponle a la primera lista el nombre «Verano»", {"list", "rename", "set", "update"}),
+        ("pon a la tarifa de muestra el nombre «Demo»", {"list", "rename", "set", "update"}),
+        ("change for the price list the name to Summer", {"list", "rename", "set", "update"}),
+        ("change on my price list the name to Summer", {"list", "rename", "set", "update"}),
+        ("change for register 2 the name to Bar", {"create", "rename", "set", "update"}),
+        ("change on register 2 the name to Bar", {"create", "rename", "set", "update"}),
+        # The name said in a row, with a verb's word that ends the sentence.
+        ("cámbiale el nombre a la primera lista", {"list", "rename", "set", "update"}),
+        ("change its name for the price list", {"list", "rename", "set", "update"}),
+    ],
+)
+def test_a_verbs_word_inside_the_name_of_the_thing_still_renames(said, verbs):
+    """A verb's word starts another command only where one starts («y», «then», its pronouns); inside what names the
+    thing it is a noun: «la primera lista», «the price list», «register 2» (ERPlora/live#59, born of live#58)."""
+    assert assistant.asked([said]).verbs == verbs
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        # After «y» / «and», a word of ``_NOT_VERBS`` still names («la temporada baja y alta», «old and new»).
+        "cámbiale a la tarifa de temporada baja y alta el nombre «Verano»",
+        "change for the old and new price list the name to Summer",
+        # Nor a word that is no verb («vinos y cervezas»).
+        "ponle a la carta de vinos y cervezas el nombre «Bodega»",
+        "change for the wine and beer list the name to Cellar",
+    ],
+)
+def test_a_word_that_names_after_and_still_renames(said):
+    assert {"rename", "set", "update"} <= assistant.asked([said]).verbs
+
+
+@pytest.mark.parametrize(
+    ("said", "verbs"),
+    [
+        # Each word after which a verb starts another command, in its language: the name said apart from a verb
+        # whose thing goes after «al» / «for» («cámbiale al café el precio…»).
+        ("cámbiale al café el precio y muestra el nombre del cliente", {"change", "list", "set", "update"}),
+        ("cámbiale al café el precio e imprime el nombre del cliente", {"change", "print", "set", "update"}),
+        ("cámbiale al café el precio y luego muestra el nombre del cliente", {"change", "list", "set", "update"}),
+        ("cámbiale al café el precio y después muestra el nombre del cliente", {"change", "list", "set", "update"}),
+        ("cámbiale al café el precio y también muestra el nombre del cliente", {"change", "list", "set", "update"}),
+        ("change for the coffee the price and show the name of the customer", {"change", "list", "set", "update"}),
+        ("change for the coffee the price then show the name of the customer", {"change", "list", "set", "update"}),
+        ("change for the coffee the price and also show the name of the customer", {"change", "list", "set", "update"}),
+        # Dictated, the other command with its pronouns: at its end in Spanish, after it in English; or what only asks.
+        ("cámbiale al café el precio búscame el nombre del cliente", {"change", "list", "set", "update"}),
+        ("cámbiale al café el precio dame el nombre del cliente", {"change", "get", "set", "update"}),
+        ("change for the coffee the price show me the name of the customer", {"change", "list", "set", "update"}),
+        ("change for the coffee the price show us the name of the customer", {"change", "list", "set", "update"}),
+        ("change for the coffee the price and tell me the name of the customer", {"change", "set", "update"}),
+    ],
+)
+def test_a_name_asked_by_a_command_that_starts_there_is_no_rename(said, verbs):
+    """Another command starts after «y», «e», «luego», «después», «también», «and», «then», «also», or said with its
+    pronouns («búscame», «dame», «show me»): «el nombre» after it is the one it asks for (ERPlora/live#59)."""
+    assert assistant.asked([said]).verbs == verbs
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        # Each article that opens the verb's own object, in its language.
+        "cambia el precio del café muestra el nombre del cliente",
+        "cambia la hora de la reserva muestra el nombre del cliente",
+        "cambia los precios del café muestra el nombre del cliente",
+        "cambia las horas de la reserva muestra el nombre del cliente",
+        "change the price of the coffee list the name of the customer",
+    ],
+)
+def test_a_verb_with_its_own_object_puts_no_name_said_later(said):
+    """Dictated with no «y» nor pronouns, a second command («muestra», «list») is no word of the thing named: a verb
+    followed by its own object («cambia el precio…») names nothing with «el nombre» said later, it is what that
+    command asks for (ERPlora/live#59; a name said apart goes after «a», «for», «on»: «ponle a la lista el nombre»)."""
+    assert assistant.asked([said]).verbs == {"change", "list", "set", "update"}
+
+
+@pytest.mark.parametrize(
+    ("said", "verbs"),
+    [
+        # A naming verb that ends the sentence has no word after it to be its own object.
+        ("el nombre de la tablet lo quiero cambiar", {"change", "set", "update"}),
+        ("that name I want to change", {"change", "set", "update"}),
+    ],
+)
+def test_a_naming_verb_that_ends_the_sentence_is_read(said, verbs):
+    assert assistant.asked([said]).verbs == verbs
 
 
 def test_being_available_is_no_device():
