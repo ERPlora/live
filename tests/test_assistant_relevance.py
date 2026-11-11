@@ -1118,6 +1118,13 @@ def test_the_words_of_one_thing_name_it_in_either_language(said, english):
         ("listo", "lista"), ("listos", "listar"),
         # «Disponible» (available) is no «dispositivo» (a device): both cut to «dispo» (ERPlora/live#47).
         ("disponible", "dispositivo"), ("disponibles", "dispositivos"), ("disponibilidad", "dispositivo"),
+        # To seal is no sale, to exist no stock, production no product and to check no purchase: each pair cut to one
+        # stem, «sell», «exist», «produ» and «compr» (ERPlora/live#71).
+        ("sella", "vende"), ("sellado", "venta"), ("sellar", "sell"), ("sello", "sale"), ("selle", "seller"),
+        ("existiera", "existencias"), ("existir", "stock"), ("existe", "inventario"), ("existing", "stock"),
+        ("exists", "inventory"),
+        ("producción", "producto"), ("producciones", "productos"), ("production", "product"),
+        ("comprueba", "compra"), ("comprobando", "compras"), ("comprobante", "purchase"), ("compruebo", "comprar"),
     ],
 )
 def test_words_of_two_things_are_never_one_stem(one, other):
@@ -1144,10 +1151,77 @@ def test_words_of_two_things_are_never_one_stem(one, other):
         ("comensal comensales", "comensal"),
         ("listo listos", "listo"),
         ("disponible disponibles disponibilidad", "dispon"),
+        ("sella sellar sellado sellamos sellan séllalo sello sellos selló selle sellen", "sellar"),
+        ("existe existen existir existiera existía exist exists existing existed existence", "existir"),
+        ("producción producciones production productions", "produccion"),
+        ("comprueba compruebo comprobar comprobando comprobado comprobación comprobante compruébalo", "comprobar"),
     ],
 )
 def test_the_forms_of_a_word_kept_apart_still_join(words, stem):
     assert assistant.stems(words) == {stem}
+
+
+@pytest.mark.parametrize(
+    ("one", "other"),
+    [
+        # What the words kept apart of ERPlora/live#71 were cut like still names what it named.
+        ("vende", "sell"), ("venta", "selling"), ("ventas", "sells"), ("venta", "seller"),
+        ("existencias", "stock"), ("existencia", "inventario"),
+        ("producto", "product"), ("productos", "products"), ("artículo", "product"),
+        ("compra", "purchase"), ("compras", "purchases"), ("comprar", "compro"),
+    ],
+)
+def test_the_words_a_word_kept_apart_was_cut_like_still_name_one_thing(one, other):
+    """«Sell», «existencias», «producto» and «compra» keep their groups: only the words kept apart leave them."""
+    names = lambda said: assistant._concept(assistant._plain(said))  # noqa: E731
+    assert not names(one).isdisjoint(names(other))
+
+
+VERIFACTU_AND_ITS_NEIGHBOURS = [
+    tool("verifactu.config.back_to_testing", "Goes back to the test environment of the tax agency while no record has "
+         "been sent there.", asks={"es": ("vuelve VeriFactu al entorno de pruebas",)}),
+    tool("verifactu.record.create", "Seals and chains the record of an invoice that has none.",
+         asks={"es": ("sella y encadena el registro de la factura",)}),
+    tool("verifactu.chain.validate", "Verify the VeriFactu chain of an issuer: every record's fingerprint is "
+         "recomputed and must carry the previous one's.", "query",
+         asks={"es": ("comprueba que la cadena de huellas no está rota",)}),
+    tool("inventory.product.list", "Lists the products.", "query"),
+    tool("inventory.product.set_sold_out", "Marks a product as sold out."),
+    tool("inventory.product.export", "Exports the products."),
+    tool("inventory.config.update", "Changes the stock settings: what counts as stock and its alerts."),
+    tool("sale.sale.print", "Prints the ticket of a sale."),
+    tool("sale.sale.void", "Voids a sale."),
+    tool("sale.sale.refund", "Refunds a sale."),
+    tool("customer.purchase.list", "Paginated purchase history of a customer: each sale with its amount.", "query",
+         asks={"es": ("¿qué ha comprado Sara?", "las compras de Ana")}),
+    tool("customer.purchase.divergences", "Reconciliation audit: the customers whose purchase count or spend disagree "
+         "with their purchase history.", "query", asks={"es": ("revisa si cuadra el gasto de cada cliente",)}),
+]
+
+
+def test_sealing_in_production_brings_no_sale_stock_or_product_before_going_back_to_testing():
+    """The probe of the QA of VeriFactu that ERPlora/live#71 reports 12th: «sellado» named a sale and «producción» a
+    product, so the tools of Inventory and Sales came before going back to the test environment."""
+    said = "vuelve al entorno de pruebas si todavía no se ha sellado ningún registro en producción"
+    names = ranked(VERIFACTU_AND_ITS_NEIGHBOURS, said)
+    others = [name for name in names if not name.startswith("verifactu.")]
+    assert all(names.index("verifactu.config.back_to_testing") < names.index(other) for other in others), names
+
+
+@pytest.mark.parametrize(
+    ("said", "language"),
+    [
+        ("sella el registro si aún no existiera, en producción, comprobando la cadena", "es"),
+        ("sella y encadena el registro de la factura de prueba si aún no existiera", "es"),
+        ("seal the record if it does not exist yet: we are in production", "en"),
+        ("check the existing chain before going to production", "en"),
+    ],
+)
+def test_sealing_existing_production_and_checking_name_no_sale_stock_product_or_purchase(said, language):
+    """The words of ERPlora/live#71 name what they say: none of them a sale, the stock, a product or a purchase."""
+    named = assistant.asked([said]).concepts
+    for thing in ("venta", "existencias", "producto", "compra"):
+        assert assistant._concept(thing) not in named, thing
 
 
 ATTENDANCE_AND_CUSTOMER = [

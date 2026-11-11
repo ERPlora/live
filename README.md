@@ -232,7 +232,9 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   pierde la consonante doblada con su final («tagged» → «tag»). Las palabras de dos cosas no comparten raíz: «tablet» no
   es «table», «compartido» no es «company», «peluquería» no es «peluquero», «carta» no es «cart», «contrato» y
   «contraseña» no son «control», «recibo» no es «recibir», «registro» no es «register», «settings» no es «set», «comensal»
-  no es «comentario» ni «comenzar», «listo» no es «lista» (live#54), «disponible» no es «dispositivo» (live#47), y
+  no es «comentario» ni «comenzar», «listo» no es «lista» (live#54), «disponible» no es «dispositivo» (live#47),
+  «sella» no es «sell», «existir» («existing») no es «existencias», «producción» («production») no es «producto»,
+  «comprueba» no es «compra» (live#71), y
   «ficha» (la del cliente) no es «fichar» salvo al empezar una orden («ficha la entrada de Ana»; igual «reserva una mesa»).
 - **Verbos** (`VERBS`): una frase de varias palabras cuenta seguida y sus palabras no piden otra cosa («get rid of» es
   borrar, nunca `get`; «set up» configura, nunca `set`; «add up» y «¿cuadran?» comprueban, no añaden; «cambia el
