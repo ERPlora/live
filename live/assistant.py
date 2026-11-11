@@ -375,6 +375,7 @@ SYNONYMS = (
     ("iva", "impuesto", "tax", "vat"),
     ("categoria", "familia", "category"),
     ("descuento", "discount"),
+    ("regla", "rule"),
     ("proveedor", "supplier"),
     ("comanda", "pedido", "order"),
     ("cocina", "kitchen"),
