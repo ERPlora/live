@@ -299,11 +299,11 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   (los «cuántos» no levantan todas las listas), y un dato por el que filtra no es lo que lee. Encender o apagar algo
   que una escritura toma la cambia («turn off the alerts» → `accounts.preferences.update`); una escritura de una cosa
   nombrada tras el verbo trae la lectura que la encuentra («borra el cliente Ana»). Al encender o apagar algo que hace
-  una app nombrada (por su nombre o su menú), lo que solo dice de qué es eso no cuenta como cosa nombrada a su lado: en
-  «vuelve a activar la regla de los productos», «la regla» sigue siendo la cosa (la app que la nombra en su menú
-  reactiva reglas); si la app nombrada no enciende nada («activa el control de stock»: «control» es una palabra de
-  «Control horario»), lo que va tras «de» sigue nombrando la cosa, y siempre dice qué dato cambia una escritura
-  («desactiva el aviso de stock bajo»; live#73).
+  una app nombrada (por su nombre o su menú), lo que solo dice de qué es eso no cuenta como cosa nombrada a su lado ni
+  como el dato que cambia una escritura: en «vuelve a activar la regla de los productos», «la regla» sigue siendo la
+  cosa (la app que la nombra en su menú reactiva reglas) y cambiar un producto no suma por el interruptor. Si la app
+  nombrada no enciende nada («activa el control de stock»: «control» es una palabra de «Control horario»), lo que va
+  tras «de» sigue nombrando la cosa y el dato («desactiva el aviso de stock bajo»; live#73).
 - **Sinónimos del proyecto** (`synonyms=`): `SYNONYMS` guarda solo lo que una palabra significa en cualquier negocio.
   Lo que significa solo en un proyecto lo pasa ese proyecto en cada turno y en su QA, nunca se fija en `live`: «cuenta»
   es la cuenta de una mesa en el Hub (`(("cuenta", "check", "tab", "order"),)`) y la cuenta de la persona en el SaaS

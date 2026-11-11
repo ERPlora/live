@@ -975,8 +975,8 @@ def _relevant(
     helps = frozenset(howto) if said.howto else frozenset()
     always = tuple(always)
 
-    def named(words: frozenset[str]) -> int:
-        return sum(1 for concept in concepts if not concept.isdisjoint(words))
+    def named(words: frozenset[str], among: frozenset[frozenset[str]] = concepts) -> int:
+        return sum(1 for concept in among if not concept.isdisjoint(words))
 
     # The things the catalogue's tools are of. A question that names none of them but an app by its name («la cocina»:
     # the kitchen app, of tickets and stations) makes that app the thing; beside a thing named («el registro de
@@ -1045,7 +1045,7 @@ def _relevant(
             else:
                 writes = matched - READ_VERBS
                 points += 7 if takes and writes else 3 if writes and not aimed_at else 1 if app_named else 0
-        elif switching and takes and not _CHANGES.isdisjoint(acts):
+        elif switching and not _CHANGES.isdisjoint(acts) and named(_taken(op.input), switched):
             points += 7
         if op.kind == "query":
             if about and any(not concept.isdisjoint(named_entity) for concept in about):
