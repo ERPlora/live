@@ -250,7 +250,12 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   (`erase`); «empieza» y «start» abren; «sienta», «sentar» y «seat» abren una mesa o vuelven a sentar una cuenta aparcada
   (`open`, `restore`: decide la cosa nombrada), y sus formas se nombran juntas aunque la raíz las separe («sienta»,
   «sentar»); «traslada», «transfiere» y «transfer» transfieren (`transfer`), y los «comensales» son los `guests`
-  (live#48); «ponme la app», «instala» encienden; «how many» y «cuántos» cuentan (`count`, `list`, `stats`). «How», «which»,
+  (live#48); «anota» y «anotar» apuntan algo nuevo, le añaden a lo que hay o escriben en ello (`create`, `add`,
+  `update`: decide lo nombrado, «anota una cita para Ana», «anótame dos cafés en la cuenta», «anota en la cita de Ana
+  que use mascarilla»), y «retira» y «retirar» lo quitan, lo retiran o lo retiran
+  como permiso (`delete`, `remove`, `retire`, `withdraw`: decide la cosa nombrada, «retira la mesa 90», «retira el
+  dispositivo», «retira su consentimiento»; en inglés, «retire» y «withdraw»), también con sus pronombres
+  («anótalo», «retírala»; live#64); «ponme la app», «instala» encienden; «how many» y «cuántos» cuentan (`count`, `list`, `stats`). «How», «which»,
   «cómo» y «cuál» ya no son el verbo «listar». Un verbo no nombra cosas salvo por sus sinónimos («cobra» nombra la
   venta; «show me», «dame», «dime», «give me», «tell me» no nombran nada). Un infinitivo tras «sin», también con sus
   pronombres, dice lo que no se hace y no se pide («borra el grupo sin cambiar los pedidos», «sin quitarle el PIN»; como

@@ -573,6 +573,90 @@ def test_a_parked_check_seated_again_is_restored(asked, language):
     assert names[0] == "table.session.restore", names[:4]
 
 
+#: What «anota» asks for: writing something new down, adding to what there is or writing on it; what is named says which.
+NOTING = {"create", "add", "update"}
+#: What «retira» asks for: taking something away, retiring it or withdrawing it; the thing named says which.
+TAKING_AWAY = {"delete", "remove", "retire", "withdraw"}
+
+
+@pytest.mark.parametrize(
+    ("said", "language", "actions"),
+    [
+        ("anota en la cita de Ana que use mascarilla", "es", NOTING),
+        ("anótalo en la ficha de Ana", "es", NOTING),
+        ("hay que anotar en la espera de Marta que viene con un bebé", "es", NOTING),
+        ("hay que anotarlo en la cita de Ana", "es", NOTING),
+        ("retira la mesa 90 del plano", "es", TAKING_AWAY),
+        ("retírala del plano", "es", TAKING_AWAY),
+        ("hay que retirar la mesa 90 del plano", "es", TAKING_AWAY),
+        ("hay que retirarla del plano", "es", TAKING_AWAY),
+        ("retire the Bar 2 station for good", "en", {"retire"}),
+        ("withdraw Ana's consent to the emails", "en", {"withdraw"}),
+    ],
+)
+def test_noting_and_taking_away_ask_for_their_action(said, language, actions):
+    """«Anota» writes something new down (``create``: «anota una cita para Ana», as «apunta» does), adds to what there
+    is (``add``) or writes on it (``update``: «anota en la cita de Ana…»); «retira» takes it
+    away (``delete``, ``remove``), retires it (``retire``) or withdraws it (``withdraw``: a consent) — ERPlora/live#64.
+    With their pronouns too; in English, «retire» and «withdraw»."""
+    assert assistant.asked([said]).verbs == actions
+
+
+#: What is noted on or taken away, beside the reads and the other writes of the same things.
+NOTED_OR_TAKEN_AWAY = [
+    tool("appointment.appointment.create", "Book an appointment for a customer with a service."),
+    tool("appointment.appointment.list", "List the appointments of some days.", "query"),
+    tool("appointment.appointment.update", "Change an appointment: its time, its service or its notes."),
+    tool("customer.consent.grant", "Record that a customer gives their consent to marketing by a channel."),
+    tool("customer.consent.list", "List a customer's consents, given or withdrawn.", "query"),
+    tool("customer.consent.withdraw", "Record that a customer withdraws their consent to marketing by a channel."),
+    tool("printing.device.list", "List the devices that print.", "query"),
+    tool("printing.device.retire", "Retire a device that prints (a till replaced or lost)."),
+    tool("printing.device.update", "Rename a device that prints."),
+    tool("sale.order.add", "Add lines to an open check."),
+    tool("sale.order.update", "Change an open check's title or note."),
+    tool("table.table.create", "Creates a table of the floor plan with its name and seats."),
+    tool("table.table.delete", "Delete a table of the floor plan; its checks keep their history."),
+    tool("table.table.list", "Lists the tables of the floor plan with their seats.", "query"),
+    tool("table.table.update", "Change a table of the floor plan: its name, its seats, its zone."),
+    *NOISE,
+]
+
+
+@pytest.mark.parametrize(
+    ("asked", "first"),
+    [
+        ("anota una cita para Ana mañana a las 10", "appointment.appointment.create"),
+        ("anótame dos cafés en la cuenta de Ana", "sale.order.add"),
+        ("retira la mesa 90 del plano", "table.table.delete"),
+        ("retira el dispositivo Barra 2, ya no está", "printing.device.retire"),
+        ("Ana retira su consentimiento para la publicidad", "customer.consent.withdraw"),
+    ],
+)
+def test_what_is_noted_or_taken_away_comes_first(asked, first):
+    """An appointment noted is booked; noted on a check, a line is added to it; a table taken away is deleted, a device
+    retired and a consent withdrawn: the action of the thing named, not its other writes nor its reads (live#64).
+    Before, neither «anota» nor «retira» asked for anything."""
+    names = ranked(NOTED_OR_TAKEN_AWAY, asked, synonyms=CHECK)
+    assert names[0] == first, names[:4]
+
+
+@pytest.mark.parametrize(
+    "asked",
+    [
+        "anota en la cita de Ana de mañana «usa mascarilla», sin cambiar la hora",
+        "hay que anotar en la cita de Ana que use mascarilla",
+        "anota una cita para Ana mañana a las 10",
+    ],
+)
+def test_what_is_noted_brings_the_write_that_books_it_and_the_one_that_changes_it(asked):
+    """«Anota una cita para Ana» books one and «anota en la cita de Ana…» writes on hers: the words do not say which,
+    so both writes of the thing named come before its reads and every other write — the model chooses. Read as
+    changing only, «anota una reserva para 4…» left the booking at the end of what a turn offers (live#64)."""
+    names = ranked(NOTED_OR_TAKEN_AWAY, asked, synonyms=CHECK)
+    assert set(names[:2]) == {"appointment.appointment.create", "appointment.appointment.update"}, names[:4]
+
+
 @pytest.mark.parametrize(
     ("said", "english"),
     [
