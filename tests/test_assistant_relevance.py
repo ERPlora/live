@@ -848,6 +848,116 @@ def test_a_naming_verb_that_ends_the_sentence_is_read(said, verbs):
     assert assistant.asked([said]).verbs == verbs
 
 
+@pytest.mark.parametrize(
+    ("said", "verbs"),
+    [
+        ("borra el grupo Salsas sin cambiar los pedidos", {"delete", "remove"}),
+        ("delete the Sauces group without changing the old orders", {"delete", "remove"}),
+        # With its pronouns: an infinitive carries them at its end, as a command does.
+        ("desactiva a Lucía en la agenda sin borrarla", {"disable"}),
+        ("desactiva esa placa sin quitarle el PIN", {"disable"}),
+        # A verb said in words, and a name put apart, are no more asked after «sin».
+        ("desactiva el horario de Ana sin cambiar el nombre", {"disable"}),
+        ("activa la tarifa sin ponerle al menú el nombre «Verano»", {"enable"}),
+        # Each ending of an infinitive: «-ar», «-er» («ponerle») and «-ir».
+        ("cobra la mesa 4 sin imprimir el ticket", {"complete"}),
+    ],
+)
+def test_a_verb_said_after_sin_is_not_asked(said, verbs):
+    """«Sin cambiar los pedidos» says what is not to be done, as «without changing» does in English: the infinitive
+    after «sin» asks for nothing, and every update that takes a ``sort_order`` stopped drowning the delete asked
+    (ERPlora/live#60)."""
+    assert assistant.asked([said]).verbs == verbs
+
+
+def test_a_verb_asked_and_said_after_sin_is_still_asked():
+    """What «sin» leaves out is the word after it, not every time it is said: «cambiar el precio» is asked, «sin
+    cambiar el nombre» is no rename."""
+    assert assistant.asked(["quiero cambiar el precio sin cambiar el nombre"]).verbs == {"change", "set", "update"}
+
+
+@pytest.mark.parametrize(
+    ("said", "asked"),
+    [
+        ("ponle al café otro precio sin cambiarle el nombre", "ponle al café otro precio"),
+        ("ponle precio nuevo al café sin cambiar el nombre", "ponle precio nuevo al café"),
+        ("ponle otro precio sin cambiarle al café el nombre", "ponle otro precio"),
+    ],
+)
+def test_a_name_not_to_be_changed_is_not_put_by_the_verb_asked_before(said, asked):
+    """«Ponle al café otro precio sin cambiarle el nombre» renames nothing: the name said after the verb that is not
+    asked is not the one «ponle» puts, as it was not when that verb started another command (ERPlora/live#57)."""
+    heard = assistant.asked([said]).verbs
+    assert "rename" not in heard
+    assert heard == assistant.asked([asked]).verbs
+
+
+def test_a_read_said_after_sin_asks_to_know_nothing():
+    said = assistant.asked(["cierra la caja sin contar el efectivo"])
+    assert (said.verbs, said.reading) == ({"close"}, False)
+
+
+@pytest.mark.parametrize(
+    ("said", "thing"),
+    [
+        ("sin cambiar los pedidos borra el grupo Salsas", "grupo"),
+        # The same verb, asked after: what it acts on is what follows the one asked.
+        ("sin cambiar los pedidos quiero cambiar el precio del café", "precio"),
+    ],
+)
+def test_a_verb_said_after_sin_is_no_command_acting_on_what_follows(said, thing):
+    """What the command acts on is what its verb names after it: «sin cambiar los pedidos» acts on nothing."""
+    assert assistant.asked([said]).objects == {assistant._concept(thing)}
+
+
+def test_a_verb_said_after_sin_names_only_what_its_synonyms_name():
+    """«¿Queda alguna mesa sin cobrar?» asks for the checks still to charge: «cobrar» is no charge asked, and it still
+    names the sale, as a verb does by its synonyms; «sin cambiar» names nothing."""
+    said = assistant.asked(["queda alguna mesa sin cobrar"])
+    assert "complete" not in said.verbs
+    assert assistant._concept("venta") in said.concepts
+    unchanged = assistant.asked(["borra el grupo Salsas sin cambiar los pedidos"])
+    assert assistant._concept("cambiar") not in unchanged.concepts
+
+
+def test_a_word_after_sin_that_is_no_verb_still_names():
+    """«Sin azúcar» ends like an infinitive and is no verb: it names what it names."""
+    assert assistant._concept("azucar") in assistant.asked(["pon un café sin azúcar en la mesa 4"]).concepts
+
+
+def test_a_verb_that_starts_a_sentence_ending_in_sin_is_asked():
+    """Dictation cut short («cambiar el precio del café sin…»): the verb has no «sin» before it."""
+    assert assistant.asked(["cambiar el precio del café sin"]).verbs == {"change", "set", "update"}
+
+
+def test_only_a_verbs_infinitive_after_sin_is_not_asked():
+    """A word of ``VERBS`` that names a thing after «sin» («sin lista de precios») is read as anywhere: only an
+    infinitive says what is not to be done."""
+    assert assistant.asked(["borra las tarifas sin lista de precios"]).verbs == {"delete", "list", "remove"}
+
+
+class SortedIn(Schema):
+    name: str | None = None
+    sort_order: int | None = None
+
+
+def test_what_is_not_to_be_changed_does_not_drown_the_delete_asked():
+    """The QA probe of ERPlora/live#60: «pedidos» names an order, which every update that takes a ``sort_order``
+    takes; with «sin cambiar» asked as a change, each of them came before the delete asked."""
+    updates = [tool(f"{app}.{entity}.update", f"Change a {entity}: its name and its place in the list.", input=SortedIn)
+               for app, entity in (("inventory", "category"), ("modifier", "option"), ("menu", "section"),
+                                   ("table", "zone"), ("service", "category"))]
+    tools = [
+        tool("modifier.group.delete", "Delete a modifier group with its options and its assignments.",
+             asks={"es": ("borra el grupo de suplementos Salsas",)}),
+        *updates,
+        *HUB_SLICE,
+        *NOISE,
+    ]
+    names = ranked(tools, "elimina Endulzante QA con su opción y sus asignaciones, sin cambiar los pedidos antiguos")
+    assert all(names.index("modifier.group.delete") < names.index(update.name) for update in updates), names[:8]
+
+
 def test_being_available_is_no_device():
     """«Quiero volver a tener Reservas disponible» names no device: the app's own «disponible» brings it, before every
     device (ERPlora/live#47: 34th in the Hub, behind ``base.device.*``)."""
