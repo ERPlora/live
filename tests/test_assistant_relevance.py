@@ -1451,6 +1451,64 @@ def test_only_a_verbs_infinitive_after_sin_is_not_asked():
     assert assistant.asked(["borra las tarifas sin lista de precios"]).verbs == {"delete", "list", "remove"}
 
 
+@pytest.mark.parametrize(
+    ("said", "verbs"),
+    [
+        # The three readings of ERPlora/live#74: «ni cambiar» reads as «sin cambiar» does.
+        ("marca como cobrada la factura, sin tocar caja ni cambiar importes", set()),
+        ("marca como cobrada la factura, sin cambiar importes", set()),
+        ("sin quitarle el PIN ni borrar su cuenta", set()),
+        # With the verb asked before, and with its pronouns after «ni».
+        ("desactiva esa placa sin quitarle el PIN ni borrar su cuenta", SWITCHING_OFF),
+        ("sin tocar la caja ni borrarla", set()),
+        # Each ending of an infinitive after «ni»: «-ar» above, «-er» («ponerle») and «-ir».
+        ("cobra la mesa 4 sin imprimir el ticket ni ponerle propina", {"complete"}),
+        ("cobra la mesa 4 sin tocar la caja ni imprimir el ticket", {"complete"}),
+        # One «ni» after another goes on with the same «sin».
+        ("sin tocar caja ni cambiar importes ni borrar nada", set()),
+    ],
+)
+def test_a_verb_said_after_ni_that_goes_on_from_sin_is_not_asked(said, verbs):
+    """«Sin tocar caja ni cambiar importes» says two things not to be done: the infinitive after «ni» goes on from the
+    «sin» before it, so it asks for nothing either, as the one right after «sin» (ERPlora/live#60). Read as asked, every
+    write that changes something came before marking the invoice paid (ERPlora/live#74)."""
+    assert assistant.asked([said]).verbs == verbs
+
+
+def test_a_verb_said_after_ni_that_goes_on_from_sin_is_no_command_acting_on_what_follows():
+    """What the command acts on is what its verb names after it: «ni cambiar los precios» acts on nothing."""
+    said = assistant.asked(["sin tocar la caja ni cambiar los precios borra el grupo Salsas"])
+    assert said.objects == {assistant._concept("grupo")}
+
+
+def test_a_verb_said_after_ni_that_goes_on_from_sin_puts_no_name():
+    """«Ni ponerle al menú el nombre» puts no name, as «sin ponerle al menú el nombre» does not."""
+    assert assistant.asked(["activa la tarifa sin tocar los precios ni ponerle al menú el nombre «Verano»"]).verbs == (
+        SWITCHING_ON
+    )
+
+
+def test_a_verb_said_after_ni_that_goes_on_from_sin_names_only_what_its_synonyms_name():
+    """«¿Queda alguna mesa sin abrir ni cobrar?»: «cobrar» is no charge asked, and it still names the sale."""
+    said = assistant.asked(["queda alguna mesa sin abrir ni cobrar"])
+    assert "complete" not in said.verbs
+    assert assistant._concept("venta") in said.concepts
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        # «ni» alone is «not even»: what the person cannot do is what they ask for help with.
+        "no sé ni cambiar el precio del café",
+        # A «sin» after it goes on from nothing before: only what follows it is not asked.
+        "no sé ni cambiar el precio del café sin borrar el producto",
+    ],
+)
+def test_a_verb_said_after_ni_with_no_sin_before_is_asked(said):
+    """Only a «ni» that goes on from a «sin» before it in the sentence says what is not to be done."""
+    assert assistant.asked([said]).verbs == {"change", "set", "update"}
+
+
 class SortedIn(Schema):
     name: str | None = None
     sort_order: int | None = None

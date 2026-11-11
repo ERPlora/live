@@ -269,8 +269,9 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   venta; «show me», «dame», «dime», «give me», «tell me» no nombran nada). Un infinitivo tras «sin», también con sus
   pronombres, dice lo que no se hace y no se pide («borra el grupo sin cambiar los pedidos», «sin quitarle el PIN»; como
   «without changing» en inglés; live#60): ni verbo, ni objeto de la orden, ni frase de renombrar, y nombra solo por sus
-  sinónimos («sin cobrar» sigue nombrando la venta); el mismo verbo dicho en otro sitio de la frase sí se pide.
-  Tampoco se pide lo que alguien dice que hará, tras «'ll» o «will» («knock 60% off the wine, I'll approve it», «we
+  sinónimos («sin cobrar» sigue nombrando la venta); el mismo verbo dicho en otro sitio de la frase sí se pide. Igual
+  el infinitivo tras «ni» cuando un «sin» va antes en la frase («sin tocar caja ni cambiar importes», «ni borrarla»;
+  live#74); sin «sin» delante, «ni» es «ni siquiera» y el verbo se pide («no sé ni cambiar el precio»). Tampoco se pide lo que alguien dice que hará, tras «'ll» o «will» («knock 60% off the wine, I'll approve it», «we
   will open»): nombra como cualquier palabra. Y un «sí» que solo confirma («sí, confírmalo», «vale, confirmo», «yes,
   confirm it») contesta a lo pedido antes y no pide ni nombra nada: tras «cancela la reserva de Ana», la cancelación
   sigue primera (live#50).

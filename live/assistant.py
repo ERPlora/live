@@ -265,6 +265,10 @@ _OWN_OBJECT = frozenset({"el", "la", "los", "las", "the"})
 #: The word after which a verb's infinitive says what is not to be done («sin cambiar los pedidos», «sin borrarlo»), as
 #: English says it with «without» and a form ``VERBS`` has not («without changing»): no action asked (ERPlora/live#60).
 _WITHOUT = frozenset({"sin"})
+#: The word that goes on with what is not to be done after a «sin» before it in the sentence («sin tocar caja ni cambiar
+#: importes»): its infinitive asks for nothing either (ERPlora/live#74). With no «sin» before, «ni» is «not even»
+#: («no sé ni cambiar el precio»), and the verb is asked. English says it with «or» and a gerund ``VERBS`` has not.
+_NOR = frozenset({"ni"})
 #: The words after which a verb says what someone will do, not what is asked («I'll approve it», «we will open»).
 _FUTURE = frozenset({"ll", "will"})
 #: The words after which a thing is named for what another is («para las próximas ventas», «for the new sales»): to the
@@ -709,10 +713,13 @@ def _starts_command(words: list[str], at: int) -> bool:
 
 def _unasked(words: list[str], at: int) -> bool:
     """Whether the verb ``words[at]`` says what is not to be done: its infinitive, its pronouns too, after ``_WITHOUT``
-    («sin cambiar los pedidos», «sin quitarle el PIN»)."""
+    («sin cambiar los pedidos», «sin quitarle el PIN») or after ``_NOR`` going on from a ``_WITHOUT`` before it in the
+    sentence («sin tocar caja ni cambiar importes»)."""
     word = words[at]
     infinitive = (_unclitic(word) or word).endswith(_INFINITIVE)
-    return at > 0 and words[at - 1] in _WITHOUT and bool(_verbs_of(word)) and infinitive
+    before = words[at - 1] if at > 0 else ""
+    negated = before in _WITHOUT or (before in _NOR and not _WITHOUT.isdisjoint(words[: at - 1]))
+    return negated and bool(_verbs_of(word)) and infinitive
 
 
 def _foretold(words: list[str], at: int) -> bool:
