@@ -231,6 +231,10 @@ _FOUND_BY = frozenset({"con", "por", "de", "del", "bajo", "with", "by", "of", "u
 #: puts no name said later. What a name said apart is put on goes after «a», «al», «for», «on» («ponle a la lista el
 #: nombre»).
 _OWN_OBJECT = frozenset({"el", "la", "los", "las", "the"})
+#: The word after which a verb's infinitive says what is not to be done («sin cambiar los pedidos», «sin borrarlo»), as
+#: English says it with «without» and a form ``VERBS`` has not («without changing»): no action asked (ERPlora/live#60).
+_WITHOUT = frozenset({"sin"})
+_INFINITIVE = ("ar", "er", "ir")
 #: The actions that only read: a question that asks for none of the others asks to know, not to do. Asked of nothing
 #: named, they bring no tool: «¿cuántos…?» is no list of everything.
 READ_VERBS = frozenset({"list", "get", "options", "count", "check", "stats"})
@@ -660,6 +664,14 @@ def _starts_command(words: list[str], at: int) -> bool:
     )
 
 
+def _unasked(words: list[str], at: int) -> bool:
+    """Whether the verb ``words[at]`` says what is not to be done: its infinitive, its pronouns too, after ``_WITHOUT``
+    («sin cambiar los pedidos», «sin quitarle el PIN»)."""
+    word = words[at]
+    infinitive = (_unclitic(word) or word).endswith(_INFINITIVE)
+    return at > 0 and words[at - 1] in _WITHOUT and bool(_verbs_of(word)) and infinitive
+
+
 def _split_naming(sentences: list[list[str]]) -> set[tuple[str, str]]:
     """The naming phrases (``_NAMING``) of ``sentences`` said with words between their verb and the name («pon al
     dispositivo el nombre»; its pronouns too: «cámbiale a la tablet el nombre»), each with its verb as said; never of a
@@ -699,15 +711,17 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
     reading = howto = False
     for text in texts:
         sentences = _sentences(text)
-        joined = [f" {' '.join(words)} " for words in sentences]
+        # What asks to be done: every word but a verb that says what is not to be done («sin cambiar», ``_unasked``).
+        heard = [[word for at, word in enumerate(words) if not _unasked(words, at)] for words in sentences]
+        joined = [f" {' '.join(words)} " for words in heard]
         found = {phrase for phrase in _PHRASES if any(f" {phrase} " in one for one in joined)}
         verbal = {word for phrase in found for word in phrase.split()}
-        for said_as, phrase in _split_naming(sentences):
+        for said_as, phrase in _split_naming(heard):
             found.add(phrase)
             verbal |= {said_as, *phrase.split()}
         said = {verb for verb, forms in VERBS.items() if not found.isdisjoint(forms)}
         acting: dict[str, frozenset[str]] = {}
-        for words in sentences:
+        for words in heard:
             for word in words:
                 if word not in verbal and (of := _verbs_of(word)):
                     acting[word] = of
@@ -716,15 +730,16 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
             acting[doing] = _verbs_of(doing[:-1] + "a") or _verbs_of(doing[:-1] + "e")
         for of in acting.values():
             said |= of
-        # A word that asks (a verb) names a thing only through its synonyms («cobra»: a sale); «show», «dame» none.
+        # A word that asks (a verb) names a thing only through its synonyms («cobra»: a sale); «show», «dame» none. So
+        # does a verb not asked («sin cobrar»: still a sale).
         naming = [
-            word for words in sentences for word in words
+            word for words in sentences for at, word in enumerate(words)
             if (word not in verbal or word in _PHRASE_NAMES) and len(word) >= 3 and word not in STOP_WORDS
-            and (word not in acting or len(_concept(word, extra)) > 1)
+            and ((word not in acting and not _unasked(words, at)) or len(_concept(word, extra)) > 1)
         ]
         concepts |= {_concept(word, extra) for word in naming}
         concepts |= {group for phrase, group in phrases_named if any(phrase in one for one in joined)}
-        acted, named_after = _objects(sentences, acting, verbal, extra)
+        acted, named_after = _objects(heard, acting, verbal, extra)
         objects |= acted
         records |= named_after
         question = _is_question(text, sentences) and not any(_opening(words)[1] for words in sentences)

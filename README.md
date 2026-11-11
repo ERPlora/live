@@ -252,7 +252,10 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   «sentar»); «traslada», «transfiere» y «transfer» transfieren (`transfer`), y los «comensales» son los `guests`
   (live#48); «ponme la app», «instala» encienden; «how many» y «cuántos» cuentan (`count`, `list`, `stats`). «How», «which»,
   «cómo» y «cuál» ya no son el verbo «listar». Un verbo no nombra cosas salvo por sus sinónimos («cobra» nombra la
-  venta; «show me», «dame», «dime», «give me», «tell me» no nombran nada).
+  venta; «show me», «dame», «dime», «give me», «tell me» no nombran nada). Un infinitivo tras «sin», también con sus
+  pronombres, dice lo que no se hace y no se pide («borra el grupo sin cambiar los pedidos», «sin quitarle el PIN»; como
+  «without changing» en inglés; live#60): ni verbo, ni objeto de la orden, ni frase de renombrar, y nombra solo por sus
+  sinónimos («sin cobrar» sigue nombrando la venta); el mismo verbo dicho en otro sitio de la frase sí se pide.
 - **Preguntas**: una pregunta (palabra interrogativa con tilde, que empieza por una o por un auxiliar inglés, o con sus
   signos) pide saber aunque nombre un verbo («do I need a customer to charge?»): sus lecturas van primero y lo que nombra
   ese verbo es de lo que pregunta (`Asked.about`: «what can customers pay with?» → las formas de pago). Nunca es pregunta
