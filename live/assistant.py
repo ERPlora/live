@@ -582,7 +582,7 @@ class Asked(NamedTuple):
     the ones a word after the verb names («borra el cliente Ana»: a customer to find). ``direct`` are the things named
     outside what something is for (``_FOR_WHAT``: «ventas» in «activa las ventas», not in «para las próximas
     ventas») and not to say of what another is (``_of_another``: «los productos» in «vuelve a activar la regla de los
-    productos»)."""
+    productos»); ``of_another`` are the things named only so (ERPlora/live#73)."""
 
     concepts: frozenset[frozenset[str]]
     verbs: frozenset[str]
@@ -592,6 +592,7 @@ class Asked(NamedTuple):
     objects: frozenset[frozenset[str]] = frozenset()
     records: frozenset[frozenset[str]] = frozenset()
     direct: frozenset[frozenset[str]] = frozenset()
+    of_another: frozenset[frozenset[str]] = frozenset()
 
 
 def _phrase_verbs(phrase: str) -> frozenset[str]:
@@ -797,6 +798,7 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
     objects: set[frozenset[str]] = set()
     records: set[frozenset[str]] = set()
     direct: set[frozenset[str]] = set()
+    of_another: set[frozenset[str]] = set()
     reading = howto = False
     for text in texts:
         # A yes to what was asked before asks for nothing of its own: the write it agrees to is in the texts before.
@@ -828,15 +830,18 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
         # does a verb not asked («sin cobrar»: still a sale); what someone will do is no verb asked, and names as any
         # word does.
         naming = [
-            (word, _FOR_WHAT.isdisjoint(words[:at]) and not _of_another(words, at, extra))
+            (word, _FOR_WHAT.isdisjoint(words[:at]), _of_another(words, at, extra))
             for words in sentences
             for at, word in enumerate(words)
             if (word not in verbal or word in _PHRASE_NAMES) and len(word) >= 3 and word not in STOP_WORDS
             and ((word not in acting and not _unasked(words, at)) or len(_concept(word, extra)) > 1)
         ]
-        concepts |= {_concept(word, extra) for word, _ in naming}
-        direct |= {_concept(word, extra) for word, outside in naming if outside}
+        concepts |= {_concept(word, extra) for word, _, _ in naming}
+        direct |= {_concept(word, extra) for word, outside, of in naming if outside and not of}
         concepts |= {group for phrase, group in phrases_named if any(phrase in one for one in joined)}
+        of_another |= {_concept(word, extra) for word, _, of in naming if of} - {
+            _concept(word, extra) for word, _, of in naming if not of
+        }
         acted, named_after = _objects(heard, acting, verbal, extra)
         objects |= acted
         records |= named_after
@@ -862,6 +867,7 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
         frozenset(objects),
         frozenset(records),
         frozenset(direct),
+        frozenset(of_another),
     )
 
 
@@ -979,7 +985,7 @@ def _relevant(
     # (ERPlora/live#73).
     things = frozenset().union(*(_things(op) for op in tools.values())) if concepts else frozenset()
     every_app = {op.app_label for op in tools.values()} if concepts else set()
-    switched = said.direct if switching else concepts
+    switched = concepts - said.of_another if switching else concepts
     names_a_thing = any(not concept.isdisjoint(things) for concept in switched)
     by_app = set() if names_a_thing else {
         concept for concept in switched if any(not concept.isdisjoint(app_words(label, language)) for label in every_app)
@@ -1033,7 +1039,7 @@ def _relevant(
             else:
                 writes = matched - READ_VERBS
                 points += 7 if takes and writes else 3 if writes and not aimed_at else 1 if app_named else 0
-        elif switching and not _CHANGES.isdisjoint(acts) and named(_taken(op.input), said.direct):
+        elif switching and not _CHANGES.isdisjoint(acts) and named(_taken(op.input), switched):
             points += 7
         if op.kind == "query":
             if about and any(not concept.isdisjoint(named_entity) for concept in about):

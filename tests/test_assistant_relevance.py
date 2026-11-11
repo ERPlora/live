@@ -930,6 +930,7 @@ def names(concepts: frozenset[frozenset[str]], word: str) -> bool:
         ("desactiva la regla española de los productos", "productos", False),
         ("desactiva la tarifa del producto", "producto", False),
         ("vuelve a activar la regla de IVA de los productos", "productos", False),
+        ("desactiva la regla de la cocina", "cocina", False),
         ("reactivate the rule of the products", "products", False),
         # An app named as one is the app («la app de clientes»), in either language; a «de» behind the verb, or after
         # the app named, says nothing of another thing.
@@ -939,6 +940,10 @@ def names(concepts: frozenset[frozenset[str]], word: str) -> bool:
         ("turn on the module of bookings", "bookings", True),
         ("desactiva de momento las ventas", "ventas", True),
         ("activa las ventas del turno de noche", "ventas", True),
+        # Behind a word too short to name a thing, or one that names nothing, or opening the sentence: of no other.
+        ("desactiva la de reservas", "reservas", True),
+        ("desactiva las de reservas", "reservas", True),
+        ("de las ventas se encarga Ana, desactiva su turno", "ventas", True),
     ],
 )
 def test_what_says_of_what_a_thing_is_is_not_named_directly(said, word, direct):
@@ -947,6 +952,29 @@ def test_what_says_of_what_a_thing_is_is_not_named_directly(said, word, direct):
     heard = assistant.asked([said])
     assert names(heard.concepts, word)  # positive control: it is named
     assert names(heard.direct, word) is direct
+
+
+@pytest.mark.parametrize(
+    ("said", "word", "only_of_another"),
+    [
+        ("vuelve a activar la regla de los productos", "productos", True),
+        ("vuelve a activar la regla de los productos", "regla", False),
+        # Named itself too, it is no longer only what another is of.
+        ("desactiva la cocina y también los avisos de la cocina", "cocina", False),
+    ],
+)
+def test_what_is_named_only_to_say_of_what_another_is_is_of_another(said, word, only_of_another):
+    """``Asked.of_another`` holds the things named only to say of what another is (ERPlora/live#73)."""
+    heard = assistant.asked([said])
+    assert names(heard.concepts, word)  # positive control: it is named
+    assert names(heard.of_another, word) is only_of_another
+
+
+def test_an_app_named_as_one_by_the_projects_own_word_is_the_app():
+    """A project's own word for an app («función», in its synonyms) names the app as «la app de…» does."""
+    synonyms = (("app", "aplicacion", "modulo", "module", "funcion"),)
+    assert names(assistant.asked(["activa la función de reservas"], synonyms).direct, "reservas")
+    assert not names(assistant.asked(["activa la función de reservas"]).direct, "reservas")  # positive control
 
 
 class ProductImageIn(Schema):
@@ -993,6 +1021,43 @@ def test_what_a_thing_switched_is_of_is_neither_the_app_switched_nor_the_thing_c
     offered_ = ranked(RULE_OF_AN_APP, asked, app_words=products_app)
     assert offered_[0] == first, offered_[:4]
     assert offered_.index(switch) < offered_.index("inventory.product.set_image"), offered_[:4]
+
+
+class FlowSwitchIn(Schema):
+    flow: str
+    enabled: bool
+
+
+#: The Hub's automations, named by their phrases and never by the word («la automatización»: ``base.assistant``'s
+#: synonyms), beside a ready-made one an app brings, the app's switch and the charge an automation fires on; the
+#: phrases below are the Hub's asks of turning one on, each ranked as its own battery does.
+AUTOMATIONS = [
+    tool("flow.flow.set_enabled", "Turn an automation on or pause it, by its id or its name («activate the welcome "
+         "automation», «pause the cash close one»).", input=FlowSwitchIn,
+         asks={"en": ("turn on the welcome automation", "pause the birthday automation"),
+               "es": ("enciende la automatización que salta al cobrar una venta",
+                      "pausa la automatización de cumpleaños", "vuelve a encender la automatización de reseñas")}),
+    tool("flow.recipe.enable", "Turn on a ready-made automation an app brings."),
+    tool("flow.flow.list", "List the automations.", "query"),
+    *HUB_SLICE,
+    *NOISE,
+]
+AUTOMATION_WORDS = (("flujo", "flow", "la automatizacion"),)
+
+
+def automations_app(label: str, language: str) -> frozenset[str]:
+    return frozenset(assistant.stems({"flow": "flow automatizaciones", "sale": "sale ventas"}.get(label, label)))
+
+
+@pytest.mark.parametrize(
+    "asked", ["vuelve a encender la automatización de reseñas", "enciende la automatización que salta al cobrar una venta"]
+)
+def test_a_thing_a_project_names_by_its_phrase_is_still_what_a_switch_names(asked):
+    """A thing named by a phrase of the project's synonyms («la automatización») is what a switch names, beside what
+    says of what it is («de reseñas»): turning that automation on comes first, not a ready-made one of its app nor the
+    charge it fires on (the review of ERPlora/live#73: reading only ``Asked.direct`` lost it)."""
+    names_ = ranked(AUTOMATIONS, asked, synonyms=AUTOMATION_WORDS, app_words=automations_app)
+    assert names_[0] == "flow.flow.set_enabled", names_[:4]
 
 
 @pytest.mark.parametrize(
