@@ -1609,6 +1609,81 @@ def test_only_a_verbs_infinitive_after_ni_is_not_asked():
     assert assistant.asked(["borra las tarifas sin precios ni lista"]).verbs == {"delete", "list", "remove"}
 
 
+@pytest.mark.parametrize(
+    ("said", "verbs"),
+    [
+        # The reading of ERPlora/live#81: a comma before «ni», as people write it.
+        ("marca como cobrada la factura, sin tocar caja, ni cambiar importes", set()),
+        ("sin quitarle el PIN, ni borrar su cuenta", set()),
+        ("desactiva esa placa sin quitarle el PIN, ni borrar su cuenta", SWITCHING_OFF),
+        ("sin tocar caja, ni cambiar importes, ni borrar nada", set()),
+        # A space before the comma, and «Ni» as dictation writes it.
+        ("sin tocar la caja , ni borrarla", set()),
+        ("sin tocar caja, Ni cambiar importes", set()),
+        # The comma at the end of a line, as a message of two lines has it.
+        ("sin tocar caja,\nni cambiar importes", set()),
+    ],
+)
+def test_a_verb_said_after_a_comma_and_ni_that_goes_on_from_sin_is_not_asked(said, verbs):
+    """«Sin tocar caja, ni cambiar importes» says the same as without the comma: two things not to be done. The comma
+    cut the sentence before the «ni», which then went on from no «sin» and asked to change (ERPlora/live#81)."""
+    assert assistant.asked([said]).verbs == verbs
+
+
+@pytest.mark.parametrize(
+    ("with_comma", "without"),
+    [
+        ("borra el grupo Salsas sin tocar los pedidos, ni cambiar los precios",
+         "borra el grupo Salsas sin tocar los pedidos ni cambiar los precios"),
+        ("activa la tarifa sin tocar los precios, ni ponerle al menú el nombre «Verano»",
+         "activa la tarifa sin tocar los precios ni ponerle al menú el nombre «Verano»"),
+        ("queda alguna mesa sin abrir, ni cobrar", "queda alguna mesa sin abrir ni cobrar"),
+    ],
+)
+def test_a_comma_before_ni_is_read_as_said_without_it(with_comma, without):
+    """Verbs, the thing acted on, the name put and what is named: a comma before «ni» changes none of them."""
+    assert assistant.asked([with_comma]) == assistant.asked([without])
+
+
+@pytest.mark.parametrize(
+    ("said", "verbs"),
+    [
+        # With no «sin» before, the «ni» after a comma is «not even», as without the comma.
+        ("no sé, ni cambiar el precio del café", {"change", "set", "update"}),
+        # A «no» between the «sin» and the «ni» still makes it «not even» (ERPlora/live#83).
+        ("tengo una mesa sin cobrar y no puedo, ni cerrar la caja", {"close"}),
+        # Only a comma: after a full stop, «Ni…» starts a sentence of its own.
+        ("la mesa 4 se fue sin pagar. Ni cerrar la caja puedo ahora", {"close"}),
+        # Nor a comma with anything else that ends a sentence.
+        ("la mesa 4 se fue sin pagar..., ni cerrar la caja puedo ahora", {"close"}),
+    ],
+)
+def test_a_verb_said_after_a_comma_and_ni_is_asked_when_it_goes_on_from_no_sin(said, verbs):
+    assert assistant.asked([said]).verbs == verbs
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        "cámbiale al café el precio, ni el nombre ni la foto",
+        "ponle otro precio al café, ni el nombre ni la foto",
+        # A «sin» of a sentence further back is none for the «ni» to go on from.
+        "sin prisa, cámbiale al café el precio, ni el nombre ni la foto",
+    ],
+)
+def test_a_comma_before_ni_that_goes_on_from_no_sin_still_ends_the_sentence(said):
+    """«Cámbiale al café el precio, ni el nombre ni la foto» changes the price alone: with no «sin» for the «ni» to go
+    on from, the comma still ends the sentence, and «el nombre» after it is no name put by «cámbiale»."""
+    assert "rename" not in assistant.asked([said]).verbs
+
+
+def test_only_the_word_ni_after_a_comma_goes_on_with_the_sentence():
+    """Only what starts with the word «ni» goes on: «ninguno» starts like it, and a «ni» later on starts nothing."""
+    assert len(assistant._sentences("cierra la caja sin contar, ni cambiar el fondo")) == 1
+    assert len(assistant._sentences("cierra la caja sin contar, ninguno ha contado el fondo")) == 2
+    assert len(assistant._sentences("cierra la caja sin contar, no toques ni el fondo")) == 2
+
+
 class SortedIn(Schema):
     name: str | None = None
     sort_order: int | None = None
