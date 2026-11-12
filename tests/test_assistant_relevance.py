@@ -1121,6 +1121,7 @@ def test_the_words_of_one_thing_name_it_in_either_language(said, english):
         # To seal is no sale, to exist no stock, production no product and to check no purchase: each pair cut to one
         # stem, «sell», «exist», «produ» and «compr» (ERPlora/live#71).
         ("sella", "vende"), ("sellado", "venta"), ("sellar", "sell"), ("sello", "sale"), ("selle", "seller"),
+        ("sellemos", "vendemos"), ("sellemos", "sellers"),
         # «Sellable» (English: what can be sold, a menu of Combos) is no «sella» either.
         ("sellable", "sella"), ("sellable", "sellado"),
         ("existiera", "existencias"), ("existir", "stock"), ("existe", "inventario"), ("existing", "stock"),
@@ -1153,7 +1154,7 @@ def test_words_of_two_things_are_never_one_stem(one, other):
         ("comensal comensales", "comensal"),
         ("listo listos", "listo"),
         ("disponible disponibles disponibilidad", "dispon"),
-        ("sella sellar sellado sellamos sellan séllalo sello sellos selló selle sellen", "sellar"),
+        ("sella sellar sellado sellamos sellan séllalo sello sellos selló selle sellen sellemos selléis", "sellar"),
         ("existe existen existir existiera existía exist exists existing existed existence", "existir"),
         ("producción producciones production productions", "produccion"),
         ("comprueba compruebo comprobar comprobando comprobado comprobación comprobante compruébalo", "comprobar"),

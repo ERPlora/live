@@ -437,8 +437,8 @@ _APART_PREFIXES = (
     ("contrat", "contrat"), ("receipt", "receipt"), ("fichaj", "fichar"), ("fichar", "fichar"), ("fichad", "fichar"),
     ("fichand", "fichar"), ("ficham", "fichar"), ("fichal", "fichar"), ("tablet", "tablet"), ("setting", "setting"),
     ("comensal", "comensal"), ("dispon", "dispon"), ("sellab", "sellab"), ("sella", "sellar"), ("sello", "sellar"),
-    ("existenci", "exist"), ("exist", "existir"), ("produccion", "produccion"), ("production", "produccion"),
-    ("comprob", "comprobar"), ("comprue", "comprobar"),
+    ("sellem", "sellar"), ("sellei", "sellar"), ("existenci", "exist"), ("exist", "existir"),
+    ("produccion", "produccion"), ("production", "produccion"), ("comprob", "comprobar"), ("comprue", "comprobar"),
 )
 #: A noun that is a command at the start of a sentence, followed by these: «ficha la entrada de Ana» clocks in, «abre
 #: la ficha de Ana» is her card; «reserva una mesa» books, «cancela la reserva» names one.
