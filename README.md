@@ -274,7 +274,8 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   sinónimos («sin cobrar» sigue nombrando la venta); el mismo verbo dicho en otro sitio de la frase sí se pide. Igual
   el infinitivo tras «ni» cuando un «sin» va antes en la frase («sin tocar caja ni cambiar importes», «ni borrarla»;
   live#74); sin «sin» delante, o con un «no» entre el «sin» y el «ni», «ni» es «ni siquiera» y el verbo se pide
-  («no sé ni cambiar el precio», «tengo una mesa sin cobrar y no puedo ni cerrar la caja»). Tampoco se pide lo que alguien dice que hará, tras «'ll» o «will» («knock 60% off the wine, I'll approve it», «we
+  («no sé ni cambiar el precio», «tengo una mesa sin cobrar y no puedo ni cerrar la caja»). Una coma antes del «ni» no
+  corta la frase («sin tocar caja, ni cambiar importes» se lee igual que sin ella; live#81); un punto, sí. Tampoco se pide lo que alguien dice que hará, tras «'ll» o «will» («knock 60% off the wine, I'll approve it», «we
   will open»): nombra como cualquier palabra. Y un «sí» que solo confirma («sí, confírmalo», «vale, confirmo», «yes,
   confirm it») contesta a lo pedido antes y no pide ni nombra nada: tras «cancela la reserva de Ana», la cancelación
   sigue primera (live#50).

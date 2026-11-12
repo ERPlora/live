@@ -420,6 +420,9 @@ SYNONYMS = (
 _WORD = re.compile(r"[a-z0-9]+")
 #: What ends a sentence or a quote: its first word may be a command («Ficha la entrada»), a question word, a name.
 _BREAK = re.compile(r"[«»\"“”()\[\].,;:!?¿¡\n]+")
+#: A comma before a ``_NOR`` that ends no sentence: «, ni …» goes on with what was said before it, as in Spanish («sin
+#: tocar caja, ni cambiar importes» says what «sin tocar caja ni cambiar importes» does, ERPlora/live#81).
+_COMMA_BEFORE_NOR = re.compile(r"\s*,\s*(?=(?:%s)\b)" % "|".join(sorted(_NOR)), re.IGNORECASE)
 #: Words kept whole: cut, they would be another word's stem («personal», the staff, is not «persona»).
 _WHOLE = frozenset({"personal"})
 #: Words kept apart from another's stem (as said, or without their plural «s»): «tablet» is no «table», «compartido»
@@ -524,10 +527,10 @@ def stem(word: str) -> str:
 
 
 def _sentences(text: str) -> list[list[str]]:
-    """The plain words of ``text``, by sentence or quote (``_BREAK``), a noun at the start that is a command
-    (``_COMMANDS``) said as its verb."""
+    """The plain words of ``text``, by sentence or quote (``_BREAK``; a comma before «ni» ends none,
+    ``_COMMA_BEFORE_NOR``), a noun at the start that is a command (``_COMMANDS``) said as its verb."""
     found = []
-    for part in _BREAK.split(text):
+    for part in _BREAK.split(_COMMA_BEFORE_NOR.sub(" ", text)):
         words = _WORD.findall(_plain(part))
         if words and words[0] in _COMMANDS:
             verb, before = _COMMANDS[words[0]]

@@ -1609,6 +1609,55 @@ def test_only_a_verbs_infinitive_after_ni_is_not_asked():
     assert assistant.asked(["borra las tarifas sin precios ni lista"]).verbs == {"delete", "list", "remove"}
 
 
+@pytest.mark.parametrize(
+    ("said", "verbs"),
+    [
+        # The reading of ERPlora/live#81: a comma before «ni», as people write it.
+        ("marca como cobrada la factura, sin tocar caja, ni cambiar importes", set()),
+        ("sin quitarle el PIN, ni borrar su cuenta", set()),
+        ("desactiva esa placa sin quitarle el PIN, ni borrar su cuenta", SWITCHING_OFF),
+        ("sin tocar caja, ni cambiar importes, ni borrar nada", set()),
+        # A space before the comma, and «Ni» as dictation writes it.
+        ("sin tocar la caja , ni borrarla", set()),
+        ("sin tocar caja, Ni cambiar importes", set()),
+    ],
+)
+def test_a_verb_said_after_a_comma_and_ni_that_goes_on_from_sin_is_not_asked(said, verbs):
+    """«Sin tocar caja, ni cambiar importes» says the same as without the comma: two things not to be done. The comma
+    cut the sentence before the «ni», which then went on from no «sin» and asked to change (ERPlora/live#81)."""
+    assert assistant.asked([said]).verbs == verbs
+
+
+@pytest.mark.parametrize(
+    ("with_comma", "without"),
+    [
+        ("borra el grupo Salsas sin tocar los pedidos, ni cambiar los precios",
+         "borra el grupo Salsas sin tocar los pedidos ni cambiar los precios"),
+        ("activa la tarifa sin tocar los precios, ni ponerle al menú el nombre «Verano»",
+         "activa la tarifa sin tocar los precios ni ponerle al menú el nombre «Verano»"),
+        ("queda alguna mesa sin abrir, ni cobrar", "queda alguna mesa sin abrir ni cobrar"),
+    ],
+)
+def test_a_comma_before_ni_is_read_as_said_without_it(with_comma, without):
+    """Verbs, the thing acted on, the name put and what is named: a comma before «ni» changes none of them."""
+    assert assistant.asked([with_comma]) == assistant.asked([without])
+
+
+@pytest.mark.parametrize(
+    ("said", "verbs"),
+    [
+        # With no «sin» before, the «ni» after a comma is «not even», as without the comma.
+        ("no sé, ni cambiar el precio del café", {"change", "set", "update"}),
+        # A «no» between the «sin» and the «ni» still makes it «not even» (ERPlora/live#83).
+        ("tengo una mesa sin cobrar y no puedo, ni cerrar la caja", {"close"}),
+        # Only a comma: after a full stop, «Ni…» starts a sentence of its own.
+        ("la mesa 4 se fue sin pagar. Ni cerrar la caja puedo ahora", {"close"}),
+    ],
+)
+def test_a_verb_said_after_a_comma_and_ni_is_asked_when_it_goes_on_from_no_sin(said, verbs):
+    assert assistant.asked([said]).verbs == verbs
+
+
 class SortedIn(Schema):
     name: str | None = None
     sort_order: int | None = None
