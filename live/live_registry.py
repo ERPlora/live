@@ -8,7 +8,7 @@ Each app declares its live queries in ``live.py``::
 ``queries.py``, so whether the operation exists, is a query and has a permission is validated later,
 by :meth:`LiveRegistry.check` (system check E004), not at declaration time.
 
-An event that may end the session a stream was opened with (saas-next: ``accounts.session.closed``, a sign-out, a
+An event that may end the session a stream was opened with (the SaaS: ``accounts.session.closed``, a sign-out, a
 new password, «Close the other sessions») is no query's business: the project lists it once in
 ``settings.LIVE["session_events"]`` (:func:`session_events`, system check ``live.E019``) and every stream of the
 channel it reaches re-reads its context (``live.executor``), so no ``live.py`` has to declare it.
@@ -94,5 +94,5 @@ def live(op_name: str, *, on: list[str]) -> None:
 def session_events() -> frozenset[str]:
     """The events after which a stream re-reads its context, ``settings.LIVE["session_events"]`` (none by default).
 
-    Listed by name, never guessed from it: hub-next's ``cash_register.session.closed`` is a till's, not a sign-in's."""
+    Listed by name, never guessed from it: the Hub's ``cash_register.session.closed`` is a till's, not a sign-in's."""
     return frozenset(getattr(settings, "LIVE", {}).get("session_events", ()))

@@ -2,7 +2,7 @@
 
 Django runs a middleware in the chain's own mode: a sync one in an async chain costs a thread switch per request, so
 each middleware of ``live`` serves both. The base keeps the detection and the mark; a subclass writes ``sync`` and
-``asynchronous`` only (saas#284: the second copy of that boilerplate, in ``live.database_cut``).
+``asynchronous`` only, so no middleware of ``live`` copies that boilerplate.
 """
 
 import pytest

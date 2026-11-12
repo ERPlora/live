@@ -764,7 +764,7 @@ def test_what_is_noted_comes_before_the_settings_a_word_names_in_passing(asked, 
     named («anota en la cita de Ana…») or on what they note down, so a setting whose field a word names in passing
     («caja»: the till's, the printer's and the charge's settings; «aviso»: the booking rules) never comes before what
     writes the thing down (ERPlora/live#88: those settings took the 7 points of a write that takes what is named, and
-    the movement came 8th in the Hub). «Una entrada… en el turno» names no movement in the Hub: ERPlora/hub#1311."""
+    the movement came 8th in the Hub). «Una entrada… en el turno» names no movement in the Hub."""
     names = ranked(NOTED_IN_PASSING, asked, app_words=till_apps)
     settings = [name for name in names if name.endswith(".settings.update")]
     assert all(names.index(noted) < names.index(name) for name in settings), names[:6]
