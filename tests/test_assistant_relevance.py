@@ -810,8 +810,7 @@ def test_noting_writes_only_on_what_is_named(said, written_on):
         ("apunta también el email de Ana", {"también", "email", "ana"}),
         ("apúntale a Ana García el teléfono nuevo", {"ana", "garcía", "teléfono", "nuevo"}),
         # «En», «de» and «a» say where it is noted, or whose it is, only before an article or another word that names
-        # nothing («de la caja», «en su ficha», «del», «al»); before a name, what follows is the datum («de teléfono»;
-        # the review of ERPlora/live#96, round 2).
+        # nothing («de la caja», «en su ficha», «del», «al»); before a name, what follows is the datum («de teléfono»).
         ("apunta el número de teléfono de Ana", {"número", "teléfono", "ana"}),
         ("apunta la subida de precio del café", {"subida", "precio"}),
         ("apunta una salida de caja", {"salida", "caja"}),
@@ -896,8 +895,7 @@ def test_what_is_noted_of_someone_is_still_written_on_their_card(asked):
 )
 def test_what_is_noted_of_a_product_is_still_written_on_it(asked):
     """«La subida de precio del café» notes a price down: the product's change that takes it stays beside the create that
-    does, as a customer's phone does (the review of ERPlora/live#96, round 2: «de precio» was read as where it is
-    noted, and the product's change came 78th in the Hub)."""
+    does, as a customer's phone does: «de precio» is the datum noted, not where it is noted (ERPlora/live#96)."""
     names = ranked(NOTED_IN_PASSING, asked, app_words=till_apps)
     assert set(names[:2]) == {"inventory.product.create", "inventory.product.update"}, names[:6]
 

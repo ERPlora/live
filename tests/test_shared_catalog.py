@@ -1,8 +1,8 @@
-"""The contract of the ``shared`` schema of the ``saas`` database (round 16, spec §3.1 and §3.2).
+"""The contract of the ``shared`` schema of the ``saas`` database.
 
 The columns are written once, in the abstract models of ``live.shared_catalog``; the SaaS concretes
 them as the owner (managed, migrated) and the Hub as a mirror (``managed = False``). Changing a
-column breaks these tests on purpose: it has to go through the expand/contract of spec §3.5.
+column breaks these tests on purpose: it has to go through an expand/contract migration.
 
 The concrete models live in an isolated app registry, in two test apps, as the two projects do.
 No database is needed: the tests read ``_meta`` and the column types of the Postgres backend.
@@ -22,7 +22,7 @@ from live.shared_catalog import (
     AbstractAppDoc,
 )
 
-#: (column, Postgres type, null) of shared.app, in the order of spec §3.1.
+#: (column, Postgres type, null) of shared.app, in column order.
 APP_COLUMNS = [
     ("id", "varchar(63)", False),
     ("name_en", "varchar(80)", False),
@@ -42,7 +42,7 @@ APP_COLUMNS = [
     ("registered_at", "timestamp with time zone", False),
 ]
 
-#: (column, Postgres type, null) of shared.app_doc, in the order of spec §3.1.
+#: (column, Postgres type, null) of shared.app_doc, in column order.
 APP_DOC_COLUMNS = [
     ("id", "uuid", False),
     ("app_id", "varchar(63)", False),
@@ -72,7 +72,7 @@ def concrete_pair(label, app_meta=None, doc_meta=None):
 
 @pytest.fixture
 def concrete():
-    """The SaaS's owner (testapp) and the Hub's mirror (fakeapp), as spec §3.2 writes them."""
+    """The SaaS's owner (testapp) and the Hub's mirror (fakeapp)."""
     with isolate_apps("tests.testapp", "tests.fakeapp"):
         yield {
             "testapp": concrete_pair(
@@ -126,7 +126,7 @@ def test_requires_and_verticals_default_to_a_new_empty_list(concrete):
 
 
 def test_category_has_no_choices():
-    """The SaaS tolerates a category its live.meta does not know yet (spec §5.3)."""
+    """The SaaS tolerates a category its live.meta does not know yet."""
     assert not AbstractApp._meta.get_field("category").choices
 
 
@@ -158,7 +158,7 @@ def test_the_doc_fk_resolves_to_the_app_of_its_own_project(concrete):
 
 
 def test_owner_and_mirror_share_the_columns(concrete):
-    """The mirror cannot diverge from the owner within one commit of live (spec §3.2)."""
+    """The mirror cannot diverge from the owner within one commit of live."""
     (owner_app, owner_doc), (mirror_app, mirror_doc) = concrete["testapp"], concrete["fakeapp"]
 
     assert columns(owner_app) == columns(mirror_app) == APP_COLUMNS

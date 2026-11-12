@@ -1,7 +1,7 @@
 [project]
 name = "erplora-live"
 version = "0.1.0"
-description = "Operations, live queries over SSE and SPA serving shared by hub-next and saas-next."
+description = "Operations, live queries over SSE and SPA serving shared by the Hub and the SaaS."
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
@@ -9,7 +9,7 @@ dependencies = [
     "django-ninja>=1.7.1",
     "psycopg[binary,pool]>=3.3",
     "daphne>=4.2",  # live's runserver command is daphne's
-    "markdown>=3.8",  # live.markdown (round 16)
+    "markdown>=3.8",  # live.markdown
     "nh3>=0.3",  # sanitises live.markdown's HTML
 ]
 

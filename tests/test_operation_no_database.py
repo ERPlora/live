@@ -1,8 +1,8 @@
-"""An operation that touches no database (``database=False``; hub APP-BASE-9): what waits on the network.
+"""An operation that touches no database (``database=False``): what waits on the network.
 
 The Hub's assistant asks erplora.com for the month's messages, a report or a dictation: up to 15 s of waiting. Inside
 ``transaction.atomic`` that wait would hold a connection to the hub's database (and, on the Free plan, its one
-transaction at a time: PLAN §14.2), so the till would wait too. Declared ``database=False``, the operation opens no
+transaction at a time), so the till would wait too. Declared ``database=False``, the operation opens no
 transaction, and keeps what ``@operation`` gives: the permission, the project's hook (``LIVE["operation_database"]``:
 the hub of the context, the app's right) and the validated output. A query to any database inside it is a misuse, as
 recording an event or asking for ``on_commit``: there is no transaction for them.

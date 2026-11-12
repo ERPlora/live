@@ -1,4 +1,4 @@
-"""A cut of the database: a request waits and tries again instead of failing (PLAN-DB, round 2026-11-04e, point 5).
+"""A cut of the database: a request waits and tries again instead of failing.
 
 A restart of the writer, an AWS maintenance or a Blue/Green switchover cut the connections or leave the database read
 only for some seconds. A project asks for this piece by naming ``settings.LIVE["database_cut"]``:

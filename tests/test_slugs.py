@@ -1,4 +1,4 @@
-"""Hub slugs (live.slugs): one shared rule and one shared list of reserved names (Ioan, 2026-10-13)."""
+"""Hub slugs (live.slugs): one shared rule and one shared list of reserved names."""
 
 import pytest
 from django.core.exceptions import ValidationError
@@ -16,10 +16,10 @@ from live.slugs import (
     validate_hub_slug,
 )
 
-# Ioan's list, as he gave it, plus `hubs`: that is ERPlora's own platform host (round 13, PLAN §18);
-# plus `pre`: the team's pre-production environment (`pre.erplora.com`, 2026-10-14);
-# `hub` stays reserved and the rest are blocked names.
-IOAN_LIST = (
+# Written out apart from live.slugs, so that changing the list is a deliberate act: `hubs` is ERPlora's own
+# platform host, `pre` the team's pre-production environment (`pre.erplora.com`), `hub` stays reserved and the
+# rest are blocked names.
+RESERVED_LIST = (
     "hub, hubs, erplora, saas, platform, system, sys, internal, www, mail, webmail, smtp, imap, pop, mx, ns1, "
     "ns2, ftp, cdn, static, assets, api, ws, dev, test, staging, pre, demo, localhost, admin, administrator, "
     "root, superuser, staff, support, help, status, security, abuse, postmaster, hostmaster, webmaster, "
@@ -28,9 +28,9 @@ IOAN_LIST = (
 )
 
 
-def test_the_reserved_list_is_exactly_ioans():
+def test_the_reserved_list_is_exactly_the_written_one():
     assert isinstance(RESERVED_HUB_SLUGS, frozenset)
-    assert RESERVED_HUB_SLUGS == frozenset(IOAN_LIST.split(", "))
+    assert RESERVED_HUB_SLUGS == frozenset(RESERVED_LIST.split(", "))
 
 
 def test_the_limits():
@@ -47,7 +47,6 @@ def test_other_names_are_not_reserved(slug):
     assert not is_reserved_hub_slug(slug)
 
 
-# Round 13 (PLAN §18): `hubs.erplora.com` is the platform host, the Hub's admin for the staff.
 @pytest.mark.parametrize("slug", ["hubs", "HUBS", "Hubs"])
 def test_hubs_is_reserved_because_it_is_the_platform_host(slug):
     assert is_reserved_hub_slug(slug)
@@ -56,7 +55,7 @@ def test_hubs_is_reserved_because_it_is_the_platform_host(slug):
 
 
 # `pre.erplora.com` is the pre-production environment's SaaS and `<slug>.pre.erplora.com` its hubs: a hub
-# named `pre` would be hidden behind it (docs/plans/2026-10-14-entorno-pre.md, §0.6).
+# named `pre` would be hidden behind it.
 @pytest.mark.parametrize("slug", ["pre", "PRE", "Pre"])
 def test_pre_is_reserved_for_the_pre_environment(slug):
     assert is_reserved_hub_slug(slug)
@@ -98,7 +97,7 @@ def test_invalid_slugs_raise_a_code(slug, code):
         validate_hub_slug(slug)
 
 
-# Demo hubs (docs/plans/2026-10-17-demo-hubs-fase-1.md, §1.9): `demo-<hex>` is the Hub's own namespace. A
+# Demo hubs: `demo-<hex>` is the Hub's own namespace. A
 # customer never takes a `demo-` slug; only the Hub's registry accepts it, with `allow_demo=True`.
 class TestDemoPrefix:
     @pytest.mark.parametrize("slug", ["demo-abcd1234", "DEMO-abcd1234", "demo-x"])

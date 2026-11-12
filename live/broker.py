@@ -1,4 +1,4 @@
-"""One ``LISTEN`` connection per process and the streams waiting on each channel (plan §4.1).
+"""One ``LISTEN`` connection per process and the streams waiting on each channel.
 
 Commands notify their scope's channel after the COMMIT, on the control database
 (``live.outbox.notify``). Every process keeps a single ``psycopg.AsyncConnection`` there (the
