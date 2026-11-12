@@ -1672,9 +1672,10 @@ def test_a_comma_before_ni_that_goes_on_from_no_sin_still_ends_the_sentence(said
 
 
 def test_only_the_word_ni_after_a_comma_goes_on_with_the_sentence():
-    """«Ninguno» starts like «ni»: after a comma it starts a sentence of its own, as any other word does."""
-    assert len(assistant._sentences("cierra la caja sin contar, ninguno ha contado el fondo")) == 2
+    """Only what starts with the word «ni» goes on: «ninguno» starts like it, and a «ni» later on starts nothing."""
     assert len(assistant._sentences("cierra la caja sin contar, ni cambiar el fondo")) == 1
+    assert len(assistant._sentences("cierra la caja sin contar, ninguno ha contado el fondo")) == 2
+    assert len(assistant._sentences("cierra la caja sin contar, no toques ni el fondo")) == 2
 
 
 class SortedIn(Schema):
