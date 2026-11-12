@@ -667,6 +667,261 @@ def test_what_is_noted_brings_the_write_that_books_it_and_the_one_that_changes_i
     assert set(names[:2]) == {"appointment.appointment.create", "appointment.appointment.update"}, names[:4]
 
 
+class MovementIn(Schema):
+    type: str
+    amount: int
+    description: str | None = None
+
+
+class TillSettingsIn(Schema):
+    enable_cash_register: bool | None = None
+    require_blind_count: bool | None = None
+
+
+class PrintingSettingsIn(Schema):
+    open_drawer_on_sale: bool | None = None
+    receipt_copies: int | None = None
+
+
+class SaleSettingsIn(Schema):
+    allow_cash: bool | None = None
+    max_discount_percent: int | None = None
+
+
+class BookingSettingsIn(Schema):
+    min_booking_notice: int | None = None
+    auto_confirm_online: bool | None = None
+
+
+class QuickNoteIn(Schema):
+    text: str
+    sort_order: int | None = None
+
+
+class CustomerIn(Schema):
+    name: str | None = None
+    phone: str | None = None
+
+
+#: What is noted down at the till, beside the settings whose fields a sentence names in passing («la caja»: the till's
+#: settings take the cash register, the printer's open the drawer, the till's charge with cash; «el aviso»: the booking
+#: rules take a notice), the writes of the shift a sentence names where something is noted and the reads of what it
+#: names for what («para comprar»: a customer's purchases; «el aviso»: the notices of the appointments), as the Hub's:
+#: a thing named, the till's name is no thing of its tools.
+NOTED_IN_PASSING = [
+    tool("cash_register.movement.add", "Record money put in or taken out of the drawer of the open session.",
+         input=MovementIn, asks={"es": ("mete 50 € de cambio en la caja",),
+                                 "en": ("record 20 € taken out to pay the supplier",)}),
+    tool("cash_register.movement.list", "List the money put in or taken out of a session.", "query"),
+    tool("cash_register.settings.update", "Change how the drawer works, field by field: cash register on, blind "
+         "count.", input=TillSettingsIn),
+    tool("printing.settings.update", "Change how the business prints: open the drawer at checkout, receipt copies.",
+         input=PrintingSettingsIn),
+    tool("sale.settings.update", "Change the till settings field by field: which payment types charge, the cap of "
+         "discounts.", input=SaleSettingsIn),
+    tool("sale.quick_note.create", "Add a quick note to the till (e.g. «no salt»): a chip of the line-note sheet.",
+         input=QuickNoteIn),
+    tool("appointment.settings.update", "Change the booking rules: the minimum notice, auto-confirming.",
+         input=BookingSettingsIn),
+    tool("staff.schedule.create", "Create a shift of the schedule for a member."),
+    tool("staff.schedule.update", "Change a shift of the schedule: its hours or its member."),
+    tool("staff.settings.update", "Change the staff settings: how shifts are planned and swapped."),
+    tool("customer.customer.create", "Creates a new customer; only the name is required.", input=CustomerIn),
+    tool("customer.customer.update", "Change a customer's card: its name, its phone.", input=CustomerIn,
+         asks={"es": ("pon la dirección nueva de Marta en su ficha", "cambia el correo de Luis")}),
+    tool("customer.customer.list", "List the customers.", "query"),
+    tool("inventory.product.create", "Create a product of the catalog with its name and its price.", input=ProductIn),
+    tool("inventory.product.update", "Change a product: its name, its price.", input=ProductIn),
+    tool("customer.purchase.list", "List what a customer bought.", "query"),
+    tool("appointment.appointment.notices", "List the notices of today's appointments.", "query"),
+    *NOISE,
+]
+TILL_APPS = {
+    "cash_register": "caja cash register", "printing": "impresión printing", "sale": "ventas sale tpv notas rápidas",
+    "appointment": "citas appointments", "staff": "personal staff turnos", "customer": "clientes customers",
+}
+
+
+def till_apps(label: str, language: str) -> frozenset[str]:
+    return frozenset(assistant.stems(TILL_APPS.get(label, label)))
+
+
+@pytest.mark.parametrize(
+    ("asked", "noted"),
+    [
+        ("anota una salida de 15 € de la caja para comprar hielo", "cash_register.movement.add"),
+        ("apunta una salida de 15 € de la caja para comprar hielo", "cash_register.movement.add"),
+        ("hay que apuntar una entrada de 20 € en efectivo en la caja para el cambio del turno",
+         "cash_register.movement.add"),
+        ("hay que anotarlo en la caja: una salida de 15 € para comprar hielo", "cash_register.movement.add"),
+        # Where it is noted, said before what is noted, is no datum noted down.
+        ("apunta en la caja una salida de 15 € para comprar hielo", "cash_register.movement.add"),
+        ("deja preparado el aviso «Sin cilantro QA» para marcarlo rápido al apuntar platos", "sale.quick_note.create"),
+    ],
+)
+def test_what_is_noted_comes_before_the_settings_a_word_names_in_passing(asked, noted):
+    """«Anota una salida de 15 € de la caja» notes a movement of the till down: «anota» and «apunta» write on a thing
+    named («anota en la cita de Ana…») or on what they note down, so a setting whose field a word names in passing
+    («caja»: the till's, the printer's and the charge's settings; «aviso»: the booking rules) never comes before what
+    writes the thing down (ERPlora/live#88: those settings took the 7 points of a write that takes what is named, and
+    the movement came 8th in the Hub). «Una entrada… en el turno» names no movement in the Hub: ERPlora/hub#1311."""
+    names = ranked(NOTED_IN_PASSING, asked, app_words=till_apps)
+    settings = [name for name in names if name.endswith(".settings.update")]
+    assert all(names.index(noted) < names.index(name) for name in settings), names[:6]
+
+
+@pytest.mark.parametrize(
+    ("said", "written_on"),
+    [
+        ("anota una salida de 15 € de la caja", {"update"}),
+        ("apúntame una entrada de 50 € en el turno", {"update"}),
+        ("hay que anotarlo en la cita de Ana", {"update"}),
+        # Asked by another verb too, a change is that verb's, of whatever it changes.
+        ("apunta una salida de 15 € y cambia la caja a arqueo ciego", set()),
+        ("ponle a la caja el arqueo ciego y anota una salida de 15 €", set()),
+        ("apunta una salida de 15 € y ponle de nombre «Hielo»", set()),
+        ("crea un aviso", set()),
+        ("cambia el precio del café", set()),
+        # A request asks for it as a command does; a question that asks to know, for no change at all.
+        ("¿puedes anotar una salida de 15 €?", {"update"}),
+        ("¿hay que anotar la salida de 15 € en la caja?", set()),
+    ],
+)
+def test_noting_writes_only_on_what_is_named(said, written_on):
+    """The actions asked only as what «anota» and «apunta» write on (``Asked.written_on``): their ``update``, unless
+    another word asks for it as well (ERPlora/live#88)."""
+    assert assistant.asked([said]).written_on == written_on
+
+
+@pytest.mark.parametrize(
+    ("said", "noted"),
+    [
+        ("anota una salida de 15 € de la caja", {"salida"}),
+        ("apúntale el teléfono nuevo a Ana", {"teléfono", "nuevo", "ana"}),
+        ("apunta en la ficha de Ana su teléfono nuevo", {"ana", "teléfono", "nuevo"}),
+        ("anótale a Ana en su ficha el teléfono nuevo", {"ana", "teléfono", "nuevo"}),
+        ("apunta en la caja una salida de 15 €", {"salida"}),
+        ("apunta en esta caja una salida de 15 €", {"salida"}),
+        ("anota de la caja de Barra una salida de 15 €", {"barra", "salida"}),
+        ("apunta del turno de Barra una entrada de 20 €", {"barra", "entrada"}),
+        ("apúntale al cliente el teléfono nuevo", {"teléfono", "nuevo"}),
+        ("anótale a la clienta el teléfono nuevo", {"teléfono", "nuevo"}),
+        # Every thing named outside where it is noted, whatever comes before it (the review of ERPlora/live#96).
+        ("apunta también el email de Ana", {"también", "email", "ana"}),
+        ("apúntale a Ana García el teléfono nuevo", {"ana", "garcía", "teléfono", "nuevo"}),
+        # «En», «de» and «a» say where it is noted, or whose it is, only before an article or another word that names
+        # nothing («de la caja», «en su ficha», «del», «al»); before a name, what follows is the datum («de teléfono»;
+        # the review of ERPlora/live#96, round 2).
+        ("apunta el número de teléfono de Ana", {"número", "teléfono", "ana"}),
+        ("apunta la subida de precio del café", {"subida", "precio"}),
+        ("apunta una salida de caja", {"salida", "caja"}),
+        ("hay que apuntar una salida de", {"salida"}),
+        # Of each word that notes something down, in each of its sentences, until another command starts; never of
+        # another verb.
+        ("hay que anotarlo en la caja: una salida de 15 €", set()),
+        ("una salida de 15 € de la caja hay que apuntarla", set()),
+        ("una salida de 15 € apúntala en la caja", set()),
+        ("anota una salida de 15 € y apunta el teléfono de Ana", {"salida", "teléfono", "ana"}),
+        ("anota una salida de 15 € y dime el saldo", {"salida"}),
+        ("anota una salida de 15 € y búscame el teléfono de Ana", {"salida"}),
+        ("crea una salida de 15 € de la caja", set()),
+    ],
+)
+def test_what_is_noted_down_is_what_the_word_that_notes_names_after_it(said, noted):
+    """What a word that notes something down notes (``Asked.noted``): every thing named after it, until another command
+    starts, but the one a word of where or whose introduces with its article («en la ficha de Ana», «de la caja», «al
+    cliente»; ERPlora/live#88)."""
+    found = assistant.asked([said]).noted
+    assert len(found) == len(noted), found
+    assert all(any(assistant.stems(word) <= concept for concept in found) for word in noted), found
+
+
+def test_noting_with_another_verb_said_before_writes_on_what_that_verb_changes():
+    """A change asked in an earlier text of the turn is still asked: the till's settings take the cash register it
+    changes, before every other write (ERPlora/live#88)."""
+    said = assistant.asked(["cambia la caja a arqueo ciego", "y apunta una salida de 15 €"])
+    assert said.written_on == frozenset()
+    names = [op.name for op in assistant.relevant(
+        {op.name: op for op in NOTED_IN_PASSING},
+        ["cambia la caja a arqueo ciego", "y apunta una salida de 15 €"],
+        "es",
+        app_words=till_apps,
+    )]
+    assert names.index("cash_register.settings.update") < names.index("printing.settings.update"), names[:6]
+    assert "cash_register.settings.update" in names[:2], names[:6]
+
+
+@pytest.mark.parametrize(
+    "asked",
+    [
+        "apúntale el teléfono nuevo a Ana",
+        "anota el teléfono nuevo de Ana",
+        "hay que apuntar el teléfono nuevo de Ana",
+        # Said after where it is noted: what is noted is still the phone.
+        "apunta en la ficha de Ana su teléfono nuevo",
+        "anótale a Ana en su ficha el teléfono nuevo",
+        # With an adjective, an adverb, a surname or a number before it, too (the review of ERPlora/live#96: only the
+        # first word after the verb was what is noted down, and the card left the first ones).
+        "apúntale a Ana el nuevo teléfono",
+        "apunta también el teléfono de Ana",
+        "anota bien el teléfono de Marta",
+        "apúntale a Ana García el teléfono nuevo",
+        "apunta en la ficha de Ana García su teléfono nuevo",
+        "anota 600 111 222 como teléfono de Ana",
+        "anota su nuevo teléfono, 600 111 222",
+        "apunta otro teléfono para Marta",
+        # Said after «de» or «a» with no article, it is the datum, not whose it is (the review of ERPlora/live#96, round
+        # 2: «de teléfono» was read as where it is noted, and the card left what a turn offers).
+        "apunta el número de teléfono de Ana",
+        "anótale a Ana el número de teléfono",
+        "apunta el número de móvil de Ana",
+        "anota el número de teléfono de Ana: 600 111 222",
+        "apunta el nuevo número de teléfono de Ana en su ficha",
+        "apunta en la ficha de Ana el número de teléfono",
+        "anota el cambio de teléfono de Ana",
+        "apunta a Ana de teléfono el 600 111 222",
+    ],
+)
+def test_what_is_noted_of_someone_is_still_written_on_their_card(asked):
+    """What a command notes down is what a write that takes it writes on («apúntale el teléfono nuevo a Ana»: the
+    customer's phone), so the change that takes it stays beside the create that does: the model chooses
+    (ERPlora/live#88 leaves out only what a word names in passing)."""
+    names = ranked(NOTED_IN_PASSING, asked, app_words=till_apps)
+    assert set(names[:2]) == {"customer.customer.create", "customer.customer.update"}, names[:6]
+
+
+@pytest.mark.parametrize(
+    "asked",
+    ["apunta la subida de precio del café", "apunta el precio nuevo del café"],
+)
+def test_what_is_noted_of_a_product_is_still_written_on_it(asked):
+    """«La subida de precio del café» notes a price down: the product's change that takes it stays beside the create that
+    does, as a customer's phone does (the review of ERPlora/live#96, round 2: «de precio» was read as where it is
+    noted, and the product's change came 78th in the Hub)."""
+    names = ranked(NOTED_IN_PASSING, asked, app_words=till_apps)
+    assert set(names[:2]) == {"inventory.product.create", "inventory.product.update"}, names[:6]
+
+
+@pytest.mark.parametrize(
+    "asked",
+    [
+        "anota el DNI de Luis en su ficha",
+        "apunta la calle nueva de Marta: Mayor 3",
+        "apúntale a Luis el correo nuevo, luis@example.com",
+        "anótale a Luis otro correo, luis@example.com",
+        "apunta el cumpleaños de Ana en su ficha: 3 de mayo",
+    ],
+)
+def test_what_is_noted_of_someone_with_no_datum_its_card_takes_still_brings_the_card(asked):
+    """What is noted down need not be named as the card's write names it («el DNI», «la calle», «el correo»): the change
+    of the card the sentence names still comes before every write that shares only the verb, as a write that takes
+    nothing named keeps the points of any other write (the review of ERPlora/live#96: with none, «anota el DNI de Luis
+    en su ficha» left the card out of what a turn offers in the Hub)."""
+    names = ranked(NOTED_IN_PASSING, asked, app_words=till_apps)
+    noise = [name for name in names if name.startswith("appointment.thing")]
+    assert all(names.index("customer.customer.update") < names.index(name) for name in noise), names[:6]
+
+
 #: What «desactiva» and «activa» ask for: switching a thing off or on, as an app's switch does, or deactivating and
 #: activating it, as a member, a price list or a rule are; the thing named says which.
 SWITCHING_OFF = {"disable", "deactivate"}

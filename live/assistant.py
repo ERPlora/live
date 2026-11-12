@@ -302,6 +302,17 @@ READ_VERBS = frozenset({"list", "get", "options", "count", "check", "stats"})
 SWITCHES = frozenset({"enable", "disable"})
 #: The actions that change what a write takes.
 _CHANGES = frozenset({"update", "set"})
+#: What a word that notes something down asks for («anota», «apunta»: ``VERBS``): writing it down, adding it to what
+#: there is, or writing on what is named (``_WRITTEN_ON``: «anota en la cita de Ana…»), never on a setting a word names
+#: in passing («anota una salida de 15 € de la caja»: no setting of the till; ERPlora/live#88).
+_NOTES = frozenset({"create", "add", "update"})
+_WRITTEN_ON = frozenset({"update"})
+#: The words that say where a thing is noted or whose it is, not what is noted down («apunta en la ficha de Ana su
+#: teléfono nuevo», «anota de la caja una salida»): with its article («del», «al»), or before one or another word that
+#: names nothing yet («de la caja», «en su ficha»). Before a name, what follows is the datum («el número de teléfono»,
+#: «la subida de precio»).
+_WHERE = frozenset({"en", "de", "del", "a", "al"})
+_WITH_ITS_ARTICLE = frozenset({"del", "al"})
 #: Words of ``VERBS`` that name a thing, not an action of it: no verb's stem.
 _NOT_VERBS = frozenset({"alta", "nuevo", "nueva", "new", "datos", "detalle", "detail"})
 #: Verbs whose stem joins forms ``VERBS`` does not list, and the irregular ones («haz» is «hacer», «di» is «decir»).
@@ -612,7 +623,9 @@ class Asked(NamedTuple):
     carpeta Facturas» creates a folder; «cobra la mesa» charges a sale, the verb's own thing), of which ``records``
     the ones a word after the verb names («borra el cliente Ana»: a customer to find). ``direct`` are the things named
     outside what something is for (``_FOR_WHAT``: «ventas» in «activa las ventas», not in «para las próximas
-    ventas»)."""
+    ventas»). ``written_on`` are the actions asked only as what a word that notes something down writes on
+    (``_WRITTEN_ON`` of «anota», «apunta»; ERPlora/live#88): no other word asks for them; ``noted`` is what such a word
+    notes down (``_noted``: the new phone of «apunta en la ficha de Ana su teléfono nuevo»)."""
 
     concepts: frozenset[frozenset[str]]
     verbs: frozenset[str]
@@ -622,6 +635,8 @@ class Asked(NamedTuple):
     objects: frozenset[frozenset[str]] = frozenset()
     records: frozenset[frozenset[str]] = frozenset()
     direct: frozenset[frozenset[str]] = frozenset()
+    written_on: frozenset[str] = frozenset()
+    noted: frozenset[frozenset[str]] = frozenset()
 
 
 def _phrase_verbs(phrase: str) -> frozenset[str]:
@@ -753,6 +768,27 @@ def _unasked(words: list[str], at: int) -> bool:
     return negated and bool(_verbs_of(word)) and _infinitive(word)
 
 
+def _noted(words: list[str], at: int, extra: tuple[tuple[str, ...], ...]) -> set[frozenset[str]]:
+    """What the word that notes something down ``words[at]`` notes: every thing named after it, until another command
+    starts (``_starts_command``), but the one a word of ``_WHERE`` says, with its article, it is noted in or whose it is
+    («apunta en la ficha de Ana García su teléfono nuevo»: Ana, García, the phone, new; «anota una salida de 15 € de la
+    caja»: the money taken out; «apunta el número de teléfono de Ana»: the number, the phone, Ana)."""
+    found: set[frozenset[str]] = set()
+    where = False
+    for later in range(at + 1, len(words)):
+        word = words[later]
+        if _starts_command(words, later):
+            break
+        if word in _WHERE:
+            after = words[later + 1] if later + 1 < len(words) else ""
+            where = word in _WITH_ITS_ARTICLE or len(after) < 3 or after in STOP_WORDS
+        elif len(word) >= 3 and word not in STOP_WORDS:
+            if not where:
+                found.add(_concept(word, extra))
+            where = False
+    return found
+
+
 def _infinitive(word: str) -> bool:
     """Whether the plain ``word`` is an infinitive, its pronouns too («cerrar», «borrarla»)."""
     return (_unclitic(word) or word).endswith(_INFINITIVE)
@@ -840,6 +876,12 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
     objects: set[frozenset[str]] = set()
     records: set[frozenset[str]] = set()
     direct: set[frozenset[str]] = set()
+    # The actions a word that notes something down asks for as writing on what is named (``_WRITTEN_ON``), those any
+    # other word or phrase asks for — a change another one asks for, in any text of the turn, is its own («cambia la
+    # caja…» and «y apunta una salida») — and what each word that notes something down notes (``_noted``).
+    noting: set[str] = set()
+    others: set[str] = set()
+    noted: set[frozenset[str]] = set()
     reading = howto = False
     for text in texts:
         # A yes to what was asked before asks for nothing of its own: the write it agrees to is in the texts before.
@@ -865,8 +907,17 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
         doing = _how_to(sentences)
         if doing and doing != "-" and doing not in acting:
             acting[doing] = _verbs_of(doing[:-1] + "a") or _verbs_of(doing[:-1] + "e")
+        others |= said
         for of in acting.values():
             said |= of
+            if of == _NOTES:
+                noting |= _WRITTEN_ON
+            else:
+                others |= of
+        for words in heard:
+            for at, word in enumerate(words):
+                if acting.get(word) == _NOTES:
+                    noted |= _noted(words, at, extra)
         # A word that asks (a verb) names a thing only through its synonyms («cobra»: a sale); «show», «dame» none. So
         # does a verb not asked («sin cobrar»: still a sale); what someone will do is no verb asked, and names as any
         # word does.
@@ -903,6 +954,8 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
         frozenset(objects),
         frozenset(records),
         frozenset(direct),
+        frozenset((noting - others) & verbs),
+        frozenset(noted),
     )
 
 
@@ -984,7 +1037,11 @@ def relevant(
     any other write unless a tool does that to what the command acts on, or it is an app named by its name («reserva
     una mesa»: no write of the staff; «abre la cocina»: no other app's open), 1 to
     a read of the app named and nothing to any other read: «¿cuántos…?» is no list of everything, and what a read is
-    filtered by is not what it reads.
+    filtered by is not what it reads. A change asked only by a word that notes something down («anota», «apunta»:
+    ``Asked.written_on``) writes on a thing named or on what is noted down (``Asked.noted``: «apúntale el teléfono
+    nuevo a Ana»): of no thing named, a write that takes only what another word names in passing adds nothing («anota
+    una salida de 15 € de la caja» notes a movement down, not the till's settings, which take the cash register;
+    ERPlora/live#88), and one that takes what is noted down, or nothing named, adds what any other write does.
 
     A write of a thing named after its verb brings its reads 3 («borra el cliente Ana»: the read that finds Ana). A
     question that asks to know and to do nothing puts the reads first (1), a thing's list before its other reads (1),
@@ -1065,7 +1122,8 @@ def _relevant(
             places += 2 * (not concept.isdisjoint(doing)) + (not concept.isdisjoint(qualified))
         if not thing and apps_named and not _APP_THING.isdisjoint(named_entity):
             thing = 1
-        takes = named(_taken(op.input))
+        taken = _taken(op.input)
+        takes = named(taken)
         points = places + named(_stems_of(description(op))) + named(asks(op)) + takes
         acts = action.split("_")
         matched = verbs.intersection(acts)
@@ -1074,7 +1132,17 @@ def _relevant(
                 points += 9 + (action in verbs) + 3 * aimed
             else:
                 writes = matched - READ_VERBS
-                points += 7 if takes and writes else 3 if writes and not aimed_at else 1 if app_named else 0
+                # What «anota» writes on is a thing named, or what it notes down («apúntale el teléfono nuevo a Ana»): a
+                # write that takes only what another word names in passing is none of it («anota una salida de 15 €
+                # de la caja»: the till's settings take the cash register, not the money taken out).
+                in_passing = (
+                    takes
+                    and writes
+                    and writes <= said.written_on
+                    and not any(not concept.isdisjoint(taken) for concept in said.noted)
+                )
+                if not in_passing:
+                    points += 7 if takes and writes else 3 if writes and not aimed_at else 1 if app_named else 0
         elif switching and takes and not _CHANGES.isdisjoint(acts):
             points += 7
         if op.kind == "query":
