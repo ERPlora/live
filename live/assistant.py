@@ -283,8 +283,9 @@ _CAN = frozenset({"puedo", "puedes", "puede", "podemos", "pueden", "pude", "pudo
                   "consigue", "consegui", "consiguio", "conseguido"})
 _LETS = frozenset({"deja", "dejan", "dejo", "dejaba"})
 _TO_WHOM = frozenset({"me", "te", "le", "nos", "les"})
-#: The word after which what someone can do says no «not even» («sin tocar caja ni cambiar importes si puede»).
-_IF = frozenset({"si"})
+#: The words that open another clause: what someone can do said after one is that clause's, no «not even» («…ni
+#: cambiar importes si puede», «…ni cambiar el fondo que me deja el turno», «…porque no puedo», «…pero no me deja»).
+_OTHER_CLAUSE = frozenset({"si", "que", "porque", "pero"})
 #: The words after which a verb says what someone will do, not what is asked («I'll approve it», «we will open»).
 _FUTURE = frozenset({"ll", "will"})
 #: The words after which a thing is named for what another is («para las próximas ventas», «for the new sales»): to the
@@ -761,10 +762,10 @@ def _not_even(words: list[str], at: int) -> bool:
     """Whether the infinitive ``words[at]`` after a ``_NOR`` is what someone cannot even do: a form of ``_CAN``, or of
     ``_LETS`` after ``_TO_WHOM``, said after it with no infinitive of its own after it («ni cerrar la caja me deja»,
     «ni cerrar puedo la caja»; «…ni cambiar importes y así puedo cuadrar la caja» is what «cuadrar» can do) and with no
-    ``_IF`` before it («…ni cambiar importes si puede»)."""
+    ``_OTHER_CLAUSE`` before it («…ni cambiar importes si puede»)."""
     for later in range(at + 1, len(words)):
         word = words[later]
-        if word in _IF:
+        if word in _OTHER_CLAUSE:
             return False
         if word in _CAN or (word in _LETS and words[later - 1] in _TO_WHOM):
             return later + 1 == len(words) or not _infinitive(words[later + 1])

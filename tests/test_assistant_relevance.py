@@ -1829,8 +1829,11 @@ def test_each_form_of_a_verb_of_what_cannot_be_done_makes_ni_not_even(cannot):
         # A verb with an infinitive of its own after it says what that one can do («puedo cuadrar»): «cuadrar» is
         # asked, «cambiar» still is not.
         ("márcala cobrada sin tocar caja ni cambiar importes y así puedo cuadrar la caja", {"check", "stats"}),
-        # After «si», what someone can do is no «not even» («si puede»).
+        # After a word that opens another clause, what someone can do is that clause's, no «not even».
         ("márcala cobrada sin tocar caja ni cambiar importes si puede", set()),
+        ("cierra la caja sin contar ni cambiar el fondo que me deja el turno de tarde", {"close"}),
+        ("cierra la caja sin contar ni cambiar el fondo porque no puedo", {"close"}),
+        ("cierra la caja sin contar ni cambiar el fondo pero no me deja", {"close"}),
     ],
 )
 def test_a_verb_said_after_ni_that_goes_on_from_sin_is_not_asked_whatever_verb_comes_after(said, verbs):
