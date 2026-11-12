@@ -422,7 +422,7 @@ _WORD = re.compile(r"[a-z0-9]+")
 _BREAK = re.compile(r"[«»\"“”()\[\].,;:!?¿¡\n]+")
 #: A comma before a ``_NOR`` that ends no sentence: «, ni …» goes on with what was said before it, as in Spanish («sin
 #: tocar caja, ni cambiar importes» says what «sin tocar caja ni cambiar importes» does, ERPlora/live#81).
-_COMMA_BEFORE_NOR = re.compile(r"\s*,\s*(?=(?:%s)\b)" % "|".join(sorted(_NOR)), re.IGNORECASE)
+_COMMA_BEFORE_NOR = re.compile(r",(?=\s*(?:%s)\b)" % "|".join(sorted(_NOR)), re.IGNORECASE)
 #: Words kept whole: cut, they would be another word's stem («personal», the staff, is not «persona»).
 _WHOLE = frozenset({"personal"})
 #: Words kept apart from another's stem (as said, or without their plural «s»): «tablet» is no «table», «compartido»

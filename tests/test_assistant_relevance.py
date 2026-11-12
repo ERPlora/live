@@ -1658,6 +1658,12 @@ def test_a_verb_said_after_a_comma_and_ni_is_asked_when_it_goes_on_from_no_sin(s
     assert assistant.asked([said]).verbs == verbs
 
 
+def test_only_the_word_ni_after_a_comma_goes_on_with_the_sentence():
+    """«Ninguno» starts like «ni»: after a comma it starts a sentence of its own, as any other word does."""
+    assert len(assistant._sentences("cierra la caja sin contar, ninguno ha contado el fondo")) == 2
+    assert len(assistant._sentences("cierra la caja sin contar, ni cambiar el fondo")) == 1
+
+
 class SortedIn(Schema):
     name: str | None = None
     sort_order: int | None = None
