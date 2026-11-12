@@ -446,6 +446,8 @@ SYNONYMS = (
     ("etiqueta", "tag"),
     ("comensal", "guest"),
     ("recordatorio", "reminder"),
+    # Only the phrases: «tema» alone is also the matter, and «modo» a way («de modo que»).
+    ("theme", "modo oscuro", "modo claro", "tema oscuro", "tema claro"),
     ("sentar", "sienta", "seat"),
     ("ajustes", "ajuste", "configuracion", "configurar", "configura", "settings", "setting", "setup", "configure",
      "set up"),
