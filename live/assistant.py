@@ -275,6 +275,16 @@ _NOR = frozenset({"ni"})
 #: The word that makes a ``_NOR`` after it «not even» whatever ``_WITHOUT`` came before («tengo una mesa sin cobrar y no
 #: puedo ni cerrar la caja»): the ``_NOR`` goes on from a ``_WITHOUT`` only with none of these between the two.
 _NOT = frozenset({"no"})
+#: The forms of the verbs that say what someone can or manages to do, and of the one that says what someone is let do
+#: after whom it lets (``_TO_WHOM``: «me deja»; «lo dejo» leaves a thing). One said after the infinitive after a ``_NOR``
+#: makes that «ni» «not even» whatever ``_WITHOUT`` came before («tengo una mesa sin cobrar, ni cerrar la caja me
+#: deja», «ni cerrar puedo la caja»): its verb is asked (ERPlora/live#86).
+_CAN = frozenset({"puedo", "puedes", "puede", "podemos", "pueden", "pude", "pudo", "podia", "podido", "consigo",
+                  "consigue", "consegui", "consiguio", "conseguido"})
+_LETS = frozenset({"deja", "dejan", "dejo", "dejaba"})
+_TO_WHOM = frozenset({"me", "te", "le", "nos", "les"})
+#: The word after which what someone can do says no «not even» («sin tocar caja ni cambiar importes si puede»).
+_IF = frozenset({"si"})
 #: The words after which a verb says what someone will do, not what is asked («I'll approve it», «we will open»).
 _FUTURE = frozenset({"ll", "will"})
 #: The words after which a thing is named for what another is («para las próximas ventas», «for the new sales»): to the
@@ -732,12 +742,33 @@ def _starts_command(words: list[str], at: int) -> bool:
 def _unasked(words: list[str], at: int) -> bool:
     """Whether the verb ``words[at]`` says what is not to be done: its infinitive, its pronouns too, after ``_WITHOUT``
     («sin cambiar los pedidos», «sin quitarle el PIN») or after ``_NOR`` going on from a ``_WITHOUT`` before it in the
-    sentence («sin tocar caja ni cambiar importes»), with no ``_NOT`` between the two («no puedo ni cerrar la caja»)."""
+    sentence («sin tocar caja ni cambiar importes»), with no ``_NOT`` between the two («no puedo ni cerrar la caja») and
+    no verb after it that says it cannot even be done (``_not_even``: «ni cerrar la caja me deja»)."""
     word = words[at]
-    infinitive = (_unclitic(word) or word).endswith(_INFINITIVE)
     before = words[at - 1] if at > 0 else ""
-    negated = before in _WITHOUT or (before in _NOR and _goes_on(words[: at - 1]))
-    return negated and bool(_verbs_of(word)) and infinitive
+    negated = before in _WITHOUT or (
+        before in _NOR and _goes_on(words[: at - 1]) and not _not_even(words, at)
+    )
+    return negated and bool(_verbs_of(word)) and _infinitive(word)
+
+
+def _infinitive(word: str) -> bool:
+    """Whether the plain ``word`` is an infinitive, its pronouns too («cerrar», «borrarla»)."""
+    return (_unclitic(word) or word).endswith(_INFINITIVE)
+
+
+def _not_even(words: list[str], at: int) -> bool:
+    """Whether the infinitive ``words[at]`` after a ``_NOR`` is what someone cannot even do: a form of ``_CAN``, or of
+    ``_LETS`` after ``_TO_WHOM``, said after it with no infinitive of its own after it («ni cerrar la caja me deja»,
+    «ni cerrar puedo la caja»; «…ni cambiar importes y así puedo cuadrar la caja» is what «cuadrar» can do) and with no
+    ``_IF`` before it («…ni cambiar importes si puede»)."""
+    for later in range(at + 1, len(words)):
+        word = words[later]
+        if word in _IF:
+            return False
+        if word in _CAN or (word in _LETS and words[later - 1] in _TO_WHOM):
+            return later + 1 == len(words) or not _infinitive(words[later + 1])
+    return False
 
 
 def _goes_on(words: list[str]) -> bool:

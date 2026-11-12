@@ -1790,6 +1790,55 @@ def test_only_the_word_ni_after_a_comma_goes_on_with_the_sentence():
     assert len(assistant._sentences("cierra la caja sin contar, no toques ni el fondo")) == 2
 
 
+@pytest.mark.parametrize(
+    ("said", "verbs"),
+    [
+        # The readings of ERPlora/live#86: what someone cannot even do, with no «no» between the «sin» and the «ni».
+        ("tengo una mesa sin cobrar, ni cerrar la caja me deja", {"close"}),
+        ("tengo una mesa sin cobrar ni cerrar la caja me deja", {"close"}),
+        ("quedan mesas sin cobrar, ni cerrar puedo la caja", {"close"}),
+        ("el cliente se fue sin pagar, ni cancelar la reserva pudo", {"cancel"}),
+        # With its pronouns, and one «ni» after another, each «not even».
+        ("la tarta sale sin stock, ni editarla puedo", {"update"}),
+        ("tengo una mesa sin cobrar, ni cerrar la caja ni abrirla puedo", {"close", "open"}),
+    ],
+)
+def test_a_verb_said_after_ni_is_asked_when_a_verb_after_it_says_it_cannot_even_be_done(said, verbs):
+    """«Tengo una mesa sin cobrar, ni cerrar la caja me deja» asks for help closing the till: the verb after the
+    infinitive («me deja», «puedo», «pudo») says it cannot even be done, as «no puedo ni cerrar la caja» says it, and
+    the «ni» is «not even», not one more thing not to be done after the «sin» (ERPlora/live#86)."""
+    assert assistant.asked([said]).verbs == verbs
+
+
+@pytest.mark.parametrize(
+    "cannot",
+    ["puedo", "puedes", "puede", "podemos", "pueden", "pude", "pudo", "podía", "he podido",
+     "consigo", "consigue", "conseguí", "consiguió", "he conseguido",
+     "me deja", "te deja", "le deja", "nos deja", "les deja", "me dejan", "me dejó", "me dejaba"],
+)
+def test_each_form_of_a_verb_of_what_cannot_be_done_makes_ni_not_even(cannot):
+    """Each form of «poder», «conseguir» and «dejar» (after whom it lets) said after the infinitive after «ni»."""
+    assert assistant.asked([f"tengo una mesa sin cobrar, ni cerrar la caja {cannot}"]).verbs == {"close"}
+
+
+@pytest.mark.parametrize(
+    ("said", "verbs"),
+    [
+        # «Dejar» that leaves a thing («lo dejo»), not that lets someone: the «ni» goes on from the «sin».
+        ("tengo una mesa sin cobrar ni cerrar la caja lo dejo hasta mañana", set()),
+        # A verb with an infinitive of its own after it says what that one can do («puedo cuadrar»): «cuadrar» is
+        # asked, «cambiar» still is not.
+        ("márcala cobrada sin tocar caja ni cambiar importes y así puedo cuadrar la caja", {"check", "stats"}),
+        # After «si», what someone can do is no «not even» («si puede»).
+        ("márcala cobrada sin tocar caja ni cambiar importes si puede", set()),
+    ],
+)
+def test_a_verb_said_after_ni_that_goes_on_from_sin_is_not_asked_whatever_verb_comes_after(said, verbs):
+    """Only «poder», «conseguir» or «dejar» said of what cannot be done make the «ni» «not even»: the enumerations of
+    ERPlora/live#74 and live#81 still ask nothing."""
+    assert assistant.asked([said]).verbs == verbs
+
+
 class SortedIn(Schema):
     name: str | None = None
     sort_order: int | None = None
