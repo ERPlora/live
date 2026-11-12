@@ -2,7 +2,9 @@
 
 Comments, docstrings, test names and log messages have to make sense on their own, so the code
 never points at a plan section, a planning round or phase, a delivery slice, a private tracker or
-a person's note. Markdown files are left out: they are where the plans live.
+a person's note. Nor does it name the two projects by the folder names they no longer have, or
+explain itself by an issue of another repository. Markdown files are left out: they are where the
+plans live.
 """
 
 import re
@@ -26,6 +28,8 @@ INTERNAL_REFERENCE = re.compile(
             r"[Tt]ajada S?[0-9]",
             r"\b(pm|knowledge)#[0-9]",
             r"\bIoan\b",
+            r"\b(hub|saas)-next\b",
+            r"\b(hub|saas)#[0-9]",
         )
     )
 )
@@ -77,6 +81,10 @@ def test_code_never_points_at_internal_plans():
         "as agreed in pm" + "#43",
         "knowledge" + "#120 has the list",
         "(Io" + "an, 2026-10-13)",
+        "shared by hub" + "-next and the SaaS",
+        "in saas" + "-next it is the user",
+        "the Hub until hub" + "#831",
+        "the script prefix (ERPlora/saas" + "#2)",
     ],
 )
 def test_the_scan_catches_each_kind_of_reference(text):
@@ -89,8 +97,9 @@ def test_the_scan_catches_each_kind_of_reference(text):
         "total = round(amount, 2)",
         "Plan the refund before the payment",
         "the two-phase commit of the outbox",
-        "hub#12 fixed the retry",
         "Section 5 of the AEAT schema",
+        "the next hub in the list",
+        "ERPlora/live#96 has the case",
     ],
 )
 def test_the_scan_leaves_ordinary_text_alone(text):
