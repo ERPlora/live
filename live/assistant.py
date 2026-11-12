@@ -291,6 +291,9 @@ _FUTURE = frozenset({"ll", "will"})
 #: The words after which a thing is named for what another is («para las próximas ventas», «for the new sales»): to the
 #: end of their sentence, it is not what a command switches (ERPlora/live#50).
 _FOR_WHAT = frozenset({"para", "for"})
+#: The words after which a thing is named as what another is of («los recordatorios de las citas», «the reminders of
+#: the bookings»): what a switch turns on or off is named before them (``_switched``; ERPlora/live#89).
+_OF = frozenset({"de", "del", "of"})
 #: The action a yes to what was asked before says («sí, confírmalo»), and the words it is said with besides greetings.
 _CONFIRMS = frozenset({"confirm"})
 _YES = frozenset({"si", "yes", "claro", "adelante", "sure", "it", "that", "todo", "eso", "por", "favor", "please"})
@@ -300,6 +303,9 @@ _INFINITIVE = ("ar", "er", "ir")
 READ_VERBS = frozenset({"list", "get", "options", "count", "check", "stats"})
 #: The actions that turn something on or off: of a setting a write takes («turn off the alerts»), they change it.
 SWITCHES = frozenset({"enable", "disable"})
+#: The actions of the operations that turn a thing on or off: its switch (``pricing.rule.deactivate``,
+#: ``flow.recipe.enable``).
+_TURNS = frozenset({"enable", "disable", "activate", "deactivate"})
 #: The actions that change what a write takes.
 _CHANGES = frozenset({"update", "set"})
 #: What a word that notes something down asks for («anota», «apunta»: ``VERBS``): writing it down, adding it to what
@@ -439,6 +445,7 @@ SYNONYMS = (
     ("aparcar", "aparcada", "park"),
     ("etiqueta", "tag"),
     ("comensal", "guest"),
+    ("recordatorio", "reminder"),
     ("sentar", "sienta", "seat"),
     ("ajustes", "ajuste", "configuracion", "configurar", "configura", "settings", "setting", "setup", "configure",
      "set up"),
@@ -457,7 +464,7 @@ _WHOLE = frozenset({"personal"})
 #: «comenzar», «listo» (ready, done) no «lista» (to list, a list), «disponible» (available) no «dispositivo»
 #: (a device), «sella» (to seal) no «sell» nor «sellable», «existir» (to exist, «existing») no «existencias» (the
 #: stock, which keep their stem), «producción» («production») no «producto» and «comprobar» (to check) no «compra»
-#: (ERPlora/live#71).
+#: (ERPlora/live#71), and «recordatorio» (a reminder) no «record» nor «recordar» (ERPlora/live#89).
 _APART_WORDS = {"ficha": "ficha", "carta": "carta", "recibo": "recibo", "registro": "registro", "fiche": "fichar",
                 "ficho": "fichar", "listo": "listo", "selle": "sellar", "sellen": "sellar"}
 _APART_PREFIXES = (
@@ -467,6 +474,7 @@ _APART_PREFIXES = (
     ("comensal", "comensal"), ("dispon", "dispon"), ("sellab", "sellab"), ("sella", "sellar"), ("sello", "sellar"),
     ("sellem", "sellar"), ("sellei", "sellar"), ("existenci", "exist"), ("exist", "existir"),
     ("produccion", "produccion"), ("production", "produccion"), ("comprob", "comprobar"), ("comprue", "comprobar"),
+    ("recordatori", "recordatori"),
 )
 #: A noun that is a command at the start of a sentence, followed by these: «ficha la entrada de Ana» clocks in, «abre
 #: la ficha de Ana» is her card; «reserva una mesa» books, «cancela la reserva» names one.
@@ -625,7 +633,9 @@ class Asked(NamedTuple):
     outside what something is for (``_FOR_WHAT``: «ventas» in «activa las ventas», not in «para las próximas
     ventas»). ``written_on`` are the actions asked only as what a word that notes something down writes on
     (``_WRITTEN_ON`` of «anota», «apunta»; ERPlora/live#88): no other word asks for them; ``noted`` is what such a word
-    notes down (``_noted``: the new phone of «apunta en la ficha de Ana su teléfono nuevo»)."""
+    notes down (``_noted``: the new phone of «apunta en la ficha de Ana su teléfono nuevo»). ``switched`` is what each
+    switch said turns on or off, one set of things per switch (``_switched``: «los recordatorios» of «desactiva los
+    recordatorios de las citas»; ERPlora/live#89)."""
 
     concepts: frozenset[frozenset[str]]
     verbs: frozenset[str]
@@ -637,6 +647,7 @@ class Asked(NamedTuple):
     direct: frozenset[frozenset[str]] = frozenset()
     written_on: frozenset[str] = frozenset()
     noted: frozenset[frozenset[str]] = frozenset()
+    switched: frozenset[frozenset[frozenset[str]]] = frozenset()
 
 
 def _phrase_verbs(phrase: str) -> frozenset[str]:
@@ -789,6 +800,34 @@ def _noted(words: list[str], at: int, extra: tuple[tuple[str, ...], ...]) -> set
     return found
 
 
+def _switched(
+    words: list[str], found: Collection[str], verbal: Collection[str], extra: tuple[tuple[str, ...], ...]
+) -> set[frozenset[frozenset[str]]]:
+    """What each switch said in ``words`` turns on or off — a word that asks for ``SWITCHES`` («desactiva», «apágalos»)
+    or a phrase of them found in the text («turn off») —: the things named after it, up to the first word that says
+    what they are of or for once one is named (``_OF``, ``_FOR_WHAT``), another switch or another command
+    (``_starts_command``). «Desactiva los recordatorios de las citas»: the reminders; «turn off the appointment
+    reminders»: the appointment and the reminders; «desactiva de momento los recordatorios»: the moment and the
+    reminders."""
+    starts = {at for at, word in enumerate(words) if word not in verbal and not _verbs_of(word).isdisjoint(SWITCHES)}
+    for phrase in found:
+        if not _phrase_verbs(phrase).isdisjoint(SWITCHES):
+            said = phrase.split()
+            starts |= {at + len(said) - 1 for at in range(len(words)) if words[at : at + len(said)] == said}
+    heads: set[frozenset[frozenset[str]]] = set()
+    for start in starts:
+        head: set[frozenset[str]] = set()
+        for later in range(start + 1, len(words)):
+            word = words[later]
+            if later in starts or _starts_command(words, later) or (head and word in _OF | _FOR_WHAT):
+                break
+            if word not in verbal and not _verbs_of(word) and len(word) >= 3 and word not in STOP_WORDS:
+                head.add(_concept(word, extra))
+        if head:
+            heads.add(frozenset(head))
+    return heads
+
+
 def _infinitive(word: str) -> bool:
     """Whether the plain ``word`` is an infinitive, its pronouns too («cerrar», «borrarla»)."""
     return (_unclitic(word) or word).endswith(_INFINITIVE)
@@ -882,6 +921,7 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
     noting: set[str] = set()
     others: set[str] = set()
     noted: set[frozenset[str]] = set()
+    switched: set[frozenset[frozenset[str]]] = set()
     reading = howto = False
     for text in texts:
         # A yes to what was asked before asks for nothing of its own: the write it agrees to is in the texts before.
@@ -918,6 +958,7 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
             for at, word in enumerate(words):
                 if acting.get(word) == _NOTES:
                     noted |= _noted(words, at, extra)
+            switched |= _switched(words, found, verbal, extra)
         # A word that asks (a verb) names a thing only through its synonyms («cobra»: a sale); «show», «dame» none. So
         # does a verb not asked («sin cobrar»: still a sale); what someone will do is no verb asked, and names as any
         # word does.
@@ -956,6 +997,7 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
         frozenset(direct),
         frozenset((noting - others) & verbs),
         frozenset(noted),
+        frozenset(switched),
     )
 
 
@@ -1032,7 +1074,10 @@ def relevant(
     itself (``create``, before ``bulk_create``) and 3 more when that thing is what the command acts on
     (``Asked.objects``: «crea la carpeta Facturas» creates a folder, not an invoice); «activa la app» is
     ``base.app.enable``, never an operation of the app named after it, and so is «activa los clientes», an app named
-    by its name. Of no thing named, it adds 7 to a write that takes a datum the question names («cambia el precio»: a
+    by its name. What a switch turns on or off (``Asked.switched``) that names no tool's thing but an app is the thing
+    of the switch of that action whose asks name it, with the apps said beside it: «desactiva los recordatorios de
+    las citas» turns off the recipe whose asks say «apaga la receta del recordatorio de citas», before turning the
+    Appointments app off (ERPlora/live#89). Of no thing named, it adds 7 to a write that takes a datum the question names («cambia el precio»: a
     write that takes a ``price``; «turn off the alerts»: a write that takes them, as turning on or off changes it), 3 to
     any other write unless a tool does that to what the command acts on, or it is an app named by its name («reserva
     una mesa»: no write of the staff; «abre la cocina»: no other app's open), 1 to
@@ -1100,11 +1145,35 @@ def _relevant(
         )
         for concept in said.objects
     )
+    # What a switch turns on or off that the catalogue names as no thing, beside the apps said with it («los
+    # recordatorios» of «desactiva los recordatorios de las citas», «the appointment reminders»): only what people say
+    # to ask for a tool names it (ERPlora/live#89).
+    unnamed: list[tuple[frozenset[frozenset[str]], frozenset[frozenset[str]]]] = []
+    for head in said.switched if switching else ():
+        apps = frozenset(
+            concept for concept in head if any(not concept.isdisjoint(app_words(label, language)) for label in every_app)
+        )
+        rest = head - apps
+        if rest and all(concept.isdisjoint(things) for concept in rest):
+            unnamed.append((rest, apps))
 
     def score(op: Operation) -> int:
         app, entity, action = op.name.split(".")
         named_app, named_entity = app_words(app, language), _stems_of(entity.replace("_", " "))
         acted_on, doing, qualified = _parts(action)
+        acts = action.split("_")
+        # A switch of the action asked whose asks name what is turned on or off, and the apps said with it, switches
+        # that thing.
+        by_asks: set[frozenset[str]] = set()
+        if unnamed and not _TURNS.isdisjoint(verbs.intersection(acts)):
+            its = asks(op)
+            by_asks = {
+                concept
+                for rest, apps in unnamed
+                if all(not app_said.isdisjoint(its) for app_said in apps)
+                for concept in rest
+                if not concept.isdisjoint(its)
+            }
         places = thing = 0
         aimed = found = app_named = False
         for concept in concepts:
@@ -1113,6 +1182,7 @@ def _relevant(
                 not concept.isdisjoint(named_entity)
                 or not concept.isdisjoint(acted_on)
                 or (in_app and concept in by_app)
+                or concept in by_asks
             )
             thing += is_thing
             aimed = aimed or (is_thing and concept in said.objects)
@@ -1125,7 +1195,6 @@ def _relevant(
         taken = _taken(op.input)
         takes = named(taken)
         points = places + named(_stems_of(description(op))) + named(asks(op)) + takes
-        acts = action.split("_")
         matched = verbs.intersection(acts)
         if matched:
             if thing:

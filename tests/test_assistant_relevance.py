@@ -1397,6 +1397,168 @@ def test_a_payment_method_switched_is_a_method_before_the_switch_of_its_app(aske
     assert ranked(PAYMENT_METHODS, asked, language, app_words=payment_apps)[0] == first
 
 
+class AppointmentRefIn(Schema):
+    appointment: str
+
+
+class CustomerActiveIn(Schema):
+    customer: str
+    is_active: bool | None = None
+
+
+#: The switches of the ready-made automations an app brings (the Hub's Flows recipes), whose asks name the appointment
+#: reminders as people say them, beside what competes with them in the Hub: the apps' switches, a write that takes an
+#: appointment, the switches of a recurring series, the business's records (VeriFactu's and the clock-ins'), a staff
+#: member's switch and a customer's write, and two other things switched that only their asks name (a promotion of
+#: Pricing, a card of Payments).
+SWITCHED_BY_THEIR_ASKS = [
+    tool("base.app.enable", "Turns on one of this business's apps, with the apps it needs."),
+    tool("base.app.disable", "Turns off one of this business's apps: it leaves everyone's menu and its screens."),
+    tool("flow.recipe.enable", "Turn on a ready-made automation an app brings, with the permissions it asks for.",
+         asks={"es": ("activa la receta de recordatorio de citas",),
+               "en": ("activate the ready-made reminder automation",)}),
+    tool("flow.recipe.disable", "Turn off a ready-made automation an app brings: it is paused, never deleted.",
+         asks={"es": ("apaga la receta del recordatorio de citas",), "en": ("turn off the appointment reminder recipe",)}),
+    tool("flow.recipe.list", "List the ready-made automations the apps bring.", "query"),
+    tool("appointment.appointment.list", "List the appointments of some days.", "query"),
+    tool("appointment.appointment.update", "Change an appointment: its day, its time, its notes."),
+    tool("appointment.recurring.activate", "Bring a recurring series of appointments back.",
+         asks={"es": ("reanuda la cita fija de Teresa",)}),
+    tool("appointment.recurring.deactivate", "Stop a recurring series of appointments for now.",
+         asks={"es": ("desactiva la cita semanal de Carmen en verano",)}),
+    tool("sale.order.set_appointment", "Link an open check to the appointment it charges.", input=AppointmentRefIn),
+    tool("reservation.reservation.list", "Lists the reservations of a day.", "query"),
+    tool("verifactu.record.list", "List the VeriFactu records of the invoices.", "query"),
+    tool("verifactu.record.get", "Get one VeriFactu record.", "query"),
+    tool("attendance.record.list", "List the clock-in records of the staff.", "query"),
+    tool("pricing.rule.activate", "Bring a deactivated discount rule back.",
+         asks={"es": ("reactiva la promoción de verano",)}),
+    tool("pricing.rule.deactivate", "Deactivate a discount rule.",
+         asks={"es": ("apaga el 2x1 de zumos hasta el año que viene",)}),
+    tool("payment.method.activate", "Activate a deactivated payment method again.",
+         asks={"es": ("que la tarjeta de empresa vuelva a servir para pagar a proveedores",)}),
+    tool("payment.method.deactivate", "Deactivate a payment method: a new payment can no longer use it.",
+         asks={"es": ("la tarjeta de empresa antigua ya no vale para los pagos salientes",)}),
+    tool("staff.member.deactivate", "Deactivate a member of the staff: they no longer sign in.",
+         asks={"es": ("desactiva a Ana mientras esté de baja",)}),
+    tool("customer.customer.update", "Change a customer: their data, active or not.", input=CustomerActiveIn),
+    *NOISE,
+]
+SWITCHED_APPS = {
+    "appointment": "appointments citas agenda", "reservation": "reservations bookings reservas",
+    "flow": "flows automations automatizaciones", "sale": "sale sales ventas", "pricing": "pricing tarifas precios",
+    "payment": "payments pagos", "staff": "staff personal", "customer": "customers clientes",
+    "verifactu": "verifactu", "attendance": "attendance fichaje",
+}
+#: The Hub's own words: «desactiva» names a deactivation, and a ready-made automation is a «receta».
+SWITCHED_WORDS = (("desactiva", "desactivar", "deactivate"), ("receta", "recetas", "recipe", "recipes"))
+
+
+def switched_apps(label: str, language: str) -> frozenset[str]:
+    return frozenset(assistant.stems(SWITCHED_APPS.get(label, label)))
+
+
+def switched(asked: str, language: str = "es") -> list[str]:
+    return ranked(SWITCHED_BY_THEIR_ASKS, asked, language, app_words=switched_apps, synonyms=SWITCHED_WORDS)
+
+
+@pytest.mark.parametrize(
+    ("asked", "language", "first"),
+    [
+        ("desactiva los recordatorios de citas", "es", "flow.recipe.disable"),
+        ("apaga los recordatorios de las citas", "es", "flow.recipe.disable"),
+        ("desactiva el recordatorio de las citas", "es", "flow.recipe.disable"),
+        ("deshabilita los recordatorios de citas", "es", "flow.recipe.disable"),
+        ("quiero desactivar los recordatorios de las citas", "es", "flow.recipe.disable"),
+        ("activa los recordatorios de citas", "es", "flow.recipe.enable"),
+        ("enciende los recordatorios de las citas", "es", "flow.recipe.enable"),
+        ("vuelve a activar los recordatorios de citas", "es", "flow.recipe.enable"),
+        ("reactiva los recordatorios de citas", "es", "flow.recipe.enable"),
+        ("desactiva los recordatorios de las reservas", "es", "flow.recipe.disable"),
+        ("apaga los recordatorios de la agenda", "es", "flow.recipe.disable"),
+        ("apaga los recordatorios", "es", "flow.recipe.disable"),
+        ("turn off the appointment reminders", "en", "flow.recipe.disable"),
+        ("switch off the appointment reminders", "en", "flow.recipe.disable"),
+        ("deactivate the appointment reminders", "en", "flow.recipe.disable"),
+        ("turn off the reminders of the bookings", "en", "flow.recipe.disable"),
+        ("turn on the appointment reminders", "en", "flow.recipe.enable"),
+        ("switch on the reminders of the appointments", "en", "flow.recipe.enable"),
+        # Another app's thing that only the asks of its switches name, beside the app named.
+        ("reactiva la promoción de verano de las ventas", "es", "pricing.rule.activate"),
+        ("desactiva la tarjeta de empresa de pagos", "es", "payment.method.deactivate"),
+    ],
+)
+def test_a_thing_only_the_asks_of_its_switch_name_is_switched_before_its_app(asked, language, first):
+    """«Desactiva los recordatorios de citas» turns the reminders off, not the Appointments app: what a switch turns off
+    names no thing of the catalogue but by the app said with it, and the asks of the switch that turns it off name it,
+    with that app — that is its switch (ERPlora/live#89: «recordatorios» read as records, and the app named as whose
+    they are turned the app off first)."""
+    names = switched(asked, language)
+    assert names[0] == first, names[:4]
+
+
+@pytest.mark.parametrize(
+    ("asked", "language", "first"),
+    [
+        ("desactiva la app de citas", "es", "base.app.disable"),
+        ("apaga la app de citas", "es", "base.app.disable"),
+        ("enciende la app de citas", "es", "base.app.enable"),
+        ("desactiva Reservas", "es", "base.app.disable"),
+        ("activa otra vez las reservas", "es", "base.app.enable"),
+        ("turn off the bookings app", "en", "base.app.disable"),
+        ("turn on the appointment app", "en", "base.app.enable"),
+    ],
+)
+def test_the_app_named_as_what_is_switched_is_still_switched_beside_those_switches(asked, language, first):
+    """The app itself, named as what the command switches, is still turned on or off by its own switch beside the
+    switches whose asks name it (ERPlora/live#89)."""
+    names = switched(asked, language)
+    assert names[0] == first, names[:4]
+
+
+@pytest.mark.parametrize(
+    ("asked", "language"),
+    [
+        ("desactiva al cliente Ana", "es"),
+        ("apaga al cliente Ana", "es"),
+    ],
+)
+def test_a_name_said_beside_a_thing_switched_is_no_switch_of_another_thing(asked, language):
+    """«Desactiva al cliente Ana»: «Ana» is whom, beside «cliente», and the asks of a member's switch that only say
+    «Ana» do not make it the thing switched — a switch's asks name the thing only with the app said beside it."""
+    names = switched(asked, language)
+    assert names.index("customer.customer.update") < names.index("staff.member.deactivate"), names[:4]
+
+
+def concepts_of(*said: str) -> frozenset[frozenset[str]]:
+    return frozenset(assistant._concept(assistant._plain(word)) for word in said)
+
+
+@pytest.mark.parametrize(
+    ("said", "heads"),
+    [
+        ("desactiva los recordatorios de las citas", {concepts_of("recordatorios")}),
+        ("apaga los recordatorios de citas", {concepts_of("recordatorios")}),
+        ("turn off the appointment reminders", {concepts_of("appointment", "reminders")}),
+        ("turn off the reminders of the bookings", {concepts_of("reminders")}),
+        ("reactiva la promoción de verano para las ventas", {concepts_of("promoción")}),
+        # What says of what or for what is said before the thing named («de momento») ends nothing.
+        ("desactiva de momento los recordatorios de citas", {concepts_of("momento", "recordatorios")}),
+        # Up to another command; each switch its own.
+        ("desactiva los recordatorios y lista las citas", {concepts_of("recordatorios")}),
+        ("apaga la cocina y enciende la barra", {concepts_of("cocina"), concepts_of("barra")}),
+        # The pronouns of a command switch too; what a switch is not asked to do turns nothing off.
+        ("desactívalos ya, los recordatorios", set()),
+        ("cambia la cita sin desactivar los recordatorios", set()),
+        ("lista los recordatorios de citas", set()),
+    ],
+)
+def test_what_a_switch_turns_on_or_off_is_named_up_to_what_it_is_of(said, heads):
+    """``Asked.switched``: of each switch said («desactiva», «turn off»), the things named after it up to the first word
+    that says what they are of or for («de», «of», «para», «for») or another command (ERPlora/live#89)."""
+    assert assistant.asked([said]).switched == heads
+
+
 @pytest.mark.parametrize(
     ("said", "language"),
     [
@@ -1459,6 +1621,8 @@ def test_a_yes_after_a_write_keeps_the_write_asked_first(before, yes, language, 
         ("las etiquetas", "tag"), ("el portátil", "device"), ("este ordenador", "device"), ("la tablet", "device"),
         ("los comensales", "guest"), ("un comensal", "guest"), ("la regla", "rule"), ("las reglas", "rule"),
         ("el método de pago", "method"), ("los métodos", "method"),
+        # A switch whose asks only say it in English is still its switch (ERPlora/live#89).
+        ("los recordatorios", "reminder"), ("el recordatorio", "reminder"),
     ],
 )
 def test_the_words_of_one_thing_name_it_in_either_language(said, english):
@@ -1489,6 +1653,8 @@ def test_the_words_of_one_thing_name_it_in_either_language(said, english):
         ("exists", "inventory"),
         ("producción", "producto"), ("producciones", "productos"), ("production", "product"),
         ("comprueba", "compra"), ("comprobando", "compras"), ("comprobante", "purchase"), ("compruebo", "comprar"),
+        # A reminder is no record: both cut to «recor» (ERPlora/live#89).
+        ("recordatorio", "record"), ("recordatorios", "records"), ("recordatorios", "recordar"),
     ],
 )
 def test_words_of_two_things_are_never_one_stem(one, other):
@@ -1519,6 +1685,7 @@ def test_words_of_two_things_are_never_one_stem(one, other):
         ("existe existen existir existiera existía exist exists existing existed existence", "existir"),
         ("producción producciones production productions", "produccion"),
         ("comprueba compruebo comprobar comprobando comprobado comprobación comprobante compruébalo", "comprobar"),
+        ("recordatorio recordatorios", "recordatori"),
     ],
 )
 def test_the_forms_of_a_word_kept_apart_still_join(words, stem):
