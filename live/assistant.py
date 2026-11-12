@@ -1077,8 +1077,9 @@ def relevant(
     by its name. What a switch turns on or off (``Asked.switched``) that names no tool's thing but an app is the thing
     of the switch of that action whose asks name it, with the apps said beside it: «desactiva los recordatorios de
     las citas» turns off the recipe whose asks say «apaga la receta del recordatorio de citas», before turning the
-    Appointments app off (ERPlora/live#89). Of no thing named, it adds 7 to a write that takes a datum the question names («cambia el precio»: a
-    write that takes a ``price``; «turn off the alerts»: a write that takes them, as turning on or off changes it), 3 to
+    Appointments app off; a word the asks of the switches of several things say («de momento», «por ahora») is the
+    thing of none (ERPlora/live#89). Of no thing named, it adds 7 to a write that takes a datum the question names
+    («cambia el precio»: a write that takes a ``price``; «turn off the alerts»: a write that takes them, as turning on or off changes it), 3 to
     any other write unless a tool does that to what the command acts on, or it is an app named by its name («reserva
     una mesa»: no write of the staff; «abre la cocina»: no other app's open), 1 to
     a read of the app named and nothing to any other read: «¿cuántos…?» is no list of everything, and what a read is
@@ -1156,6 +1157,22 @@ def _relevant(
         rest = head - apps
         if rest and all(concept.isdisjoint(things) for concept in rest):
             unnamed.append((rest, apps))
+    # A word the asks of the switches of several things say tells for how long, not what («de momento», «por ahora»):
+    # it is the thing of none of them.
+    if unnamed:
+        said_by: dict[frozenset[str], set[tuple[str, str]]] = {}
+        for op in tools.values():
+            app, entity, action = op.name.split(".")
+            if not _TURNS.isdisjoint(verbs.intersection(action.split("_"))):
+                its = asks(op)
+                for rest, _ in unnamed:
+                    for concept in rest:
+                        if not concept.isdisjoint(its):
+                            said_by.setdefault(concept, set()).add((app, entity))
+        unnamed = [
+            (frozenset(concept for concept in rest if len(said_by.get(concept, ())) == 1), apps)
+            for rest, apps in unnamed
+        ]
 
     def score(op: Operation) -> int:
         app, entity, action = op.name.split(".")

@@ -1420,11 +1420,13 @@ SWITCHED_BY_THEIR_ASKS = [
                "en": ("activate the ready-made reminder automation",)}),
     tool("flow.recipe.disable", "Turn off a ready-made automation an app brings: it is paused, never deleted.",
          asks={"es": ("apaga la receta del recordatorio de citas",), "en": ("turn off the appointment reminder recipe",)}),
+    tool("flow.recipe.bulk_disable", "Turn off several ready-made automations at once.",
+         asks={"es": ("apaga de golpe todas las recetas de recordatorio",)}),
     tool("flow.recipe.list", "List the ready-made automations the apps bring.", "query"),
     tool("appointment.appointment.list", "List the appointments of some days.", "query"),
     tool("appointment.appointment.update", "Change an appointment: its day, its time, its notes."),
     tool("appointment.appointment.history", "List a customer's past appointments.", "query",
-         asks={"es": ("¿qué citas ha tenido Carmen este año?",)}),
+         asks={"es": ("¿qué citas ha tenido Carmen este año?", "¿le llegó el recordatorio de su última cita?")}),
     tool("appointment.recurring.activate", "Bring a recurring series of appointments back.",
          asks={"es": ("reanuda la cita fija de Teresa",)}),
     tool("appointment.recurring.deactivate", "Stop a recurring series of appointments for now.",
@@ -1435,11 +1437,14 @@ SWITCHED_BY_THEIR_ASKS = [
     tool("verifactu.record.get", "Get one VeriFactu record.", "query"),
     tool("attendance.record.list", "List the clock-in records of the staff.", "query"),
     tool("tax.rule.deactivate", "Deactivate a tax rule so it no longer applies to new operations.",
-         asks={"es": ("deja de aplicar por ahora la regla fiscal del 10 %",)}),
+         asks={"es": ("deja de aplicar por ahora la regla fiscal del 10 %",
+                      "desactiva de momento la regla de impuestos de la comida")}),
+    tool("pricing.price_list.deactivate", "Deactivate a price list: no new sale takes its prices.",
+         asks={"es": ("quita la de verano por ahora, hasta el año que viene",)}),
     tool("pricing.rule.activate", "Bring a deactivated discount rule back.",
-         asks={"es": ("reactiva la promoción de verano",)}),
+         asks={"es": ("reactiva la promoción de verano", "que el descuento por pagar con tarjeta vuelva a valer")}),
     tool("pricing.rule.deactivate", "Deactivate a discount rule.",
-         asks={"es": ("apaga el 2x1 de zumos hasta el año que viene",)}),
+         asks={"es": ("apaga el 2x1 de zumos hasta el año que viene", "quita de momento el descuento de los jueves")}),
     tool("payment.method.activate", "Activate a deactivated payment method again.",
          asks={"es": ("que la tarjeta de empresa vuelva a servir para pagar a proveedores",)}),
     tool("payment.method.deactivate", "Deactivate a payment method: a new payment can no longer use it.",
@@ -1453,7 +1458,7 @@ SWITCHED_APPS = {
     "appointment": "appointments citas agenda", "reservation": "reservations bookings reservas",
     "flow": "flows automations automatizaciones", "sale": "sale sales ventas", "pricing": "pricing tarifas precios",
     "payment": "payments pagos", "staff": "staff personal", "customer": "customers clientes",
-    "verifactu": "verifactu", "attendance": "attendance fichaje",
+    "verifactu": "verifactu", "attendance": "attendance fichaje", "tax": "taxes impuestos reglas",
 }
 #: The Hub's own words: «desactiva» names a deactivation, and a ready-made automation is a «receta».
 SWITCHED_WORDS = (("desactiva", "desactivar", "deactivate"), ("receta", "recetas", "recipe", "recipes"))
@@ -1492,6 +1497,7 @@ def switched(asked: str, language: str = "es") -> list[str]:
         # Another app's thing that only the asks of its switches name, beside the app named.
         ("reactiva la promoción de verano de las ventas", "es", "pricing.rule.activate"),
         ("desactiva la tarjeta de empresa de pagos", "es", "payment.method.deactivate"),
+        ("desactiva la tarjeta de las ventas", "es", "payment.method.deactivate"),
     ],
 )
 def test_a_thing_only_the_asks_of_its_switch_name_is_switched_before_its_app(asked, language, first):
@@ -1547,6 +1553,36 @@ def test_a_read_whose_asks_name_what_is_switched_off_is_no_switch_of_it():
     assert names.index("staff.member.deactivate") < names.index("appointment.appointment.history"), names[:4]
 
 
+@pytest.mark.parametrize(
+    ("asked", "first"),
+    [
+        ("desactiva de momento la regla de descuento", "pricing.rule.deactivate"),
+        ("desactiva de momento los recordatorios de citas", "flow.recipe.disable"),
+        ("desactiva por ahora los recordatorios de citas", "flow.recipe.disable"),
+        # Two things of one app say it («hasta el año que viene»: a discount and a price list of Pricing).
+        ("desactiva hasta el año que viene los recordatorios de citas", "flow.recipe.disable"),
+    ],
+)
+def test_a_word_the_switches_of_several_things_say_is_none_of_them(asked, first):
+    """«Desactiva de momento la regla de descuento»: «de momento» and «por ahora» say for how long, and the asks of the
+    switches of several things say them (a tax rule's, a discount's, a price list's); such a word is the thing of no
+    switch, so the tax rule whose asks say «de momento la regla» does not come before the discount rule, nor before
+    the reminders' recipe (ERPlora/live#89). The things are counted, not their tools (the recipes' two switches that
+    turn off say «recordatorio»), and only by the switches of the action asked: a read that says «recordatorio» or a
+    discount brought back that says «tarjeta» leaves the reminders and the card what is turned off."""
+    names = switched(asked)
+    assert names[0] == first, names[:4]
+
+
+def test_the_switch_of_another_action_is_no_switch_of_what_is_turned_off():
+    """«Apaga los recordatorios»: the switch that turns them on says them too, and is not the one asked for; it comes
+    after every switch that turns something off (ERPlora/live#89)."""
+    names = switched("apaga los recordatorios")
+    off = [name for name in names if name.rsplit(".", 1)[1] in {"disable", "deactivate"}]
+    assert len(off) > 5  # positive control
+    assert all(names.index(name) < names.index("flow.recipe.enable") for name in off), names[:6]
+
+
 def concepts_of(*said: str) -> frozenset[frozenset[str]]:
     return frozenset(assistant._concept(assistant._plain(word)) for word in said)
 
@@ -1558,6 +1594,7 @@ def concepts_of(*said: str) -> frozenset[frozenset[str]]:
         ("apaga los recordatorios de citas", {concepts_of("recordatorios")}),
         ("turn off the appointment reminders", {concepts_of("appointment", "reminders")}),
         ("turn off the reminders of the bookings", {concepts_of("reminders")}),
+        ("apaga los recordatorios del salón", {concepts_of("recordatorios")}),
         ("reactiva la promoción de verano para las ventas", {concepts_of("promoción")}),
         ("turn on the reminders for the appointments", {concepts_of("reminders")}),
         # A verb said inside names nothing, as anywhere else: the sale «charge» names is not what is turned off.
