@@ -711,6 +711,13 @@ DEREGISTERING = {"terminate", "withdraw"}
         ("switch off the summer discount rule", "en", SWITCHING_OFF),
         ("turn on the summer discount rule again", "en", SWITCHING_ON),
         ("switch on the summer discount rule", "en", SWITCHING_ON),
+        # «Apaga» and «enciende» too, as «desactiva» and «activa» (ERPlora/live#79): with their infinitive and pronouns.
+        ("apaga la tarifa de verano", "es", SWITCHING_OFF),
+        ("hay que apagar el método Bizum", "es", SWITCHING_OFF),
+        ("apágala hasta el verano", "es", SWITCHING_OFF),
+        ("enciende la tarifa de verano", "es", SWITCHING_ON),
+        ("hay que encender el método Bizum", "es", SWITCHING_ON),
+        ("enciéndela otra vez", "es", SWITCHING_ON),
         ("activa la tarifa de verano", "es", SWITCHING_ON),
         ("vuelve a activar la regla de descuento", "es", SWITCHING_ON),
         ("actívala otra vez", "es", SWITCHING_ON),
@@ -738,7 +745,8 @@ DEREGISTERING = {"terminate", "withdraw"}
 def test_approving_rejecting_requesting_confirming_and_terminating_ask_for_their_action(said, language, actions):
     """«Aprueba», «rechaza», «solicita» (and «pido»), «confirma» and «da de baja» (terminating a member or withdrawing
     from a mailing) ask for their action; «desactiva» and «activa» (and «reactiva», «habilita») switch a thing off or on
-    or deactivate and activate it, which the thing named says — ERPlora/live#50. In the infinitive, as a command, in
+    or deactivate and activate it, which the thing named says — ERPlora/live#50 —, as «apaga» and «enciende» do
+    (ERPlora/live#79) and «turn off» and «turn on» (ERPlora/live#82). In the infinitive, as a command, in
     the first person and with their pronouns; in English, as their actions are called. Before, none was a verb but
     «desactiva» and «activa», only as a switch."""
     assert assistant.asked([said]).verbs == actions
@@ -863,6 +871,11 @@ HUB_WORDS = (("ausencia", "ausencias", "vacaciones", "time"), ("publicidad", "pr
         ("switch off the summer price list", "en", "pricing.price_list.deactivate"),
         ("turn on the summer price list again", "en", "pricing.price_list.activate"),
         ("switch on the summer price list again", "en", "pricing.price_list.activate"),
+        # «Apaga» and «enciende» as «desactiva» and «activa» (ERPlora/live#79).
+        ("apaga la tarifa de verano", "es", "pricing.price_list.deactivate"),
+        ("enciende otra vez la tarifa de verano", "es", "pricing.price_list.activate"),
+        ("apaga la app de reservas", "es", "base.app.disable"),
+        ("enciende la app de reservas", "es", "base.app.enable"),
         ("desactiva la app de reservas", "es", "base.app.disable"),
         ("activa la app de reservas", "es", "base.app.enable"),
     ],
@@ -890,6 +903,8 @@ SWITCHED_BY_NAME = [*APPROVED_OR_SWITCHED, tool("sale.sale.list", "Lists the sal
         ("switch off the sales", "en", "base.app.disable"),
         ("turn on the sales", "en", "base.app.enable"),
         ("switch on the sales", "en", "base.app.enable"),
+        ("apaga las ventas", "es", "base.app.disable"),
+        ("enciende las ventas", "es", "base.app.enable"),
         # With words between the verb and the app, or the app named in the sentence before: still the app's switch.
         ("activa otra vez las ventas", "es", "base.app.enable"),
         ("activa también las ventas", "es", "base.app.enable"),
@@ -1059,6 +1074,74 @@ def test_an_app_named_after_a_word_that_names_nothing_is_the_app_switched(asked,
     assert switch in names_[:2], names_[:4]
 
 
+#: The payment methods of the Hub's Payments, whose menu says «Pagos» and «Métodos», as theirs say of themselves,
+#: beside the till's own methods of Sales, the apps' switches and a price list's: what a switch of a method competes
+#: with.
+PAYMENT_METHODS = [
+    tool("base.app.enable", "Turns on one of this business's apps, with the apps it needs."),
+    tool("base.app.disable", "Turns off one of this business's apps: it leaves everyone's menu and its screens."),
+    tool("payment.method.activate", "Activate a deactivated payment method again (named by its id or its name), so "
+         "new payments can use it.", asks={"es": ("reactiva la cuenta bancaria del Sabadell para los pagos",),
+                                           "en": ("reactivate the Santander bank account for outgoing payments",)}),
+    tool("payment.method.deactivate", "Deactivate a payment method (named by its id or its name): a new payment can "
+         "no longer use it; the payments that used it keep it. It is never deleted.",
+         asks={"es": ("que la cuenta del Sabadell ya no se use en pagos nuevos",),
+               "en": ("stop using the Sabadell bank account for new payments",)}),
+    tool("payment.method.create", "Create a payment method the business pays with: a bank account or a card."),
+    tool("payment.method.update", "Change a payment method: its name or its details."),
+    tool("payment.method.list", "List the payment methods.", "query"),
+    tool("payment.payment.create", "Register an outgoing payment."),
+    tool("payment.payment.list", "List the outgoing payments.", "query"),
+    tool("sale.payment_method.create", "Adds a payment method the till charges with (cash, card, transfer)."),
+    tool("sale.payment_method.list", "List the active payment methods of the charge sheet.", "query"),
+    tool("sale.sale.list", "Lists the sales of a day.", "query"),
+    tool("kitchen.ticket.list", "Lists the kitchen's tickets.", "query"),
+    tool("pricing.price_list.activate", "Bring a price list back into use for new sales."),
+    tool("pricing.price_list.deactivate", "Stop using a price list for new sales; its prices stay."),
+    *NOISE,
+]
+PAYMENT_APPS = {
+    "payment": "payment payments pagos methods métodos", "sale": "sale sales ventas", "kitchen": "kitchen cocina",
+    "pricing": "pricing tarifas precios",
+}
+
+
+def payment_apps(label: str, language: str) -> frozenset[str]:
+    return frozenset(assistant.stems(PAYMENT_APPS.get(label, label)))
+
+
+@pytest.mark.parametrize(
+    ("asked", "language", "first"),
+    [
+        ("vuelve a activar el método de pago de Bizum", "es", "payment.method.activate"),
+        ("reactiva el método de pago de Bizum", "es", "payment.method.activate"),
+        ("activa el método de pago Bizum", "es", "payment.method.activate"),
+        ("habilita el método de pago Transferencia", "es", "payment.method.activate"),
+        ("vuelve a activar los métodos de pago de tarjeta y Bizum", "es", "payment.method.activate"),
+        ("desactiva el método de pago de Bizum", "es", "payment.method.deactivate"),
+        ("deshabilita el método de pago de tarjeta", "es", "payment.method.deactivate"),
+        ("apaga el método de pago Bizum", "es", "payment.method.deactivate"),
+        ("enciende el método de pago Bizum", "es", "payment.method.activate"),
+        ("vuelve a encender el método de pago de Bizum", "es", "payment.method.activate"),
+        ("reactivate the payment method of Bizum", "en", "payment.method.activate"),
+        ("turn off the Bizum payment method", "en", "payment.method.deactivate"),
+        # The app named by its name, or as an app, is still the one switched.
+        ("activa la app de pagos", "es", "base.app.enable"),
+        ("desactiva el módulo de pagos", "es", "base.app.disable"),
+        ("activa Pagos", "es", "base.app.enable"),
+        ("apaga la cocina", "es", "base.app.disable"),
+        ("enciende la cocina", "es", "base.app.enable"),
+        ("turn on the payments app", "en", "base.app.enable"),
+    ],
+)
+def test_a_payment_method_switched_is_a_method_before_the_switch_of_its_app(asked, language, first):
+    """«Vuelve a activar el método de pago de Bizum» reactivates a payment method: «método» is a method in either
+    language, so the method's own switch comes first, before turning on Payments, which «pago» and its menu
+    «Métodos» name; «apaga» and «enciende» switch it as «desactiva» and «activa» do (ERPlora/live#79: «método» named
+    only the app, and «apaga» only switched apps off, so turning Payments on or off came first)."""
+    assert ranked(PAYMENT_METHODS, asked, language, app_words=payment_apps)[0] == first
+
+
 @pytest.mark.parametrize(
     ("said", "language"),
     [
@@ -1120,6 +1203,7 @@ def test_a_yes_after_a_write_keeps_the_write_asked_first(before, yes, language, 
         ("el reembolso", "refund"), ("las cuentas aparcadas", "park"),
         ("las etiquetas", "tag"), ("el portátil", "device"), ("este ordenador", "device"), ("la tablet", "device"),
         ("los comensales", "guest"), ("un comensal", "guest"), ("la regla", "rule"), ("las reglas", "rule"),
+        ("el método de pago", "method"), ("los métodos", "method"),
     ],
 )
 def test_the_words_of_one_thing_name_it_in_either_language(said, english):

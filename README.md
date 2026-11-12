@@ -262,11 +262,11 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   que en una mesa son lo que pide el cliente), «confirma» y «da de baja» piden su acción (`approve`, `reject`,
   `request`, `confirm`, y `terminate` o `withdraw`: dar de baja a alguien del negocio o de la publicidad; su «baja»
   sigue nombrando la baja), en infinitivo, como orden, en primera persona y con sus pronombres («apruébasela», «dale de
-  baja»); «desactiva», «deshabilita», «activa», «reactiva» y «habilita» (y en inglés «turn off», «switch off», «turn on»
-  y «switch on»: live#82) apagan o encienden y también desactivan o
-  activan (`disable` y `deactivate`, `enable` y `activate`: decide la cosa nombrada; «activo» no, que es lo que algo
-  está), y una app se enciende o se apaga cuando la orden la nombra («activa las ventas», «activa otra vez las
-  ventas»), no cuando se nombra para qué es otra cosa, tras «para» o «for» («vuelve a activar Mayorista para las
+  baja»); «desactiva», «deshabilita», «apaga», «activa», «reactiva», «habilita» y «enciende» («apaga» y «enciende»:
+  live#79; en inglés «turn off», «switch off», «turn on» y «switch on»: live#82) apagan o encienden y también
+  desactivan o activan (`disable` y `deactivate`, `enable` y `activate`: decide la cosa nombrada; «activo» no, que es
+  lo que algo está), y una app se enciende o se apaga cuando la orden la nombra («activa las ventas», «activa otra vez
+  las ventas»), no cuando se nombra para qué es otra cosa, tras «para» o «for» («vuelve a activar Mayorista para las
   próximas ventas»: la tarifa; live#50); «ponme la app»,
   «instala» encienden; «how many» y «cuántos» cuentan (`count`, `list`, `stats`). «How», «which»,
   «cómo» y «cuál» ya no son el verbo «listar». Un verbo no nombra cosas salvo por sus sinónimos («cobra» nombra la
@@ -310,7 +310,9 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   es la cuenta de una mesa en el Hub (`(("cuenta", "check", "tab", "order"),)`) y la cuenta de la persona en el SaaS
   (`(("cuenta", "account"),)`). Un grupo admite frases («foto de perfil»). Una palabra que nombra una cosa en cualquier
   negocio va en `SYNONYMS` con su inglés aunque un menú la diga: «regla» es `rule` (live#73), y sin eso solo nombraba la
-  app cuyo menú dice «Reglas», que al lado de otra cosa nombrada («la regla de los productos») ya no era la cosa.
+  app cuyo menú dice «Reglas», que al lado de otra cosa nombrada («la regla de los productos») ya no era la cosa; igual
+  «método» es `method` (live#79): solo nombraba la app cuyo menú dice «Métodos», y al pedir «vuelve a activar el método
+  de pago de Bizum» encender Pagos iba antes que reactivar el método.
 
 **QA del asistente, derivada de las operaciones** (`live.assistant_qa`; plan 2026-10-31 del conocimiento y la QA del
 asistente), en dos capas:

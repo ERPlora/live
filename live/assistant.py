@@ -231,12 +231,12 @@ VERBS = {
     "disable": ("desactiva", "desactivar", "desactivo", "apaga", "apagar", "deshabilita", "deshabilitar", "disable",
                 "deactivate", "turn off", "switch off"),
     # Switching a thing on or off is also activating or deactivating it, as a member, a price list or a rule are: the
-    # thing named says which, in either language («turn off», «switch on»: ERPlora/live#82). «Activo» is left out: far
-    # more often it is what a thing is («los clientes activos»).
-    "activate": ("activa", "activar", "reactiva", "reactivar", "habilita", "habilitar", "activate", "reactivate",
-                 "turn on", "switch on"),
-    "deactivate": ("desactiva", "desactivar", "desactivo", "deshabilita", "deshabilitar", "deactivate", "turn off",
-                   "switch off"),
+    # thing named says which, in either language («apaga», «enciende»: ERPlora/live#79; «turn off», «switch on»:
+    # ERPlora/live#82). «Activo» is left out: far more often it is what a thing is («los clientes activos»).
+    "activate": ("activa", "activar", "reactiva", "reactivar", "enciende", "encender", "habilita", "habilitar",
+                 "activate", "reactivate", "turn on", "switch on"),
+    "deactivate": ("desactiva", "desactivar", "desactivo", "apaga", "apagar", "deshabilita", "deshabilitar",
+                   "deactivate", "turn off", "switch off"),
     "approve": ("aprueba", "aprobar", "apruebo", "approve"),
     "reject": ("rechaza", "rechazar", "rechazo", "reject"),
     # «Pide» and «pedir» are left out: at a table they are what a customer orders («pide la cuenta»).
@@ -386,6 +386,7 @@ SYNONYMS = (
     ("categoria", "familia", "category"),
     ("descuento", "discount"),
     ("regla", "rule"),
+    ("metodo", "method"),
     ("proveedor", "supplier"),
     ("comanda", "pedido", "order"),
     ("cocina", "kitchen"),
