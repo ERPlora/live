@@ -809,11 +809,11 @@ def _switched(
     (``_starts_command``). «Desactiva los recordatorios de las citas»: the reminders; «turn off the appointment
     reminders»: the appointment and the reminders; «desactiva de momento los recordatorios»: the moment and the
     reminders."""
-    starts = {at for at, word in enumerate(words) if word not in verbal and not _verbs_of(word).isdisjoint(SWITCHES)}
+    starts = {at for at, word in enumerate(words) if not _verbs_of(word).isdisjoint(SWITCHES)}
     for phrase in found:
         if not _phrase_verbs(phrase).isdisjoint(SWITCHES):
             said = phrase.split()
-            starts |= {at + len(said) - 1 for at in range(len(words)) if words[at : at + len(said)] == said}
+            starts |= {at for at in range(len(words)) if words[at : at + len(said)] == said}
     heads: set[frozenset[frozenset[str]]] = set()
     for start in starts:
         head: set[frozenset[str]] = set()
@@ -1149,7 +1149,7 @@ def _relevant(
     # recordatorios» of «desactiva los recordatorios de las citas», «the appointment reminders»): only what people say
     # to ask for a tool names it (ERPlora/live#89).
     unnamed: list[tuple[frozenset[frozenset[str]], frozenset[frozenset[str]]]] = []
-    for head in said.switched if switching else ():
+    for head in said.switched:
         apps = frozenset(
             concept for concept in head if any(not concept.isdisjoint(app_words(label, language)) for label in every_app)
         )
@@ -1162,15 +1162,15 @@ def _relevant(
         named_app, named_entity = app_words(app, language), _stems_of(entity.replace("_", " "))
         acted_on, doing, qualified = _parts(action)
         acts = action.split("_")
-        # A switch of the action asked whose asks name what is turned on or off, and the apps said with it, switches
-        # that thing.
+        # A switch of the action asked whose asks name what is turned on or off, and one of the apps said with it if
+        # any, switches that thing.
         by_asks: set[frozenset[str]] = set()
         if unnamed and not _TURNS.isdisjoint(verbs.intersection(acts)):
             its = asks(op)
             by_asks = {
                 concept
                 for rest, apps in unnamed
-                if all(not app_said.isdisjoint(its) for app_said in apps)
+                if not apps or any(not app_said.isdisjoint(its) for app_said in apps)
                 for concept in rest
                 if not concept.isdisjoint(its)
             }

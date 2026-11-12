@@ -1408,9 +1408,10 @@ class CustomerActiveIn(Schema):
 
 #: The switches of the ready-made automations an app brings (the Hub's Flows recipes), whose asks name the appointment
 #: reminders as people say them, beside what competes with them in the Hub: the apps' switches, a write that takes an
-#: appointment, the switches of a recurring series, the business's records (VeriFactu's and the clock-ins'), a staff
-#: member's switch and a customer's write, and two other things switched that only their asks name (a promotion of
-#: Pricing, a card of Payments).
+#: appointment, a read of past appointments, the switches of a recurring series, the business's records (VeriFactu's
+#: and the clock-ins'), a staff member's switch, a customer's write, a tax rule's switch whose asks say «aplicar» (a
+#: stem «aplicación» shares) and two other things switched that only their asks name (a promotion of Pricing, a card of
+#: Payments).
 SWITCHED_BY_THEIR_ASKS = [
     tool("base.app.enable", "Turns on one of this business's apps, with the apps it needs."),
     tool("base.app.disable", "Turns off one of this business's apps: it leaves everyone's menu and its screens."),
@@ -1422,6 +1423,8 @@ SWITCHED_BY_THEIR_ASKS = [
     tool("flow.recipe.list", "List the ready-made automations the apps bring.", "query"),
     tool("appointment.appointment.list", "List the appointments of some days.", "query"),
     tool("appointment.appointment.update", "Change an appointment: its day, its time, its notes."),
+    tool("appointment.appointment.history", "List a customer's past appointments.", "query",
+         asks={"es": ("¿qué citas ha tenido Carmen este año?",)}),
     tool("appointment.recurring.activate", "Bring a recurring series of appointments back.",
          asks={"es": ("reanuda la cita fija de Teresa",)}),
     tool("appointment.recurring.deactivate", "Stop a recurring series of appointments for now.",
@@ -1431,6 +1434,8 @@ SWITCHED_BY_THEIR_ASKS = [
     tool("verifactu.record.list", "List the VeriFactu records of the invoices.", "query"),
     tool("verifactu.record.get", "Get one VeriFactu record.", "query"),
     tool("attendance.record.list", "List the clock-in records of the staff.", "query"),
+    tool("tax.rule.deactivate", "Deactivate a tax rule so it no longer applies to new operations.",
+         asks={"es": ("deja de aplicar por ahora la regla fiscal del 10 %",)}),
     tool("pricing.rule.activate", "Bring a deactivated discount rule back.",
          asks={"es": ("reactiva la promoción de verano",)}),
     tool("pricing.rule.deactivate", "Deactivate a discount rule.",
@@ -1483,6 +1488,7 @@ def switched(asked: str, language: str = "es") -> list[str]:
         ("turn off the reminders of the bookings", "en", "flow.recipe.disable"),
         ("turn on the appointment reminders", "en", "flow.recipe.enable"),
         ("switch on the reminders of the appointments", "en", "flow.recipe.enable"),
+        ("turn off the booking and appointment reminders", "en", "flow.recipe.disable"),
         # Another app's thing that only the asks of its switches name, beside the app named.
         ("reactiva la promoción de verano de las ventas", "es", "pricing.rule.activate"),
         ("desactiva la tarjeta de empresa de pagos", "es", "payment.method.deactivate"),
@@ -1501,6 +1507,9 @@ def test_a_thing_only_the_asks_of_its_switch_name_is_switched_before_its_app(ask
     ("asked", "language", "first"),
     [
         ("desactiva la app de citas", "es", "base.app.disable"),
+        ("desactiva la app de reservas", "es", "base.app.disable"),
+        ("desactiva ahora la app de reservas", "es", "base.app.disable"),
+        ("desactiva el módulo de citas", "es", "base.app.disable"),
         ("apaga la app de citas", "es", "base.app.disable"),
         ("enciende la app de citas", "es", "base.app.enable"),
         ("desactiva Reservas", "es", "base.app.disable"),
@@ -1511,7 +1520,8 @@ def test_a_thing_only_the_asks_of_its_switch_name_is_switched_before_its_app(ask
 )
 def test_the_app_named_as_what_is_switched_is_still_switched_beside_those_switches(asked, language, first):
     """The app itself, named as what the command switches, is still turned on or off by its own switch beside the
-    switches whose asks name it (ERPlora/live#89)."""
+    switches whose asks name it (ERPlora/live#89): «app» is a thing of the catalogue, so a tax rule's asks that say
+    «aplicar» do not make that rule what «desactiva la app de reservas» turns off."""
     names = switched(asked, language)
     assert names[0] == first, names[:4]
 
@@ -1530,6 +1540,13 @@ def test_a_name_said_beside_a_thing_switched_is_no_switch_of_another_thing(asked
     assert names.index("customer.customer.update") < names.index("staff.member.deactivate"), names[:4]
 
 
+def test_a_read_whose_asks_name_what_is_switched_off_is_no_switch_of_it():
+    """«Apaga a Carmen»: only the asks of a switch of that action name what it turns off; a read whose asks say «Carmen»
+    is not what is turned off, and the member's switch still comes before it (ERPlora/live#89)."""
+    names = switched("apaga a Carmen")
+    assert names.index("staff.member.deactivate") < names.index("appointment.appointment.history"), names[:4]
+
+
 def concepts_of(*said: str) -> frozenset[frozenset[str]]:
     return frozenset(assistant._concept(assistant._plain(word)) for word in said)
 
@@ -1542,15 +1559,20 @@ def concepts_of(*said: str) -> frozenset[frozenset[str]]:
         ("turn off the appointment reminders", {concepts_of("appointment", "reminders")}),
         ("turn off the reminders of the bookings", {concepts_of("reminders")}),
         ("reactiva la promoción de verano para las ventas", {concepts_of("promoción")}),
+        ("turn on the reminders for the appointments", {concepts_of("reminders")}),
+        # A verb said inside names nothing, as anywhere else: the sale «charge» names is not what is turned off.
+        ("turn off the reminders when I charge", {concepts_of("reminders")}),
         # What says of what or for what is said before the thing named («de momento») ends nothing.
         ("desactiva de momento los recordatorios de citas", {concepts_of("momento", "recordatorios")}),
         # Up to another command; each switch its own.
         ("desactiva los recordatorios y lista las citas", {concepts_of("recordatorios")}),
         ("apaga la cocina y enciende la barra", {concepts_of("cocina"), concepts_of("barra")}),
+        ("turn on the reminders and turn off the bookings", {concepts_of("reminders"), concepts_of("bookings")}),
         # The pronouns of a command switch too; what a switch is not asked to do turns nothing off.
         ("desactívalos ya, los recordatorios", set()),
         ("cambia la cita sin desactivar los recordatorios", set()),
         ("lista los recordatorios de citas", set()),
+        ("cambia el nombre de los recordatorios", set()),
     ],
 )
 def test_what_a_switch_turns_on_or_off_is_named_up_to_what_it_is_of(said, heads):
