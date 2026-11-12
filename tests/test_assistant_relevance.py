@@ -805,6 +805,8 @@ def test_noting_writes_only_on_what_is_named(said, written_on):
         ("apúntale al cliente el teléfono nuevo", {"teléfono"}),
         # Of each word that notes something down, in each of its sentences; never of another verb.
         ("hay que anotarlo en la caja: una salida de 15 €", set()),
+        ("una salida de 15 € de la caja hay que apuntarla", set()),
+        ("una salida de 15 € apúntala en la caja", set()),
         ("anota una salida de 15 € y apunta el teléfono de Ana", {"salida", "teléfono"}),
         ("crea una salida de 15 € de la caja", set()),
     ],
