@@ -234,7 +234,7 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   «contraseña» no son «control», «recibo» no es «recibir», «registro» no es «register», «settings» no es «set», «comensal»
   no es «comentario» ni «comenzar», «listo» no es «lista» (live#54), «disponible» no es «dispositivo» (live#47),
   «sella» no es «sell», «existir» («existing») no es «existencias», «producción» («production») no es «producto»,
-  «comprueba» no es «compra» (live#71), y
+  «comprueba» no es «compra» (live#71), «recordatorio» no es «record» ni «recordar» (y es «reminder»: live#89), y
   «ficha» (la del cliente) no es «fichar» salvo al empezar una orden («ficha la entrada de Ana»; igual «reserva una mesa»).
 - **Verbos** (`VERBS`): una frase de varias palabras cuenta seguida y sus palabras no piden otra cosa («get rid of» es
   borrar, nunca `get`; «set up» configura, nunca `set`; «add up» y «¿cuadran?» comprueban, no añaden; «cambia el
@@ -272,7 +272,15 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   desactivan o activan (`disable` y `deactivate`, `enable` y `activate`: decide la cosa nombrada; «activo» no, que es
   lo que algo está), y una app se enciende o se apaga cuando la orden la nombra («activa las ventas», «activa otra vez
   las ventas»), no cuando se nombra para qué es otra cosa, tras «para» o «for» («vuelve a activar Mayorista para las
-  próximas ventas»: la tarifa; live#50); «ponme la app»,
+  próximas ventas»: la tarifa; live#50). Lo que un interruptor apaga o enciende es lo que se nombra tras el verbo hasta
+  lo que dice de qué o para qué es («los recordatorios» de «desactiva los recordatorios de las citas», «the
+  appointment reminders», `Asked.switched`); si el catálogo no lo nombra como cosa más que por una app, es la cosa
+  del interruptor de esa acción cuyas `asks` lo dicen junto con la app nombrada a su lado: «desactiva los
+  recordatorios de citas» apaga la receta («apaga la receta del recordatorio de citas») antes que la app de Citas, y
+  «desactiva al cliente Ana» no sube el interruptor de un empleado cuyas `asks` solo dicen «Ana», y una palabra
+  que dicen las `asks` de los interruptores de varias cosas («de momento», «por ahora») no es la cosa de ninguno
+  (live#89); «ponme la
+  app»,
   «instala» encienden; «how many» y «cuántos» cuentan (`count`, `list`, `stats`). «How», «which»,
   «cómo» y «cuál» ya no son el verbo «listar». Un verbo no nombra cosas salvo por sus sinónimos («cobra» nombra la
   venta; «show me», «dame», «dime», «give me», «tell me» no nombran nada). Un infinitivo tras «sin», también con sus
