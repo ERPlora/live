@@ -587,6 +587,11 @@ TAKING_AWAY = {"delete", "remove", "retire", "withdraw"}
         ("anótalo en la ficha de Ana", "es", NOTING),
         ("hay que anotar en la espera de Marta que viene con un bebé", "es", NOTING),
         ("hay que anotarlo en la cita de Ana", "es", NOTING),
+        # «Apunta» is said as «anota» is, with each of its forms (ERPlora/live#80).
+        ("apunta el teléfono nuevo de Ana en su ficha", "es", NOTING),
+        ("apúntale el teléfono nuevo a Ana", "es", NOTING),
+        ("hay que apuntar en la cita de Ana que use mascarilla", "es", NOTING),
+        ("hay que apuntarlo en la ficha de Ana", "es", NOTING),
         ("retira la mesa 90 del plano", "es", TAKING_AWAY),
         ("retírala del plano", "es", TAKING_AWAY),
         ("hay que retirar la mesa 90 del plano", "es", TAKING_AWAY),
@@ -629,6 +634,7 @@ NOTED_OR_TAKEN_AWAY = [
     [
         ("anota una cita para Ana mañana a las 10", "appointment.appointment.create"),
         ("anótame dos cafés en la cuenta de Ana", "sale.order.add"),
+        ("apúntame dos cafés en la cuenta de Ana", "sale.order.add"),
         ("retira la mesa 90 del plano", "table.table.delete"),
         ("retira el dispositivo Barra 2, ya no está", "printing.device.retire"),
         ("Ana retira su consentimiento para la publicidad", "customer.consent.withdraw"),
@@ -648,6 +654,9 @@ def test_what_is_noted_or_taken_away_comes_first(asked, first):
         "anota en la cita de Ana de mañana «usa mascarilla», sin cambiar la hora",
         "hay que anotar en la cita de Ana que use mascarilla",
         "anota una cita para Ana mañana a las 10",
+        # «Apunta» as «anota» (ERPlora/live#80): writing on her appointment, or booking one.
+        "apunta en la cita de Ana de mañana que use mascarilla",
+        "apunta una cita para Ana mañana a las 10",
     ],
 )
 def test_what_is_noted_brings_the_write_that_books_it_and_the_one_that_changes_it(asked):
@@ -697,6 +706,11 @@ DEREGISTERING = {"terminate", "withdraw"}
         ("deshabilita el método Bizum", "es", SWITCHING_OFF),
         ("hay que deshabilitar el método Bizum", "es", SWITCHING_OFF),
         ("deactivate the summer discount rule", "en", SWITCHING_OFF),
+        # «Turn off» and «switch off», «turn on» and «switch on» say what «desactiva» and «activa» do (ERPlora/live#82).
+        ("turn off the summer discount rule", "en", SWITCHING_OFF),
+        ("switch off the summer discount rule", "en", SWITCHING_OFF),
+        ("turn on the summer discount rule again", "en", SWITCHING_ON),
+        ("switch on the summer discount rule", "en", SWITCHING_ON),
         ("activa la tarifa de verano", "es", SWITCHING_ON),
         ("vuelve a activar la regla de descuento", "es", SWITCHING_ON),
         ("actívala otra vez", "es", SWITCHING_ON),
@@ -844,6 +858,11 @@ HUB_WORDS = (("ausencia", "ausencias", "vacaciones", "time"), ("publicidad", "pr
         ("desactiva la tarifa de verano", "es", "pricing.price_list.deactivate"),
         ("vuelve a activar la tarifa de verano", "es", "pricing.price_list.activate"),
         ("reactivate the summer price list", "en", "pricing.price_list.activate"),
+        # In English as «desactiva» and «activa» (ERPlora/live#82).
+        ("turn off the summer price list", "en", "pricing.price_list.deactivate"),
+        ("switch off the summer price list", "en", "pricing.price_list.deactivate"),
+        ("turn on the summer price list again", "en", "pricing.price_list.activate"),
+        ("switch on the summer price list again", "en", "pricing.price_list.activate"),
         ("desactiva la app de reservas", "es", "base.app.disable"),
         ("activa la app de reservas", "es", "base.app.enable"),
     ],
@@ -868,6 +887,9 @@ SWITCHED_BY_NAME = [*APPROVED_OR_SWITCHED, tool("sale.sale.list", "Lists the sal
         ("activa las ventas", "es", "base.app.enable"),
         ("desactiva las ventas", "es", "base.app.disable"),
         ("turn off the sales", "en", "base.app.disable"),
+        ("switch off the sales", "en", "base.app.disable"),
+        ("turn on the sales", "en", "base.app.enable"),
+        ("switch on the sales", "en", "base.app.enable"),
         # With words between the verb and the app, or the app named in the sentence before: still the app's switch.
         ("activa otra vez las ventas", "es", "base.app.enable"),
         ("activa también las ventas", "es", "base.app.enable"),

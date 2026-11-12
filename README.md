@@ -252,7 +252,8 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   (`erase`); «empieza» y «start» abren; «sienta», «sentar» y «seat» abren una mesa o vuelven a sentar una cuenta aparcada
   (`open`, `restore`: decide la cosa nombrada), y sus formas se nombran juntas aunque la raíz las separe («sienta»,
   «sentar»); «traslada», «transfiere» y «transfer» transfieren (`transfer`), y los «comensales» son los `guests`
-  (live#48); «anota» y «anotar» apuntan algo nuevo, le añaden a lo que hay o escriben en ello (`create`, `add`,
+  (live#48); «anota» y «anotar» (y «apunta», «apuntar»: live#80) apuntan algo nuevo, le añaden a lo que hay o
+  escriben en ello (`create`, `add`,
   `update`: decide lo nombrado, «anota una cita para Ana», «anótame dos cafés en la cuenta», «anota en la cita de Ana
   que use mascarilla»), y «retira» y «retirar» lo quitan, lo retiran o lo retiran
   como permiso (`delete`, `remove`, `retire`, `withdraw`: decide la cosa nombrada, «retira la mesa 90», «retira el
@@ -261,7 +262,8 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   que en una mesa son lo que pide el cliente), «confirma» y «da de baja» piden su acción (`approve`, `reject`,
   `request`, `confirm`, y `terminate` o `withdraw`: dar de baja a alguien del negocio o de la publicidad; su «baja»
   sigue nombrando la baja), en infinitivo, como orden, en primera persona y con sus pronombres («apruébasela», «dale de
-  baja»); «desactiva», «deshabilita», «activa», «reactiva» y «habilita» apagan o encienden y también desactivan o
+  baja»); «desactiva», «deshabilita», «activa», «reactiva» y «habilita» (y en inglés «turn off», «switch off», «turn on»
+  y «switch on»: live#82) apagan o encienden y también desactivan o
   activan (`disable` y `deactivate`, `enable` y `activate`: decide la cosa nombrada; «activo» no, que es lo que algo
   está), y una app se enciende o se apaga cuando la orden la nombra («activa las ventas», «activa otra vez las
   ventas»), no cuando se nombra para qué es otra cosa, tras «para» o «for» («vuelve a activar Mayorista para las

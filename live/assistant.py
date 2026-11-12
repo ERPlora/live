@@ -179,10 +179,10 @@ VERBS = {
             "add"),
     "update": ("cambia", "cambiar", "modifica", "modificar", "actualiza", "actualizar", "edita", "editar", "pon",
                "ponle", "poner", "sube", "subir", "configura", "configurar", "ajusta", "ajustar", "ordena", "ordenar",
-               "anota", "anotar", "update", "change", "edit", "set", "set up", "configure", "reorder",
-               "cambia el nombre", "cambiale el nombre", "cambiar el nombre", "ponle de nombre", "ponle el nombre",
-               "ponle nombre", "pon de nombre", "pon el nombre", "poner el nombre", "change the name",
-               "change its name"),
+               "anota", "anotar", "apunta", "apuntar", "update", "change", "edit", "set", "set up", "configure",
+               "reorder", "cambia el nombre", "cambiale el nombre", "cambiar el nombre", "ponle de nombre",
+               "ponle el nombre", "ponle nombre", "pon de nombre", "pon el nombre", "poner el nombre",
+               "change the name", "change its name"),
     "change": ("cambia", "cambiar", "change"),
     "reorder": ("ordena", "ordenar", "reorder"),
     "rename": ("renombra", "renombrar", "rename", "cambia el nombre", "cambiale el nombre", "cambiar el nombre",
@@ -231,9 +231,12 @@ VERBS = {
     "disable": ("desactiva", "desactivar", "desactivo", "apaga", "apagar", "deshabilita", "deshabilitar", "disable",
                 "deactivate", "turn off", "switch off"),
     # Switching a thing on or off is also activating or deactivating it, as a member, a price list or a rule are: the
-    # thing named says which. «Activo» is left out: far more often it is what a thing is («los clientes activos»).
-    "activate": ("activa", "activar", "reactiva", "reactivar", "habilita", "habilitar", "activate", "reactivate"),
-    "deactivate": ("desactiva", "desactivar", "desactivo", "deshabilita", "deshabilitar", "deactivate"),
+    # thing named says which, in either language («turn off», «switch on»: ERPlora/live#82). «Activo» is left out: far
+    # more often it is what a thing is («los clientes activos»).
+    "activate": ("activa", "activar", "reactiva", "reactivar", "habilita", "habilitar", "activate", "reactivate",
+                 "turn on", "switch on"),
+    "deactivate": ("desactiva", "desactivar", "desactivo", "deshabilita", "deshabilitar", "deactivate", "turn off",
+                   "switch off"),
     "approve": ("aprueba", "aprobar", "apruebo", "approve"),
     "reject": ("rechaza", "rechazar", "rechazo", "reject"),
     # «Pide» and «pedir» are left out: at a table they are what a customer orders («pide la cuenta»).
