@@ -1620,6 +1620,8 @@ def test_only_a_verbs_infinitive_after_ni_is_not_asked():
         # A space before the comma, and «Ni» as dictation writes it.
         ("sin tocar la caja , ni borrarla", set()),
         ("sin tocar caja, Ni cambiar importes", set()),
+        # The comma at the end of a line, as a message of two lines has it.
+        ("sin tocar caja,\nni cambiar importes", set()),
     ],
 )
 def test_a_verb_said_after_a_comma_and_ni_that_goes_on_from_sin_is_not_asked(said, verbs):
@@ -1652,6 +1654,8 @@ def test_a_comma_before_ni_is_read_as_said_without_it(with_comma, without):
         ("tengo una mesa sin cobrar y no puedo, ni cerrar la caja", {"close"}),
         # Only a comma: after a full stop, «Ni…» starts a sentence of its own.
         ("la mesa 4 se fue sin pagar. Ni cerrar la caja puedo ahora", {"close"}),
+        # Nor a comma with anything else that ends a sentence.
+        ("la mesa 4 se fue sin pagar..., ni cerrar la caja puedo ahora", {"close"}),
     ],
 )
 def test_a_verb_said_after_a_comma_and_ni_is_asked_when_it_goes_on_from_no_sin(said, verbs):
@@ -1663,6 +1667,8 @@ def test_a_verb_said_after_a_comma_and_ni_is_asked_when_it_goes_on_from_no_sin(s
     [
         "cámbiale al café el precio, ni el nombre ni la foto",
         "ponle otro precio al café, ni el nombre ni la foto",
+        # A «sin» of a sentence further back is none for the «ni» to go on from.
+        "sin prisa, cámbiale al café el precio, ni el nombre ni la foto",
     ],
 )
 def test_a_comma_before_ni_that_goes_on_from_no_sin_still_ends_the_sentence(said):
