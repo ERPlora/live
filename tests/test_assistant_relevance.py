@@ -727,7 +727,8 @@ NOTED_IN_PASSING = [
     tool("staff.schedule.update", "Change a shift of the schedule: its hours or its member."),
     tool("staff.settings.update", "Change the staff settings: how shifts are planned and swapped."),
     tool("customer.customer.create", "Creates a new customer; only the name is required.", input=CustomerIn),
-    tool("customer.customer.update", "Change a customer's card: its name, its phone.", input=CustomerIn),
+    tool("customer.customer.update", "Change a customer's card: its name, its phone.", input=CustomerIn,
+         asks={"es": ("pon la dirección nueva de Marta en su ficha", "cambia el correo de Luis")}),
     tool("customer.customer.list", "List the customers.", "query"),
     tool("customer.purchase.list", "List what a customer bought.", "query"),
     tool("appointment.appointment.notices", "List the notices of today's appointments.", "query"),
@@ -748,8 +749,6 @@ def till_apps(label: str, language: str) -> frozenset[str]:
     [
         ("anota una salida de 15 € de la caja para comprar hielo", "cash_register.movement.add"),
         ("apunta una salida de 15 € de la caja para comprar hielo", "cash_register.movement.add"),
-        ("anótame una entrada de 50 € de cambio en el turno", "cash_register.movement.add"),
-        ("apúntame una entrada de 50 € de cambio en el turno", "cash_register.movement.add"),
         ("hay que apuntar una entrada de 20 € en efectivo en la caja para el cambio del turno",
          "cash_register.movement.add"),
         ("hay que anotarlo en la caja: una salida de 15 € para comprar hielo", "cash_register.movement.add"),
@@ -760,10 +759,10 @@ def till_apps(label: str, language: str) -> frozenset[str]:
 )
 def test_what_is_noted_comes_before_the_settings_a_word_names_in_passing(asked, noted):
     """«Anota una salida de 15 € de la caja» notes a movement of the till down: «anota» and «apunta» write on a thing
-    only when it is named («anota en la cita de Ana…»), so a setting whose field a word names in passing («caja»: the
-    till's, the printer's and the charge's settings; «aviso»: the booking rules), or any other change of nothing named,
-    never comes before what writes the thing down (ERPlora/live#88: they took the 7 points of a write that takes what
-    is named, or the 3 of any other write, and the movement came 8th, or 24th, in the Hub)."""
+    named («anota en la cita de Ana…») or on what they note down, so a setting whose field a word names in passing
+    («caja»: the till's, the printer's and the charge's settings; «aviso»: the booking rules) never comes before what
+    writes the thing down (ERPlora/live#88: those settings took the 7 points of a write that takes what is named, and
+    the movement came 8th in the Hub). «Una entrada… en el turno» names no movement in the Hub: ERPlora/hub#1311."""
     names = ranked(NOTED_IN_PASSING, asked, app_words=till_apps)
     settings = [name for name in names if name.endswith(".settings.update")]
     assert all(names.index(noted) < names.index(name) for name in settings), names[:6]
@@ -796,24 +795,30 @@ def test_noting_writes_only_on_what_is_named(said, written_on):
     ("said", "noted"),
     [
         ("anota una salida de 15 € de la caja", {"salida"}),
-        ("apúntale el teléfono nuevo a Ana", {"teléfono"}),
-        ("apunta en la ficha de Ana su teléfono nuevo", {"teléfono"}),
-        ("anótale a Ana en su ficha el teléfono nuevo", {"teléfono"}),
+        ("apúntale el teléfono nuevo a Ana", {"teléfono", "nuevo"}),
+        ("apunta en la ficha de Ana su teléfono nuevo", {"teléfono", "nuevo"}),
+        ("anótale a Ana en su ficha el teléfono nuevo", {"teléfono", "nuevo"}),
         ("apunta en la caja una salida de 15 €", {"salida"}),
         ("anota de la caja de Barra una salida de 15 €", {"salida"}),
         ("apunta del turno de Barra una entrada de 20 €", {"entrada"}),
-        ("apúntale al cliente el teléfono nuevo", {"teléfono"}),
-        # Of each word that notes something down, in each of its sentences; never of another verb.
+        ("apúntale al cliente el teléfono nuevo", {"teléfono", "nuevo"}),
+        # Every thing named outside where it is noted, whatever comes before it (the review of ERPlora/live#96).
+        ("apunta también el email de Ana", {"también", "email"}),
+        ("apúntale a Ana García el teléfono nuevo", {"garcía", "teléfono", "nuevo"}),
+        # Of each word that notes something down, in each of its sentences, until another command starts; never of
+        # another verb.
         ("hay que anotarlo en la caja: una salida de 15 €", set()),
         ("una salida de 15 € de la caja hay que apuntarla", set()),
         ("una salida de 15 € apúntala en la caja", set()),
         ("anota una salida de 15 € y apunta el teléfono de Ana", {"salida", "teléfono"}),
+        ("anota una salida de 15 € y dime el saldo", {"salida"}),
         ("crea una salida de 15 € de la caja", set()),
     ],
 )
 def test_what_is_noted_down_is_what_the_word_that_notes_names_after_it(said, noted):
-    """What a word that notes something down notes (``Asked.noted``): the first thing named after it but the one a word
-    of where or of what introduces («en la ficha de Ana», «de la caja», «a Ana»; ERPlora/live#88)."""
+    """What a word that notes something down notes (``Asked.noted``): every thing named after it but the ones a word of
+    where or of what introduces («en la ficha de Ana», «de la caja», «a Ana»), until another command starts
+    (ERPlora/live#88)."""
     found = assistant.asked([said]).noted
     assert len(found) == len(noted), found
     assert all(any(assistant.stems(word) <= concept for concept in found) for word in noted), found
@@ -843,6 +848,16 @@ def test_noting_with_another_verb_said_before_writes_on_what_that_verb_changes()
         # Said after where it is noted: what is noted is still the phone.
         "apunta en la ficha de Ana su teléfono nuevo",
         "anótale a Ana en su ficha el teléfono nuevo",
+        # With an adjective, an adverb, a surname or a number before it, too (the review of ERPlora/live#96: only the
+        # first word after the verb was what is noted down, and the card left the first ones).
+        "apúntale a Ana el nuevo teléfono",
+        "apunta también el teléfono de Ana",
+        "anota bien el teléfono de Marta",
+        "apúntale a Ana García el teléfono nuevo",
+        "apunta en la ficha de Ana García su teléfono nuevo",
+        "anota 600 111 222 como teléfono de Ana",
+        "anota su nuevo teléfono, 600 111 222",
+        "apunta otro teléfono para Marta",
     ],
 )
 def test_what_is_noted_of_someone_is_still_written_on_their_card(asked):
@@ -851,6 +866,26 @@ def test_what_is_noted_of_someone_is_still_written_on_their_card(asked):
     (ERPlora/live#88 leaves out only what a word names in passing)."""
     names = ranked(NOTED_IN_PASSING, asked, app_words=till_apps)
     assert set(names[:2]) == {"customer.customer.create", "customer.customer.update"}, names[:6]
+
+
+@pytest.mark.parametrize(
+    "asked",
+    [
+        "anota el DNI de Luis en su ficha",
+        "apunta la calle nueva de Marta: Mayor 3",
+        "apúntale a Luis el correo nuevo, luis@example.com",
+        "anótale a Luis otro correo, luis@example.com",
+        "apunta el cumpleaños de Ana en su ficha: 3 de mayo",
+    ],
+)
+def test_what_is_noted_of_someone_with_no_datum_its_card_takes_still_brings_the_card(asked):
+    """What is noted down need not be named as the card's write names it («el DNI», «la calle», «el correo»): the change
+    of the card the sentence names still comes before every write that shares only the verb, as a write that takes
+    nothing named keeps the points of any other write (the review of ERPlora/live#96: with none, «anota el DNI de Luis
+    en su ficha» left the card out of what a turn offers in the Hub)."""
+    names = ranked(NOTED_IN_PASSING, asked, app_words=till_apps)
+    noise = [name for name in names if name.startswith("appointment.thing")]
+    assert all(names.index("customer.customer.update") < names.index(name) for name in noise), names[:6]
 
 
 #: What «desactiva» and «activa» ask for: switching a thing off or on, as an app's switch does, or deactivating and

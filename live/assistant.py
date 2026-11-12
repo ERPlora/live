@@ -622,7 +622,7 @@ class Asked(NamedTuple):
     outside what something is for (``_FOR_WHAT``: «ventas» in «activa las ventas», not in «para las próximas
     ventas»). ``written_on`` are the actions asked only as what a word that notes something down writes on
     (``_WRITTEN_ON`` of «anota», «apunta»; ERPlora/live#88): no other word asks for them; ``noted`` is what such a word
-    notes down (``_noted``: the phone of «apunta en la ficha de Ana su teléfono nuevo»)."""
+    notes down (``_noted``: the new phone of «apunta en la ficha de Ana su teléfono nuevo»)."""
 
     concepts: frozenset[frozenset[str]]
     verbs: frozenset[str]
@@ -765,19 +765,24 @@ def _unasked(words: list[str], at: int) -> bool:
     return negated and bool(_verbs_of(word)) and _infinitive(word)
 
 
-def _noted(words: list[str], at: int, extra: tuple[tuple[str, ...], ...]) -> frozenset[str] | None:
-    """What the word that notes something down ``words[at]`` notes: the first thing named after it but the one a word
-    of ``_WHERE`` says it is noted in or whose it is («apunta en la ficha de Ana su teléfono nuevo»: the phone; «anota
-    una salida de 15 € de la caja»: the money taken out), ``None`` when its sentence names none."""
+def _noted(words: list[str], at: int, extra: tuple[tuple[str, ...], ...]) -> set[frozenset[str]]:
+    """What the word that notes something down ``words[at]`` notes: every thing named after it, until another command
+    starts (``_starts_command``), but the one a word of ``_WHERE`` says it is noted in or whose it is («apunta en la
+    ficha de Ana García su teléfono nuevo»: García, the phone, new; «anota una salida de 15 € de la caja»: the money
+    taken out)."""
+    found: set[frozenset[str]] = set()
     where = False
-    for word in words[at + 1 :]:
+    for later in range(at + 1, len(words)):
+        word = words[later]
+        if _starts_command(words, later):
+            break
         if word in _WHERE:
             where = True
         elif len(word) >= 3 and word not in STOP_WORDS:
             if not where:
-                return _concept(word, extra)
+                found.add(_concept(word, extra))
             where = False
-    return None
+    return found
 
 
 def _infinitive(word: str) -> bool:
@@ -905,12 +910,10 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
                 noting |= _WRITTEN_ON
             else:
                 others |= of
-        noted |= {
-            down
-            for words in heard
-            for at, word in enumerate(words)
-            if acting.get(word) == _NOTES and (down := _noted(words, at, extra)) is not None
-        }
+        for words in heard:
+            for at, word in enumerate(words):
+                if acting.get(word) == _NOTES:
+                    noted |= _noted(words, at, extra)
         # A word that asks (a verb) names a thing only through its synonyms («cobra»: a sale); «show», «dame» none. So
         # does a verb not asked («sin cobrar»: still a sale); what someone will do is no verb asked, and names as any
         # word does.
@@ -1031,10 +1034,10 @@ def relevant(
     una mesa»: no write of the staff; «abre la cocina»: no other app's open), 1 to
     a read of the app named and nothing to any other read: «¿cuántos…?» is no list of everything, and what a read is
     filtered by is not what it reads. A change asked only by a word that notes something down («anota», «apunta»:
-    ``Asked.written_on``) writes on a thing named: of none, it adds 7 to a write that takes what is noted down
-    (``Asked.noted``: «apúntale el teléfono nuevo a Ana») and nothing to any other, a setting whose field a word names
-    in passing above all («anota una salida de 15 € de la caja» notes a movement down, not the till's settings;
-    ERPlora/live#88).
+    ``Asked.written_on``) writes on a thing named or on what is noted down (``Asked.noted``: «apúntale el teléfono
+    nuevo a Ana»): of no thing named, a write that takes only what another word names in passing adds nothing («anota
+    una salida de 15 € de la caja» notes a movement down, not the till's settings, which take the cash register;
+    ERPlora/live#88), and one that takes what is noted down, or nothing named, adds what any other write does.
 
     A write of a thing named after its verb brings its reads 3 («borra el cliente Ana»: the read that finds Ana). A
     question that asks to know and to do nothing puts the reads first (1), a thing's list before its other reads (1),
@@ -1125,11 +1128,16 @@ def _relevant(
                 points += 9 + (action in verbs) + 3 * aimed
             else:
                 writes = matched - READ_VERBS
-                if writes and writes <= said.written_on:
-                    # What «anota» writes on is a thing named, or what it notes down when the write takes it
-                    # («apúntale el teléfono nuevo a Ana»): never a setting another word names in passing.
-                    points += 7 * any(not concept.isdisjoint(taken) for concept in said.noted)
-                else:
+                # What «anota» writes on is a thing named, or what it notes down («apúntale el teléfono nuevo a Ana»): a
+                # write that takes only what another word names in passing is none of it («anota una salida de 15 €
+                # de la caja»: the till's settings take the cash register, not the money taken out).
+                in_passing = (
+                    takes
+                    and writes
+                    and writes <= said.written_on
+                    and not any(not concept.isdisjoint(taken) for concept in said.noted)
+                )
+                if not in_passing:
                     points += 7 if takes and writes else 3 if writes and not aimed_at else 1 if app_named else 0
         elif switching and takes and not _CHANGES.isdisjoint(acts):
             points += 7
