@@ -1658,6 +1658,19 @@ def test_a_verb_said_after_a_comma_and_ni_is_asked_when_it_goes_on_from_no_sin(s
     assert assistant.asked([said]).verbs == verbs
 
 
+@pytest.mark.parametrize(
+    "said",
+    [
+        "cámbiale al café el precio, ni el nombre ni la foto",
+        "ponle otro precio al café, ni el nombre ni la foto",
+    ],
+)
+def test_a_comma_before_ni_that_goes_on_from_no_sin_still_ends_the_sentence(said):
+    """«Cámbiale al café el precio, ni el nombre ni la foto» changes the price alone: with no «sin» for the «ni» to go
+    on from, the comma still ends the sentence, and «el nombre» after it is no name put by «cámbiale»."""
+    assert "rename" not in assistant.asked([said]).verbs
+
+
 def test_only_the_word_ni_after_a_comma_goes_on_with_the_sentence():
     """«Ninguno» starts like «ni»: after a comma it starts a sentence of its own, as any other word does."""
     assert len(assistant._sentences("cierra la caja sin contar, ninguno ha contado el fondo")) == 2
