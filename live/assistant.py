@@ -308,8 +308,11 @@ _CHANGES = frozenset({"update", "set"})
 _NOTES = frozenset({"create", "add", "update"})
 _WRITTEN_ON = frozenset({"update"})
 #: The words that say where a thing is noted or whose it is, not what is noted down («apunta en la ficha de Ana su
-#: teléfono nuevo», «anota de la caja una salida»).
+#: teléfono nuevo», «anota de la caja una salida»): with its article («del», «al»), or before one or another word that
+#: names nothing yet («de la caja», «en su ficha»). Before a name, what follows is the datum («el número de teléfono»,
+#: «la subida de precio»).
 _WHERE = frozenset({"en", "de", "del", "a", "al"})
+_WITH_ITS_ARTICLE = frozenset({"del", "al"})
 #: Words of ``VERBS`` that name a thing, not an action of it: no verb's stem.
 _NOT_VERBS = frozenset({"alta", "nuevo", "nueva", "new", "datos", "detalle", "detail"})
 #: Verbs whose stem joins forms ``VERBS`` does not list, and the irregular ones («haz» is «hacer», «di» is «decir»).
@@ -767,9 +770,9 @@ def _unasked(words: list[str], at: int) -> bool:
 
 def _noted(words: list[str], at: int, extra: tuple[tuple[str, ...], ...]) -> set[frozenset[str]]:
     """What the word that notes something down ``words[at]`` notes: every thing named after it, until another command
-    starts (``_starts_command``), but the one a word of ``_WHERE`` says it is noted in or whose it is («apunta en la
-    ficha de Ana García su teléfono nuevo»: García, the phone, new; «anota una salida de 15 € de la caja»: the money
-    taken out)."""
+    starts (``_starts_command``), but the one a word of ``_WHERE`` says, with its article, it is noted in or whose it is
+    («apunta en la ficha de Ana García su teléfono nuevo»: Ana, García, the phone, new; «anota una salida de 15 € de la
+    caja»: the money taken out; «apunta el número de teléfono de Ana»: the number, the phone, Ana)."""
     found: set[frozenset[str]] = set()
     where = False
     for later in range(at + 1, len(words)):
@@ -777,7 +780,8 @@ def _noted(words: list[str], at: int, extra: tuple[tuple[str, ...], ...]) -> set
         if _starts_command(words, later):
             break
         if word in _WHERE:
-            where = True
+            after = words[later + 1] if later + 1 < len(words) else ""
+            where = word in _WITH_ITS_ARTICLE or len(after) < 3 or after in STOP_WORDS
         elif len(word) >= 3 and word not in STOP_WORDS:
             if not where:
                 found.add(_concept(word, extra))

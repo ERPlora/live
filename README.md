@@ -256,9 +256,10 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   escriben en ello (`create`, `add`,
   `update`: decide lo nombrado, «anota una cita para Ana», «anótame dos cafés en la cuenta», «anota en la cita de Ana
   que use mascarilla»); su `update` escribe en una cosa nombrada o en lo que se apunta (todo lo que se nombra tras el
-  verbo salvo lo que va tras «en», «de», «a»: «apúntale a Ana el nuevo teléfono», «apunta en la ficha de Ana García su
-  teléfono»), nunca en un ajuste que solo toma lo que se nombra de paso («anota una salida de 15 € de la caja» apunta
-  un movimiento, no cambia los ajustes de la caja; live#88), y
+  verbo salvo el sitio, lo que va tras «en», «de», «a» con su artículo: «de la caja», «en su ficha», «del», «al»;
+  «apúntale a Ana el nuevo teléfono», «apunta el número de teléfono de Ana»), nunca en un ajuste que solo toma lo que
+  se nombra de paso («anota una salida de 15 € de la caja» apunta un movimiento, no cambia los ajustes de la caja;
+  live#88), y
   «retira» y «retirar» lo quitan, lo retiran o lo retiran
   como permiso (`delete`, `remove`, `retire`, `withdraw`: decide la cosa nombrada, «retira la mesa 90», «retira el
   dispositivo», «retira su consentimiento»; en inglés, «retire» y «withdraw»), también con sus pronombres

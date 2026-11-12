@@ -730,6 +730,8 @@ NOTED_IN_PASSING = [
     tool("customer.customer.update", "Change a customer's card: its name, its phone.", input=CustomerIn,
          asks={"es": ("pon la dirección nueva de Marta en su ficha", "cambia el correo de Luis")}),
     tool("customer.customer.list", "List the customers.", "query"),
+    tool("inventory.product.create", "Create a product of the catalog with its name and its price.", input=ProductIn),
+    tool("inventory.product.update", "Change a product: its name, its price.", input=ProductIn),
     tool("customer.purchase.list", "List what a customer bought.", "query"),
     tool("appointment.appointment.notices", "List the notices of today's appointments.", "query"),
     *NOISE,
@@ -795,30 +797,40 @@ def test_noting_writes_only_on_what_is_named(said, written_on):
     ("said", "noted"),
     [
         ("anota una salida de 15 € de la caja", {"salida"}),
-        ("apúntale el teléfono nuevo a Ana", {"teléfono", "nuevo"}),
-        ("apunta en la ficha de Ana su teléfono nuevo", {"teléfono", "nuevo"}),
-        ("anótale a Ana en su ficha el teléfono nuevo", {"teléfono", "nuevo"}),
+        ("apúntale el teléfono nuevo a Ana", {"teléfono", "nuevo", "ana"}),
+        ("apunta en la ficha de Ana su teléfono nuevo", {"ana", "teléfono", "nuevo"}),
+        ("anótale a Ana en su ficha el teléfono nuevo", {"ana", "teléfono", "nuevo"}),
         ("apunta en la caja una salida de 15 €", {"salida"}),
-        ("anota de la caja de Barra una salida de 15 €", {"salida"}),
-        ("apunta del turno de Barra una entrada de 20 €", {"entrada"}),
+        ("apunta en esta caja una salida de 15 €", {"salida"}),
+        ("anota de la caja de Barra una salida de 15 €", {"barra", "salida"}),
+        ("apunta del turno de Barra una entrada de 20 €", {"barra", "entrada"}),
         ("apúntale al cliente el teléfono nuevo", {"teléfono", "nuevo"}),
+        ("anótale a la clienta el teléfono nuevo", {"teléfono", "nuevo"}),
         # Every thing named outside where it is noted, whatever comes before it (the review of ERPlora/live#96).
-        ("apunta también el email de Ana", {"también", "email"}),
-        ("apúntale a Ana García el teléfono nuevo", {"garcía", "teléfono", "nuevo"}),
+        ("apunta también el email de Ana", {"también", "email", "ana"}),
+        ("apúntale a Ana García el teléfono nuevo", {"ana", "garcía", "teléfono", "nuevo"}),
+        # «En», «de» and «a» say where it is noted, or whose it is, only before an article or another word that names
+        # nothing («de la caja», «en su ficha», «del», «al»); before a name, what follows is the datum («de teléfono»;
+        # the review of ERPlora/live#96, round 2).
+        ("apunta el número de teléfono de Ana", {"número", "teléfono", "ana"}),
+        ("apunta la subida de precio del café", {"subida", "precio"}),
+        ("apunta una salida de caja", {"salida", "caja"}),
+        ("hay que apuntar una salida de", {"salida"}),
         # Of each word that notes something down, in each of its sentences, until another command starts; never of
         # another verb.
         ("hay que anotarlo en la caja: una salida de 15 €", set()),
         ("una salida de 15 € de la caja hay que apuntarla", set()),
         ("una salida de 15 € apúntala en la caja", set()),
-        ("anota una salida de 15 € y apunta el teléfono de Ana", {"salida", "teléfono"}),
+        ("anota una salida de 15 € y apunta el teléfono de Ana", {"salida", "teléfono", "ana"}),
         ("anota una salida de 15 € y dime el saldo", {"salida"}),
+        ("anota una salida de 15 € y búscame el teléfono de Ana", {"salida"}),
         ("crea una salida de 15 € de la caja", set()),
     ],
 )
 def test_what_is_noted_down_is_what_the_word_that_notes_names_after_it(said, noted):
-    """What a word that notes something down notes (``Asked.noted``): every thing named after it but the ones a word of
-    where or of what introduces («en la ficha de Ana», «de la caja», «a Ana»), until another command starts
-    (ERPlora/live#88)."""
+    """What a word that notes something down notes (``Asked.noted``): every thing named after it, until another command
+    starts, but the one a word of where or whose introduces with its article («en la ficha de Ana», «de la caja», «al
+    cliente»; ERPlora/live#88)."""
     found = assistant.asked([said]).noted
     assert len(found) == len(noted), found
     assert all(any(assistant.stems(word) <= concept for concept in found) for word in noted), found
@@ -858,6 +870,16 @@ def test_noting_with_another_verb_said_before_writes_on_what_that_verb_changes()
         "anota 600 111 222 como teléfono de Ana",
         "anota su nuevo teléfono, 600 111 222",
         "apunta otro teléfono para Marta",
+        # Said after «de» or «a» with no article, it is the datum, not whose it is (the review of ERPlora/live#96, round
+        # 2: «de teléfono» was read as where it is noted, and the card left what a turn offers).
+        "apunta el número de teléfono de Ana",
+        "anótale a Ana el número de teléfono",
+        "apunta el número de móvil de Ana",
+        "anota el número de teléfono de Ana: 600 111 222",
+        "apunta el nuevo número de teléfono de Ana en su ficha",
+        "apunta en la ficha de Ana el número de teléfono",
+        "anota el cambio de teléfono de Ana",
+        "apunta a Ana de teléfono el 600 111 222",
     ],
 )
 def test_what_is_noted_of_someone_is_still_written_on_their_card(asked):
@@ -866,6 +888,18 @@ def test_what_is_noted_of_someone_is_still_written_on_their_card(asked):
     (ERPlora/live#88 leaves out only what a word names in passing)."""
     names = ranked(NOTED_IN_PASSING, asked, app_words=till_apps)
     assert set(names[:2]) == {"customer.customer.create", "customer.customer.update"}, names[:6]
+
+
+@pytest.mark.parametrize(
+    "asked",
+    ["apunta la subida de precio del café", "apunta el precio nuevo del café"],
+)
+def test_what_is_noted_of_a_product_is_still_written_on_it(asked):
+    """«La subida de precio del café» notes a price down: the product's change that takes it stays beside the create that
+    does, as a customer's phone does (the review of ERPlora/live#96, round 2: «de precio» was read as where it is
+    noted, and the product's change came 78th in the Hub)."""
+    names = ranked(NOTED_IN_PASSING, asked, app_words=till_apps)
+    assert set(names[:2]) == {"inventory.product.create", "inventory.product.update"}, names[:6]
 
 
 @pytest.mark.parametrize(
