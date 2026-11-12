@@ -1,4 +1,4 @@
-"""Live registry: which queries are subscribable and which events re-run them (plan §4.1)."""
+"""Live registry: which queries are subscribable and which events re-run them."""
 
 import pytest
 from live import live_registry as live_registry_module
@@ -67,7 +67,7 @@ def test_a_query_is_declared_live_only_once(reg):
 
 
 def test_the_testapp_live_module_is_discovered_at_startup():
-    """LiveConfig.ready() imports every app's live.py (P2); the testapp declares its list."""
+    """LiveConfig.ready() imports every app's live.py; the testapp declares its list."""
     assert live_registry.subscribable["testapp.thing.list"] == ["testapp.thing.created"]
 
 

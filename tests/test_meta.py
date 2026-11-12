@@ -119,11 +119,7 @@ def test_testapp_is_a_module_with_its_metadata():
 
 
 def test_live_app_config_has_empty_store_metadata_by_default():
-    """Round 16 (PLAN §21): the public store's fields, empty for a platform app.
-
-    It replaces the round 15 test that the class had no ``description``: round 16 brings the
-    description back for the public store; the Hub's apps page still shows icon and name only.
-    """
+    """The public store's fields, empty for a platform app; the Hub's apps page shows icon and name only."""
     assert LiveAppConfig.summary == ""
     assert LiveAppConfig.description == ""
     assert LiveAppConfig.verticals == []
@@ -175,7 +171,7 @@ def test_nav_is_an_immutable_menu_entry():
         nav.path = "/other"
 
 
-# --- The Home's hooks (PLAN-HUB round 2026-10-21): setup, widgets and bell --------------------------
+# --- The Home's hooks: setup, widgets and bell ----------------------------------------------------
 
 
 def test_live_app_config_declares_no_home_hooks_by_default():
@@ -205,7 +201,7 @@ def test_a_setup_step_needs_key_operation_title_and_route():
 
 
 def test_a_setup_step_is_required_by_default():
-    """As in the old manifest: required = functional; required=False = recommended."""
+    """required = functional; required=False = recommended."""
     assert SetupStep(key="catalog", operation="stock.catalog.status", title="Your catalog", route="/stock").required
 
 
@@ -268,7 +264,7 @@ def test_the_hooks_are_immutable_like_nav(hook):
         hook.key = "other"
 
 
-# --- The device's notices (PLAN-HUB round 2026-10-23): notices -----------------------------------------
+# --- The device's notices -------------------------------------------------------------------------
 
 
 def test_live_app_config_declares_no_device_notices_by_default():

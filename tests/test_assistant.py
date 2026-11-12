@@ -1,5 +1,5 @@
-"""The assistant's mechanics that do not depend on a gateway (``live.assistant``; PLAN §30,
-docs/plans/2026-10-30-asistente-saas.md §2): which operations are a person's tools, the few a turn offers, how a tool
+"""The assistant's mechanics that do not depend on a gateway (``live.assistant``):
+which operations are a person's tools, the few a turn offers, how a tool
 is told to the model, what a write's card says before it runs and what the person types to confirm it, how a tool runs
 as the person, what a dangerous write will do (its preview) and the rounds of tools of a request.
 
@@ -273,9 +273,9 @@ class NamedCentsIn(Schema):
 
 
 def test_a_name_in_cents_makes_no_amount_only_its_mark_does():
-    """hub#917: a whole number counted as money by its name alone (``…_cents``) while its schema carried no mark, so a
-    new datum named so that is no amount would reach the card as money. Only the mark (``MONEY``) says an amount now,
-    on top, inside an object and in a list, as the words of a description never did."""
+    """A whole number is no money by its name alone (``…_cents``): a datum named so that is no amount would reach the
+    card as money. Only the mark (``MONEY``) says an amount, on top, inside an object and in a list, as the words of a
+    description never do."""
     assert assistant.is_money({assistant.MONEY: True})
     assert not assistant.is_money(NamedCentsIn.model_json_schema()["properties"]["total_cents"])
     write = op("testapp.probe.cents", ai=CREATE, input=NamedCentsIn)
@@ -303,8 +303,7 @@ def test_an_amount_its_mark_declares_is_sent_on_top_inside_an_object_and_in_a_li
 
 def test_a_marked_amount_sent_as_no_whole_number_stays_as_sent(probes):
     """The mark says the amount of a whole number: one that comes as anything else — a text, a fraction, which the
-    write refuses — is no money on the card but as sent. A list named in ``_cents`` said so by its name until hub#917
-    took the name's word away; this says it by the mark."""
+    write refuses — is no money on the card but as sent."""
     arguments = {"name": "x", "price": "12,50", "counted": 2.5}
     shown = fields(assistant.card(probes["testapp.probe.create"], arguments, "en"))
     assert (shown["price"]["kind"], shown["price"]["value"]) == ("text", "12,50")
@@ -391,7 +390,7 @@ def named(card) -> dict:
 
 
 def test_a_list_the_card_says_in_words_is_marked_named_one_as_sent_is_not(lists):
-    """FIX-HUB-PRINTING-ASSISTANT-CARD-LEAVES-OUT-ITS-RECORDS: the screen says the items of a list only when the server
+    """The screen says the items of a list only when the server
     said each one in words — a record by its name, a moment, a value of a closed list by its label, an amount —; a list
     of texts sent as they are (codes nobody names: «sale.sale.create») or of lines says how many it carries."""
     card = assistant.card(lists, LISTS, "en", SpokenWords(lists, "en"))
@@ -416,7 +415,8 @@ def test_a_list_with_one_item_left_as_sent_is_not_named(lists, monkeypatch):
 
 
 class ThingRefIn(Schema):
-    """A line that names its record by its id or, when its id is not known, as a person says it (Citas' services)."""
+    """A line that names its record by its id or, when its id is not known, as a person says it (the appointment
+    app's services)."""
 
     thing_id: uuid.UUID | None = Field(None, json_schema_extra={"refers": {"read": "testapp.probe.get", "by": "id"}})
     thing: str | None = None
@@ -441,7 +441,7 @@ def lines():
 
 
 def test_a_list_of_lines_that_carry_only_their_record_is_named(lines):
-    """hub#835: a booking's services (``[{"service_id": …}]``), each named by the server, and the card said «Servicios:
+    """A booking's services (``[{"service_id": …}]``), each named by the server, are never said as «Servicios:
     1 elemento». A line that carries one datum, its record, is said as that record is: by its name, or left out — the
     screen counts it among the more, never by its id."""
     one, other = str(uuid.uuid4()), str(uuid.uuid4())
@@ -486,9 +486,9 @@ def test_a_line_is_named_only_when_the_datum_it_carries_alone_is_said_in_words(l
 
 
 class StockLineIn(Schema):
-    """A line that carries its record and figures (Inventario's reception, a sale's lines, a package's services): a
-    quantity — a decimal, which a model writes as a number or as a text —, how many sessions, an amount; or more than
-    one record, or a text of its own."""
+    """A line that carries its record and figures (the inventory app's reception, a sale's lines, a package's
+    services): a quantity — a decimal, which a model writes as a number or as a text —, how many sessions, an amount;
+    or more than one record, or a text of its own."""
 
     thing_id: uuid.UUID | None = Field(None, json_schema_extra={"refers": {"read": "testapp.probe.get", "by": "id"}})
     thing: str | None = Field(None, json_schema_extra={"name_of": "thing_id"})
@@ -515,8 +515,8 @@ def said_items(write, items, words=None) -> tuple:
 
 
 def test_a_line_of_its_record_and_figures_is_named_by_that_record(stock):
-    """hub#970: a reception of goods (``[{"product_id": …, "qty": "6"}]``), its product named by the server, and the
-    card said «Productos: 1 elemento». A line that carries one record the server names and, beside it, only figures — a
+    """A reception of goods (``[{"product_id": …, "qty": "6"}]``), its product named by the server, is never said as
+    «Productos: 1 elemento». A line that carries one record the server names and, beside it, only figures — a
     quantity as a number or as the text of a decimal, sessions, an amount — is said by that record and its figures;
     the name beside its record still does not count."""
     one = str(uuid.uuid4())
@@ -571,7 +571,7 @@ def test_a_line_of_figures_and_no_single_record_is_not_named(stock, line):
 
 
 class SaidThingRefIn(Schema):
-    """Citas' services as its app marks them (hub#860): the text is the name a person says of the record ``thing_id``
+    """The appointment app's services as it marks them: the text is the name a person says of the record ``thing_id``
     names, when its id is not known (``NAME_OF``)."""
 
     thing_id: uuid.UUID | None = Field(None, json_schema_extra={"refers": {"read": "testapp.probe.get", "by": "id"}})
@@ -619,7 +619,7 @@ def said_things(write, things, words=None) -> tuple:
 
 
 def test_a_line_by_the_name_a_person_said_is_named_by_that_name(said_lines):
-    """hub#860: a booking's service sent by its name (``[{"service": "Tinte"}]``) and the card said «Servicios: 1
+    """A booking's service sent by its name (``[{"service": "Tinte"}]``) is never said as «Servicios: 1
     elemento». A text its app marks as the name a person says of the line's record is said as sent, so a line that
     carries only it, or a list that mixes it with lines by their record, is named."""
     words = SpokenWords(said_lines, "en")
@@ -629,8 +629,9 @@ def test_a_line_by_the_name_a_person_said_is_named_by_that_name(said_lines):
 
 
 def test_a_line_that_carries_its_record_is_said_by_the_record_never_by_the_name_beside_it(said_lines):
-    """The write takes the record by its id and ignores the name beside it (Citas' ``find_service``): the card says the
-    record's name — even when the name sent is another one — and only that, so the line carries one datum."""
+    """The write takes the record by its id and ignores the name beside it (``find_service`` of the appointment
+    app): the card says the record's name — even when the name sent is another one — and only that, so the line
+    carries one datum."""
     one = str(uuid.uuid4())
     for spoken in ("Mesa 4", "Barra 1", ""):
         line = [{"thing_id": one, "thing": spoken}]
@@ -648,7 +649,7 @@ def test_a_name_beside_a_record_the_card_cannot_name_never_stands_for_it(said_li
 
 @pytest.mark.parametrize("empty", [None, ""])
 def test_a_name_beside_an_empty_record_still_names_its_line(said_lines, empty):
-    """rv-856: a model writes the id it does not give as null or empty: the line carries only the name a person said."""
+    """A model writes the id it does not give as null or empty: the line carries only the name a person said."""
     line = [{"thing": "Mesa 4", "thing_id": empty}]
     assert said_things(said_lines, line, SpokenWords(said_lines, "en")) == (line, True)
 
@@ -672,8 +673,8 @@ def test_a_mark_that_names_no_record_of_its_line_leaves_nothing_out(said_lines, 
 
 
 def test_a_mark_that_is_not_the_name_of_a_datum_is_no_mark(said_lines):
-    """A mark that is no text (a list, by mistake) marks nothing: its text is one as sent, never said one by one
-    (hub#504), alone or beside another datum."""
+    """A mark that is no text (a list, by mistake) marks nothing: its text is one as sent, never said one by one,
+    alone or beside another datum."""
     for line in ({"loose": "Mesa 4"}, {"loose": "Mesa 4", "note": "ventana"}):
         shown = fields(assistant.card(said_lines, {"misnamed": [line]}, "en", SpokenWords(said_lines, "en")))["misnamed"]
         assert (shown["value"], shown.get(assistant.NAMED, False)) == ([line], False)
@@ -701,8 +702,8 @@ def test_an_id_written_where_the_name_goes_is_never_said(said_lines):
 
 @pytest.mark.parametrize("blank", ["   ", "\t", "\n", " \t\r\n ", "\xa0"])
 def test_a_name_in_blank_names_nothing(said_lines, blank):
-    """hub#879: a model that writes the name as blanks (``{"service": "   "}``) and the card said «Servicios:» with
-    nothing after it. Blanks say nothing, as an empty name does: the screen says how many the list carries. Beside its
+    """A name the model writes as blanks (``{"service": "   "}``) never leaves «Servicios:» with nothing after
+    it. Blanks say nothing, as an empty name does: the screen says how many the list carries. Beside its
     record, the record still names the line."""
     words = SpokenWords(said_lines, "en")
     assert said_things(said_lines, [{"thing": blank}], words) == ([{"thing": blank}], False)
@@ -792,7 +793,7 @@ APP_CHOICES = {"shade": (("pale", "Pale"), ("deep", "Deep")), "days": (("mon", "
 
 
 def test_a_closed_list_no_field_holds_is_said_by_the_labels_its_app_declares(monkeypatch):
-    """hub#679: a closed list an app keeps where no field of its models holds it (inside a JSON: a website's palette, the
+    """A closed list an app keeps where no field of its models holds it (inside a JSON: a website's palette, the
     days of its opening hours) says each value by the label its app declares for that datum (``LiveAppConfig.choices``),
     at any depth and in a list; a value it does not label, or a datum it declares nothing of, as sent."""
     monkeypatch.setattr(apps.get_app_config("testapp"), "choices", APP_CHOICES)
@@ -835,8 +836,8 @@ class PlaceIn(Schema):
 
 
 def test_arguments_the_operation_refuses_are_told_back_to_the_model_field_by_field():
-    """QA 2026-10-31 (A2.12): a card said «country: España», the person typed the word, and the write was refused;
-    the model asked again and the person confirmed twice. The model hears the refusal before any card is drawn."""
+    """A card that says «country: España» for data the write refuses would make the person confirm twice: the model
+    hears the refusal, field by field, before any card is drawn."""
     outcome = assistant.invalid_arguments(op("testapp.probe.place", input=PlaceIn), {"name": "QA", "country": "España"})
     assert (outcome.outcome, outcome.code) == ("error", "invalid_payload")
     error = json.loads(outcome.content)["error"]

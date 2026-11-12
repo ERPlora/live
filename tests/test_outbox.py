@@ -193,7 +193,7 @@ def test_notify_arrives_only_after_commit(listen, raw):
 @pytest.mark.django_db(transaction=True)
 def test_notify_runs_once_the_row_is_committed_and_outside_any_transaction(monkeypatch, raw):
     # Here the control database is the one the command writes to, where Postgres would hold a
-    # NOTIFY sent inside the transaction until the COMMIT anyway; in hub-next phase 2 they differ,
+    # NOTIFY sent inside the transaction until the COMMIT anyway; in the Hub they differ,
     # so what is checked is when notify runs, not only when the notification arrives.
     seen = []
 

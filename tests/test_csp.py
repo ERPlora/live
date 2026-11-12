@@ -1,4 +1,4 @@
-"""Content Security Policy of the SPA (plan §4.1) on Django 6.1's native CSP middleware.
+"""Content Security Policy of the SPA on Django 6.1's native CSP middleware.
 
 Production: nonce + 'strict-dynamic' + Trusted Types, nothing from a CDN, and
 `connect-src ipc: http://ipc.localhost` or the Tauri app loses its hardware with no visible error.
@@ -54,7 +54,7 @@ class TestBasePolicy:
         assert "*" not in policy["trusted-types"]
 
     def test_only_our_trusted_types_policies_are_allowed(self):
-        """The page's `default` and Vue's `vue`; Lit (`lit-html`) left with OutfitKit."""
+        """The page's `default` and Vue's `vue`."""
         assert csp.base_policy()["trusted-types"] == [
             "default",
             "vue",

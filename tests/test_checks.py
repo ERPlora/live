@@ -1,13 +1,12 @@
 """System checks of the app metadata (tag ``live``): modules carry what the Hub's apps page needs.
 
-Round 15 (PLAN §20): every app of ours extends ``LiveAppConfig``; ``kind = "app"`` marks a module
-of ``apps/`` (turned on and off per hub), ``kind = "platform"`` an always-on app such as ``base``.
-Round 16 (PLAN §21) adds the public store's metadata of a module: ``summary`` and ``description``
-(E007), ``verticals`` (E008) and ``listed``, which a platform app leaves at their defaults (E006).
-The PLAN-HUB round 2026-10-21 adds the Home's hooks of a module, ``setup``, ``widgets`` and ``bell``
-(E006, E009–E016). The PLAN-HUB round 2026-10-23 adds the device's notices of a module, ``notices``
-(E006, E009–E013 like the Home's hooks, and E018 for its texts). The checks run on ``manage.py check`` and
-when the server starts.
+Every app of ours extends ``LiveAppConfig``; ``kind = "app"`` marks a module of ``apps/`` (turned
+on and off per hub), ``kind = "platform"`` an always-on app such as ``base``. A module also carries
+the public store's metadata: ``summary`` and ``description`` (E007), ``verticals`` (E008) and
+``listed``, which a platform app leaves at their defaults (E006); the Home's hooks, ``setup``,
+``widgets`` and ``bell`` (E006, E009–E016); and the device's notices, ``notices`` (E006, E009–E013
+like the Home's hooks, and E018 for its texts). The checks run on ``manage.py check`` and when the
+server starts.
 """
 
 import datetime as dt
@@ -135,8 +134,8 @@ def test_module_without_icon_is_e002(run):
 
 
 def test_module_with_only_the_defaults_misses_icon_category_summary_and_description(run):
-    """Round 16 replaces the round 15 test that a module needed no description: the Hub's apps page
-    still shows icon and name only, but the public store shows the summary and the description."""
+    """The Hub's apps page shows icon and name only, but the public store shows the summary and the
+    description."""
     defaults = {
         field: getattr(LiveAppConfig, field)
         for field in (
@@ -318,7 +317,7 @@ def test_e006_names_store_and_module_fields_in_one_error(run):
         assert field in message.msg
 
 
-# --- E007: summary, description and name of the public store (round 16) -----------------------------
+# --- E007: summary, description and name of the public store --------------------------------------
 
 
 @pytest.mark.parametrize("summary", ["", "   "])
@@ -391,7 +390,7 @@ def test_each_store_problem_of_a_module_is_its_own_e007(run):
     assert ids(messages) == ["live.E007", "live.E007", "live.E007"]
 
 
-# --- E008: verticals (round 16; PLAN §15.2) ---------------------------------------------------------
+# --- E008: verticals ------------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("verticals", [[], ["restaurant"], ["hair_salon", "retail2", "a"], ["x" * 50]])
@@ -412,7 +411,7 @@ def test_a_malformed_vertical_is_e008(run, vertical):
 
 
 def test_the_test_vertical_is_reserved(run):
-    """hub_template_test is the template of the test suites (PLAN §15.2)."""
+    """hub_template_test is the template of the test suites."""
     [message] = run(module("stock", verticals=["test"]))
 
     assert message.id == "live.E008"
@@ -441,7 +440,7 @@ def test_verticals_that_are_not_a_list_is_e008(run, verticals):
     assert "list" in message.msg
 
 
-# --- The Home's hooks (PLAN-HUB round 2026-10-21): setup, widgets and bell, E009–E016 -----------------
+# --- The Home's hooks: setup, widgets and bell, E009–E016 -----------------------------------------
 
 
 class ChangeOut(Schema):

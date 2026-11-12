@@ -7,11 +7,11 @@ ninja route, the live subscription, the assistant and the API keys all call the 
 command, hands the names of the events it recorded to ``notify_hook`` after the COMMIT.
 
 The transaction opens on ``default`` unless the project names a hook in ``LIVE["operation_database"]``: a dotted
-path to ``(operation, context) -> context manager`` that yields the alias to use (hub-next phase 2: the hub of
+path to ``(operation, context) -> context manager`` that yields the alias to use (the Hub: the hub of
 ``use_hub``, ``base.tenancy.context.operation_database``). ``READ ONLY``, ``statement_timeout`` and the
 notification after the COMMIT follow that alias's transaction; the notification still goes to the control database.
 What a ``services.py`` wraps in a savepoint goes through :func:`atomic`, never a bare ``transaction.atomic()`` (whose
-alias is ``default``): it opens on :func:`current_alias`, the project's ``LIVE["current_database"]`` (hub-next: the
+alias is ``default``): it opens on :func:`current_alias`, the project's ``LIVE["current_database"]`` (the Hub: the
 active ``use_hub``'s alias, ``base.tenancy.context.current_alias``), else the running operation's, else ``default``.
 
 An operation declared ``database=False`` touches no database: what waits on the network (another service's answer)
@@ -22,7 +22,7 @@ A project that asks for it (``LIVE["database_cut"]``, ``live.database_cut``) get
 ``DatabaseCut``, 503, instead of the driver's error: the outermost operation says whether it may run again, by how far its
 transaction got. ``repeatable=True`` is a command's own word that a try the database rolled back left nothing behind.
 
-Every operation tells the assistant what it is (PLAN §30: every operation is a tool by default): ``ai=AI(description=…,
+Every operation tells the assistant what it is: ``ai=AI(description=…,
 risk="normal"|"high")`` for a tool, ``ai=INTERNAL`` for what is not one, never by omission (``live.E017``). A ``dict``
 declared before ``AI`` existed is still accepted: ``Operation.ai_spec()`` reads it as one of the two. A tool also says
 what a person would type to ask for it (``asks``, by language): the selection of tools weighs it and the assistant's QA
@@ -333,7 +333,7 @@ def on_commit(fn: Callable[[], Any], *, robust: bool = True) -> None:
     """Run ``fn`` after the COMMIT of the running operation's transaction, on that transaction's alias.
 
     What a ``services.py`` calls instead of ``transaction.on_commit``: with ``LIVE["operation_database"]`` the
-    operation's transaction is not on ``default`` (hub-next phase 2: the hub's database), and a callback registered
+    operation's transaction is not on ``default`` (in the Hub: the hub's database), and a callback registered
     there would run at once, before the COMMIT, and also after a rollback. ``robust``: a callback that raises is
     logged and the others still run. Outside an operation it is a misuse.
     """
@@ -350,7 +350,7 @@ def current_alias() -> str:
     """The alias the code running now works on: where :func:`atomic` opens.
 
     The project's ``LIVE["current_database"]`` (a dotted path to a callable with no arguments) says it when it names one
-    (hub-next: the active ``use_hub``'s alias, ``HubContextMissing`` without a context, never a guess): inside an
+    (the Hub: the active ``use_hub``'s alias, ``HubContextMissing`` without a context, never a guess): inside an
     operation that is the alias its transaction is open on, or the one of a context entered inside it. Without it, the
     running operation's alias, else ``default`` (the SaaS, with no tenancy). An operation declared ``database=False``
     has none: a misuse.
@@ -392,7 +392,7 @@ def atomic(func: Callable[..., Any] | None = None, /, *, savepoint: bool = True,
 
     Inside an operation it is a savepoint of the operation's own transaction, so ``try: with atomic(): create…
     except IntegrityError:`` rolls back to it and the operation goes on writing; a bare ``transaction.atomic()``
-    opens another transaction on ``default`` when the operation's is elsewhere (hub-next phase 2: the hub's database),
+    opens another transaction on ``default`` when the operation's is elsewhere (in the Hub: the hub's database),
     and the error aborts the operation's. As Django's, a context manager or a decorator (``@atomic``, ``@atomic(...)``);
     ``savepoint`` and ``durable`` are Django's. It takes no alias.
     """

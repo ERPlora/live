@@ -1,4 +1,4 @@
-"""Content Security Policy of the SPA on Django 6.1's native CSP (plan §4.1).
+"""Content Security Policy of the SPA on Django 6.1's native CSP.
 
 ``settings.SECURE_CSP = base_policy()`` in production and ``debug_policy()`` with DEBUG, with
 ``django.middleware.csp.ContentSecurityPolicyMiddleware`` and the ``csp`` context processor. Every

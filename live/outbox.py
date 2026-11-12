@@ -59,7 +59,7 @@ def notify(scope: Scope, names: Sequence[str]) -> None:
         payload = ALL_EVENTS_PAYLOAD
     # The only place of the package that picks a connection by alias: every process holds its
     # single LISTEN on the control database, so notifications always go there, whatever database
-    # the command wrote to (in hub-next phase 2, the hub's own database).
+    # the command wrote to (in the Hub, the hub's own database).
     alias = getattr(settings, "LIVE", {}).get("control_alias", DEFAULT_DB_ALIAS)
     connection = connections[alias]
     if connection.in_atomic_block:

@@ -1,4 +1,4 @@
-"""The HTML of the SPA (plan §4.2, §4.3 and §4.6).
+"""The HTML of the SPA.
 
 One page for every path without a URL of its own in Django, linking the Vite build (or the dev
 server with DEBUG) with the nonce of the response's CSP header. Under 'strict-dynamic' a script or
@@ -187,7 +187,7 @@ class TestAssets:
         ]
 
 
-#: A second entry of the same build: the public web's script (round 16, saas-next's frontend/public.ts).
+#: A second entry of the same build: the public web's script (the SaaS's frontend/public.ts).
 PUBLIC_ENTRY = {
     "frontend/public.ts": {
         "file": "assets/public-9d8e7f6a.js",
@@ -244,7 +244,7 @@ class TestPaletteAndConfig:
         assert spa.palette(request) == "ocean"
 
     def test_the_old_outfitkit_cookie_is_ignored(self, rf):
-        # Renamed to ep_palette in phase 1, before any real user: no fallback to the old name.
+        # The cookie was renamed to ep_palette before any real user had one: no fallback to the old name.
         request = rf.get("/")
         request.COOKIES["ok_palette"] = "ocean"
 
@@ -396,7 +396,7 @@ class TestRenderedShell:
             client.get("/spa/config-clash/")
 
     def test_the_viewport_and_color_scheme_metas(self, client, manifest_path):
-        """By default the page does not zoom (the Hub's point of sale, as today)."""
+        """By default the page does not zoom (the Hub's point of sale)."""
         html = client.get("/spa/").content.decode()
 
         assert (
@@ -413,7 +413,7 @@ class TestRenderedShell:
         assert "maximum-scale=1.0, user-scalable=no" in html
 
     def test_user_scalable_lets_the_page_zoom(self, client, manifest_path, settings):
-        """WCAG 1.4.4 (audit R-02): a web panel must zoom, so no maximum-scale nor user-scalable."""
+        """WCAG 1.4.4: a web panel must zoom, so no maximum-scale nor user-scalable."""
         settings.LIVE = {**settings.LIVE, "spa": {**settings.LIVE["spa"], "user_scalable": True}}
 
         html = client.get("/spa/").content.decode()
@@ -460,7 +460,7 @@ class TestIcons:
     """``LIVE["spa"]["icons"]``: the project's tab and home-screen icons, static files of its own origin.
 
     Without them the browser asks for ``/favicon.ico``, which is no page of the SPA. Optional: a project without
-    icons gets no ``<link>``, as before.
+    icons gets no ``<link>``.
     """
 
     def test_without_icons_the_shell_links_none(self, client, manifest_path):

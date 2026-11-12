@@ -1,4 +1,4 @@
-"""The assistant's mechanics that do not depend on a gateway (PLAN §30; docs/plans/2026-10-30-asistente-saas.md §2):
+"""The assistant's mechanics that do not depend on a gateway:
 the Hub's assistant and the SaaS's panel use the same ones, each with its own tools and its own words.
 
 - **Its tools** (``catalog``) are the operations of the apps on (``active_labels``) that this person may run (the
@@ -43,7 +43,7 @@ from live.operations import AI, Operation, registry
 
 #: The tools a turn offers at most: the gateway takes 256, the model chooses better among a few.
 MAX_TOOLS = 40
-#: Rounds of tools of one request of the person (the old hub's guard against a loop, not an allowance).
+#: Rounds of tools of one request of the person: a guard against a loop, not an allowance.
 MAX_ROUNDS = 6
 #: A tool's result told back to the model: no more (a list of a hundred rows fits).
 MAX_RESULT_CHARS = 60_000
@@ -1293,7 +1293,7 @@ MONEY = "money"
 
 def is_money(prop: dict) -> bool:
     """Whether the schema ``prop`` declares an amount: its mark (``MONEY``), and only that — neither the datum's name
-    (a ``…_cents`` without the mark is no amount, hub#917), which it is not even given, nor a description's words."""
+    (a ``…_cents`` without the mark is no amount), which it is not even given, nor a description's words."""
     return prop.get(MONEY) is True
 
 
@@ -1476,9 +1476,9 @@ def is_uuid(value: Any) -> bool:
 
 #: The mark of a text of an object that names, as a person says it, the record another datum of that object names by
 #: its id, when the id is not known (``json_schema_extra={"name_of": "<that datum>"}``: a booking's service, «Tinte»,
-#: beside ``service_id``; hub#860). It is a name, never a code: a line that carries only it is said by it. Beside its
+#: beside ``service_id``). It is a name, never a code: a line that carries only it is said by it. Beside its
 #: record the write takes the id and ignores the name, so the card says the record and leaves the name out. A text
-#: without it is sent as it is and never said one by one (a code nobody names: hub#504), and so are blanks or an id
+#: without it is sent as it is and never said one by one (a code nobody names), and so are blanks or an id
 #: written where the name goes (``_is_said_name``). It marks a text of an object a write sends (a line of a list); on
 #: a write's own data it does nothing: each of them shows under its own label.
 NAME_OF = "name_of"
@@ -1499,7 +1499,7 @@ def _name_of(prop: dict, defs: dict) -> str | None:
 
 def _is_said_name(text: Any) -> bool:
     """Whether ``text``, a datum marked ``NAME_OF``, is a name a person said, judged by what it says: a text with more
-    than blanks (blanks show nothing, as an empty name does: hub#879) and no id (a card never says one), even padded."""
+    than blanks (blanks show nothing, as an empty name does) and no id (a card never says one), even padded."""
     words = text.strip() if isinstance(text, str) else ""
     return words != "" and not is_uuid(words)
 
@@ -1712,8 +1712,8 @@ def _is_figure(value: Any, prop: dict, defs: dict) -> bool:
 
 def _record_and_figures(carried: dict, spoken: Any, props: dict, defs: dict) -> bool:
     """Whether the data a line carries (``carried``) are one record ``said`` named (``spoken``: by the name its read
-    gives it, never left out) and, beside it, only figures (``_is_figure``): a reception's product and its quantity
-    (hub#970). Two records, or none the card names, are not: the line would read as the wrong one, or as a bare
+    gives it, never left out) and, beside it, only figures (``_is_figure``): a reception's product and its quantity.
+    Two records, or none the card names, are not: the line would read as the wrong one, or as a bare
     figure."""
     records = [
         key for key, item in carried.items() if key in props and _is_record(item, fitting(item, props[key], defs))
@@ -1727,9 +1727,9 @@ def _record_and_figures(carried: dict, spoken: Any, props: dict, defs: dict) -> 
 def _in_words(value: Any, spoken: Any, prop: dict, defs: dict) -> bool:
     """Whether ``said`` put the item ``value`` of a list in words (``spoken``) as its schema ``prop`` declares it — a
     record (``REFERS`` or an id), a moment, a value of a closed list, an amount, or a line that carries only one of
-    them (a booking's services, ``[{"service_id": …}]``: hub#835) or only the name a person said of its record
-    (``NAME_OF``: ``[{"service": "Tinte"}]``, hub#860), or a record the card names and figures beside it
-    (``_record_and_figures``: hub#970) —, not as sent (``NAMED``). Any other line with more than one datum is not:
+    them (a booking's services, ``[{"service_id": …}]``) or only the name a person said of its record
+    (``NAME_OF``: ``[{"service": "Tinte"}]``), or a record the card names and figures beside it
+    (``_record_and_figures``) —, not as sent (``NAMED``). Any other line with more than one datum is not:
     which of them names it, only its app knows. An empty datum of a line (a name the model writes as null beside the id
     it gives) does not count: it does not show; nor does a name beside its record, which the card leaves out."""
     prop = fitting(value, prop, defs)

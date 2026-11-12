@@ -1,4 +1,4 @@
-"""`manage.py runserver` of `live`: daphne's, plus the Vite dev server with HMR (plan §4.6).
+"""`manage.py runserver` of `live`: daphne's, plus the Vite dev server with HMR.
 
 With DEBUG and `LIVE["vite"]`, the autoreloader's parent process starts Vite in its own session
 and kills its whole process group at exit (SIGTERM, then SIGKILL after 5 s). The reloaded child
