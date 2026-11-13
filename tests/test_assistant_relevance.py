@@ -1048,6 +1048,12 @@ def test_registering_asks_to_write_down_or_to_add(said):
     assert assistant.asked([said]).verbs == REGISTERING
 
 
+def test_registering_in_english_still_asks_only_to_create():
+    """English's «register» is also the till itself («close the cash register»): asking to add with it would bring the
+    till's adds before closing it, so it still asks only to create (ERPlora/live#95)."""
+    assert assistant.asked(["register a new waiter, Pablo, at 12 € an hour"]).verbs == {"create"}
+
+
 #: The movement of the till as the Hub says it is asked for («apunta una salida de 35 € de la caja»), beside the shifts
 #: of the staff, which share the word «turno», the creates of what «registra» also writes down and the writes of things
 #: nobody names.
