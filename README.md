@@ -319,9 +319,15 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   cosa de ninguna herramienta, la app nombrada por su nombre es la cosa de sus herramientas («¿qué hay en la cocina?»,
   «abre la caja con 100 €»); al lado de una cosa nombrada («el registro de eventos») solo desempata. La acción pedida sobre la
   cosa nombrada suma 9, y 3 más si esa cosa es lo primero que nombra la orden desde su verbo (`Asked.objects`: «crea la
-  carpeta Facturas» crea una carpeta, no una factura); una escritura de otra cosa no suma si alguna herramienta hace
-  eso a lo que la orden toca («reserva una mesa» no trae las altas de la plantilla; «create a 10% discount» sí trae las
-  altas, porque ninguna herramienta crea un descuento); una lectura sin cosa nombrada suma 1 solo si se nombra su app
+  carpeta Facturas» crea una carpeta, no una factura). En un verbo que mete o apunta algo («anota», «apunta», «añade»,
+  «mete»), el sitio dicho antes con su artículo o determinante («en el turno», «a la cuenta de la mesa 4», «del turno»)
+  no es lo que toca: lo es lo primero que se nombra después en una frase propia, tras un artículo, un determinante o un
+  número («anota en el turno una salida de 50 €» apunta el movimiento, igual que «anota una salida de 50 € en el
+  turno»; si no se nombra nada así, el sitio sigue siendo lo que toca: «anota en la cita de Ana que…»; live#94). En los
+  demás verbos el sitio dicho antes sigue siendo lo que tocan («borra del historial la cuenta»). Una escritura de otra
+  cosa no suma si alguna herramienta hace eso a lo que la orden toca («reserva una mesa» no trae las altas de la
+  plantilla; «create a 10% discount» sí trae las altas, porque ninguna herramienta crea un descuento); una lectura sin
+  cosa nombrada suma 1 solo si se nombra su app
   (los «cuántos» no levantan todas las listas), y un dato por el que filtra no es lo que lee. Encender o apagar algo
   que una escritura toma la cambia («turn off the alerts» → `accounts.preferences.update`); una escritura de una cosa
   nombrada tras el verbo trae la lectura que la encuentra («borra el cliente Ana»).
