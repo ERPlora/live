@@ -933,6 +933,8 @@ def test_what_is_noted_of_someone_with_no_datum_its_card_takes_still_brings_the_
         ("añade a la cuenta de la mesa 4 una cerveza", "cerveza"),
         ("añade a la carpeta Facturas un documento", "documento"),
         ("mete en la caja 50 € de cambio", "cambio"),
+        # Once a number opens what is put, it stays open through what the money is of.
+        ("mete en la caja 50 € de la propina", "propina"),
         # «Del» and «al» say where with their article; «en» and «a» before a determiner too.
         ("anota del turno una salida de 15 €", "salida"),
         ("apunta en esta caja una salida de 15 €", "salida"),
@@ -966,6 +968,9 @@ def test_what_is_noted_of_someone_with_no_datum_its_card_takes_still_brings_the_
         ("borra del historial la cuenta de la mesa 4", "historial"),
         ("pon en la web el horario de verano", "web"),
         ("crea en la carpeta Facturas un documento", "carpeta"),
+        # Of two verbs said before where, the one it follows says whether it is a place or the thing acted on.
+        ("anota o borra del historial la cuenta de la mesa 4", "historial"),
+        ("quita o añade a la cuenta de la mesa 4 una cerveza", "cerveza"),
         ("anota una salida de 15 € en el turno", "salida"),
         # Only a word of where says where; any other word said first is what the command acts on, as it always was.
         ("anota hoy una salida de 15 € en la caja", "hoy"),
