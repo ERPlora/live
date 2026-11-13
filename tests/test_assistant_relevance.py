@@ -936,7 +936,16 @@ def test_what_is_noted_of_someone_with_no_datum_its_card_takes_still_brings_the_
         # «Del» and «al» say where with their article; «en» and «a» before a determiner too.
         ("anota del turno una salida de 15 €", "salida"),
         ("apunta en esta caja una salida de 15 €", "salida"),
+        ("apunta en mi caja una salida de 15 €", "salida"),
+        ("anota en tu turno una salida de 15 €", "salida"),
+        ("anota en su turno una salida de 15 €", "salida"),
+        # Each determiner opens what is put, as «una» does.
+        ("apunta en la ficha de Ana su móvil nuevo", "movil"),
         ("apunta en el turno otra salida de 20 €", "salida"),
+        ("añade a la mesa 4 otro café", "café"),
+        ("añade a la mesa 4 otros cafés", "cafés"),
+        ("añade a la mesa 4 otras cervezas", "cervezas"),
+        ("añade a la mesa de la terraza el pan", "pan"),
         # A short name goes on with where it is done, as any name does («Ana QA»): only a determiner or a number opens
         # the phrase of what is acted on.
         ("anota en la cita de Ana QA de mañana", "cita"),
@@ -948,6 +957,8 @@ def test_what_is_noted_of_someone_with_no_datum_its_card_takes_still_brings_the_
         ("anota en la cita de Ana que use mascarilla", "cita"),
         ("anota en la caja y luego una salida de 15 €", "caja"),
         ("hay que anotarlo en la caja", "caja"),
+        # A word of under three letters names nothing, as anywhere («té»).
+        ("añade a la cuenta de la mesa 4 un té", "cuenta"),
         # «A» before a name is whom it is done to, no place: what follows is no thing of its own.
         ("apúntale a Ana el teléfono nuevo", "ana"),
         # Only a verb that puts something somewhere: where another verb acts, said first, is what it acts on.
@@ -955,13 +966,18 @@ def test_what_is_noted_of_someone_with_no_datum_its_card_takes_still_brings_the_
         ("pon en la web el horario de verano", "web"),
         ("crea en la carpeta Facturas un documento", "carpeta"),
         ("anota una salida de 15 € en el turno", "salida"),
+        # Only a word of where says where; any other word said first is what the command acts on, as it always was.
+        ("anota hoy una salida de 15 € en la caja", "hoy"),
     ],
 )
 def test_what_a_command_acts_on_is_named_after_where_it_is_done(said, thing):
     """Where a command is done, said before what it does it to («anota en el turno una salida de 50 €»), is no thing it
     acts on: the shift is where the money taken out is noted, as in «anota una salida de 50 € en el turno»
     (ERPlora/live#94: read as the shift, the writes and reads of the staff's shifts came before noting the movement)."""
-    assert assistant.asked([said]).objects == {assistant._concept(thing)}
+    said = assistant.asked([said])
+    assert said.objects == {assistant._concept(assistant._plain(thing))}
+    # What it acts on is named after the verb: the record a read finds, not where it is done.
+    assert said.records == said.objects
 
 
 #: The tools of the shift a sentence says something is noted in, its reads and its delete too, beside what is noted
