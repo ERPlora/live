@@ -318,6 +318,10 @@ _WRITTEN_ON = frozenset({"update"})
 #: before it, is no thing they act on («mete en el turno una entrada»). Where other verbs act, said first, is what they
 #: act on («borra del historial la cuenta», «pon en la web el horario»).
 _PUTS = frozenset({"add"})
+#: The words that open a phrase of its own, as an article, a possessive or «otro» do («en la caja», «su teléfono», «un
+#: documento», «otra salida»), but those of ``STOP_WORDS`` («una», «esta», «sus»): what is put after where it is put
+#: is named in one.
+_DETERMINERS = frozenset({"el", "la", "su", "mi", "tu", "un", "otro", "otra", "otros", "otras"})
 #: The words that say where a thing is noted or whose it is, not what is noted down («apunta en la ficha de Ana su
 #: teléfono nuevo», «anota de la caja una salida»): with its article («del», «al»), or before one or another word that
 #: names nothing yet («de la caja», «en su ficha»). Before a name, what follows is the datum («el número de teléfono»,
@@ -754,9 +758,8 @@ def _objects(
             elif (
                 seen
                 and not _PUTS.isdisjoint(acting.get(verb, ()))
-                and word in _WHERE
-                and _says_where(words, at)
-                and (thing := _named_after_where(words, at))
+                and _puts_where(words, at)
+                and (thing := _named_after_where(words, at)) is not None
             ):
                 found.add(_concept(words[thing], extra))
                 after.add(_concept(words[thing], extra))
@@ -768,20 +771,28 @@ def _objects(
     return found, after
 
 
-def _says_where(words: list[str], at: int) -> bool:
-    """Whether the word of ``_WHERE`` ``words[at]`` says where something is done or whose it is: with its article
-    (``_WITH_ITS_ARTICLE``: «del», «al») or before a word that names nothing («de la caja», «en su ficha», «en esta
-    caja»). Before a name, what follows is no place («a Ana», «el número de teléfono»)."""
+def _determiner(word: str) -> bool:
+    """Whether ``word`` opens a phrase of its own: a determiner (``_DETERMINERS``) or another word that names nothing
+    by itself (``STOP_WORDS``: «esta», «unos», «sus»)."""
+    return word in _DETERMINERS or word in STOP_WORDS
+
+
+def _puts_where(words: list[str], at: int) -> bool:
+    """Whether ``words[at]`` says where something is put, before what is put: a word of ``_WHERE`` with its article
+    (``_WITH_ITS_ARTICLE``: «del turno», «al carrito») or before a determiner («en el turno», «a la cuenta», «en esta
+    caja»). Before a name it is whom it is done to («apúntale a Ana…»), and English's «a» goes before a number, a letter
+    or a word («add a 10% discount», «add a QR code»)."""
     after = words[at + 1] if at + 1 < len(words) else ""
-    return words[at] in _WITH_ITS_ARTICLE or len(after) < 3 or after in STOP_WORDS
+    return words[at] in _WHERE and (words[at] in _WITH_ITS_ARTICLE or _determiner(after))
 
 
 def _named_after_where(words: list[str], at: int) -> int | None:
-    """Where the thing is named that a command acts on when ``words[at]`` says first where it is done: the first word
-    that names something in a phrase of its own — after an article, a determiner or a number no word of ``_WHERE``
-    introduces —, before another clause or command (``_OTHER_CLAUSE``, ``_THEN``). Where it is done goes on with what
-    it is of and with its name: «anota en el turno de Barra una entrada» names the money brought in, «crea en la
-    carpeta Facturas un documento» a document; ``None`` when nothing is named so («anota en la cita de Ana que…»)."""
+    """Where the thing is named that a command acts on when ``words[at]`` says first where it is put
+    (``_puts_where``): the first word that names something in a phrase of its own — after a determiner or a number no
+    word of ``_WHERE`` introduces —, before another clause or command (``_OTHER_CLAUSE``, ``_THEN``). Where it is put
+    goes on with what it is of and with its name: «anota en el turno de Barra una entrada» names the money brought in,
+    «añade a la carpeta Facturas un documento» a document; ``None`` when nothing is named so («anota en la cita de Ana
+    que…», «… de Ana QA de mañana»)."""
     introduced = opened = False
     for later in range(at, len(words)):
         word = words[later]
@@ -789,11 +800,11 @@ def _named_after_where(words: list[str], at: int) -> int | None:
             return None
         if word in _WHERE:
             introduced = True
-        elif len(word) < 3 or word in STOP_WORDS:
+        elif _determiner(word) or word.isdigit():
             opened = opened or not introduced
-        elif opened:
-            return later
-        else:
+        elif len(word) >= 3:
+            if opened:
+                return later
             introduced = False
     return None
 
@@ -842,7 +853,8 @@ def _noted(words: list[str], at: int, extra: tuple[tuple[str, ...], ...]) -> set
         if _starts_command(words, later):
             break
         if word in _WHERE:
-            where = _says_where(words, later)
+            after = words[later + 1] if later + 1 < len(words) else ""
+            where = word in _WITH_ITS_ARTICLE or len(after) < 3 or after in STOP_WORDS
         elif len(word) >= 3 and word not in STOP_WORDS:
             if not where:
                 found.add(_concept(word, extra))

@@ -936,6 +936,13 @@ def test_what_is_noted_of_someone_with_no_datum_its_card_takes_still_brings_the_
         # «Del» and «al» say where with their article; «en» and «a» before a determiner too.
         ("anota del turno una salida de 15 €", "salida"),
         ("apunta en esta caja una salida de 15 €", "salida"),
+        ("apunta en el turno otra salida de 20 €", "salida"),
+        # A short name goes on with where it is done, as any name does («Ana QA»): only a determiner or a number opens
+        # the phrase of what is acted on.
+        ("anota en la cita de Ana QA de mañana", "cita"),
+        # English's «a» goes before what is added: no place, before a number, a letter or a name.
+        ("add a 10% discount to table 4", "discount"),
+        ("add a QR code to table 4", "code"),
         # With nothing named in a phrase of its own before another clause or command, where it is done is what the
         # command acts on («anota en la cita de Ana…»: it writes on her appointment).
         ("anota en la cita de Ana que use mascarilla", "cita"),
