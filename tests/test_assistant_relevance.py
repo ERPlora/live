@@ -931,7 +931,7 @@ def test_what_is_noted_of_someone_with_no_datum_its_card_takes_still_brings_the_
         # Facturas»): the thing acted on is named in a phrase of its own, after an article, a determiner or a number.
         ("mete en el turno de Barra una entrada de 20 € de cambio", "entrada"),
         ("añade a la cuenta de la mesa 4 una cerveza", "cerveza"),
-        ("crea en la carpeta Facturas un documento", "documento"),
+        ("añade a la carpeta Facturas un documento", "documento"),
         ("mete en la caja 50 € de cambio", "cambio"),
         # «Del» and «al» say where with their article; «en» and «a» before a determiner too.
         ("anota del turno una salida de 15 €", "salida"),
@@ -943,6 +943,10 @@ def test_what_is_noted_of_someone_with_no_datum_its_card_takes_still_brings_the_
         ("hay que anotarlo en la caja", "caja"),
         # «A» before a name is whom it is done to, no place: what follows is no thing of its own.
         ("apúntale a Ana el teléfono nuevo", "ana"),
+        # Only a verb that puts something somewhere: where another verb acts, said first, is what it acts on.
+        ("borra del historial la cuenta de la mesa 4", "historial"),
+        ("pon en la web el horario de verano", "web"),
+        ("crea en la carpeta Facturas un documento", "carpeta"),
         ("anota una salida de 15 € en el turno", "salida"),
     ],
 )

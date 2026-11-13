@@ -314,6 +314,10 @@ _CHANGES = frozenset({"update", "set"})
 #: in passing («anota una salida de 15 € de la caja»: no setting of the till; ERPlora/live#88).
 _NOTES = frozenset({"create", "add", "update"})
 _WRITTEN_ON = frozenset({"update"})
+#: The action of the words that put something somewhere («anota», «apunta», «añade», «mete»): where they put it, said
+#: before it, is no thing they act on («mete en el turno una entrada»). Where other verbs act, said first, is what they
+#: act on («borra del historial la cuenta», «pon en la web el horario»).
+_PUTS = frozenset({"add"})
 #: The words that say where a thing is noted or whose it is, not what is noted down («apunta en la ficha de Ana su
 #: teléfono nuevo», «anota de la caja una salida»): with its article («del», «al»), or before one or another word that
 #: names nothing yet («de la caja», «en su ficha»). Before a name, what follows is the datum («el número de teléfono»,
@@ -730,22 +734,30 @@ def _objects(
     sentences: list[list[str]], acting: Mapping[str, frozenset[str]], verbal: Collection[str], extra: tuple
 ) -> tuple[set[frozenset[str]], set[frozenset[str]]]:
     """What the command of each sentence acts on: the first thing named from its verb on — the verb's own when it
-    names one («cobra»: a sale), else the first word after it that names something («crea la carpeta»: a folder), or
-    the one named after where it is done when that is said first (``_named_after_where``: «anota en el turno una
-    salida»: the money taken out, not the shift) —; and of those, the ones named by a word after the verb (a record to
-    find)."""
+    names one («cobra»: a sale), else the first word after it that names something («crea la carpeta»: a folder) —;
+    and of those, the ones named by a word after the verb (a record to find). Of a verb that puts something somewhere
+    (``_PUTS``), where it is put, said first, is no thing it acts on: what it puts is named after it
+    (``_named_after_where``: «anota en el turno una salida» notes the money taken out, as «anota una salida en el
+    turno» does; ERPlora/live#94)."""
     found: set[frozenset[str]] = set()
     after: set[frozenset[str]] = set()
     for words in sentences:
         seen = False
+        verb = ""
         for at, word in enumerate(words):
             if word in acting or word in verbal:
                 own = _concept(word, extra) if word in acting and not seen else frozenset()
                 if len(own) > 1:
                     found.add(own)
                     break
-                seen = True
-            elif seen and word in _WHERE and _says_where(words, at) and (thing := _named_after_where(words, at)):
+                seen, verb = True, word
+            elif (
+                seen
+                and not _PUTS.isdisjoint(acting.get(verb, ()))
+                and word in _WHERE
+                and _says_where(words, at)
+                and (thing := _named_after_where(words, at))
+            ):
                 found.add(_concept(words[thing], extra))
                 after.add(_concept(words[thing], extra))
                 break
