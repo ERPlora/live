@@ -1,8 +1,7 @@
-"""Markdown to safe HTML (round 16, spec §6): the store's documentation and the Hub's help.
+"""Markdown to safe HTML: the store's documentation and the Hub's help.
 
-Ported from the old SaaS (``apps/public/modules/services/rendering.py``, origin/develop): the same
-extensions, allowlist and Mermaid blocks. New in round 16: images only from the app's own
-``docs/img/``, rewritten to ``image_base``, and ids on the headings for the anchors.
+Extensions, allowlist and Mermaid blocks; images only from the app's own ``docs/img/``, rewritten
+to ``image_base``; and ids on the headings for the anchors.
 """
 
 import re
@@ -20,7 +19,7 @@ def images(html):
     return _IMG_RE.findall(html)
 
 
-# --- What the old SaaS did --------------------------------------------------------------------------
+# --- Extensions, allowlist and Mermaid blocks -----------------------------------------------------
 
 
 def test_empty_text_is_an_empty_string():
@@ -103,7 +102,7 @@ def test_the_allowlist_of_tags_survives():
         assert tag in html
 
 
-# --- Images: only the app's own docs/img/, rewritten to the base (new in round 16) ---------------------
+# --- Images: only the app's own docs/img/, rewritten to the base ----------------------------------
 
 
 def test_a_relative_docs_img_image_is_rewritten_to_the_base():
@@ -276,7 +275,7 @@ def test_an_image_attribute_cannot_smuggle_a_second_tag():
     assert "ok" in html
 
 
-# --- Ids on the headings, for the anchors (new in round 16) -------------------------------------------
+# --- Ids on the headings, for the anchors ---------------------------------------------------------
 
 
 def test_every_heading_gets_an_id():

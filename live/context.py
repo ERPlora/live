@@ -1,7 +1,7 @@
 """Who runs an operation and where: the scope, the operation context and its builder.
 
-The scope is pluggable: in hub-next phase 1 it is the first label of the Host (``hub``/``a``), in
-phase 2 the hub of ``use_hub``; in saas-next it is the user. Each project provides a
+The scope is pluggable: in the Hub it is the hub named by the first label of the Host (``hub``/``a``),
+whose database ``use_hub`` enters; in the SaaS it is the user. Each project provides a
 ``ContextBuilder`` (``settings.LIVE["context_builder"]``) that builds the context from a request
 and refreshes it (re-reading permissions) before every live re-execution. The context is never
 built from the payload.
@@ -73,7 +73,7 @@ class ContextBuilder(Protocol):
     """Builds the context from a request and refreshes it before every live re-execution.
 
     Optionally, ``enter(ctx)`` returns the context manager a live re-execution runs in (its refresh included), in
-    the executor's own thread: hub-next phase 2 enters the stream's hub there (``use_hub``). Without it, nothing is
+    the executor's own thread: the Hub enters the stream's hub there (``use_hub``). Without it, nothing is
     entered.
     """
 

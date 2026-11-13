@@ -1,4 +1,4 @@
-"""System checks of the app metadata (tag ``live``; round 15, PLAN §20).
+"""System checks of the app metadata (tag ``live``).
 
 A module (``kind = "app"``) carries what the Hub's apps page shows next to its name (``icon``,
 ``category``) and only requires other modules, without cycles. A platform app (``kind =
@@ -6,11 +6,11 @@ A module (``kind = "app"``) carries what the Hub's apps page shows next to its n
 the checks always look at every app of ours, whatever ``app_configs`` ``manage.py check`` passes.
 Registered when ``live`` is ready (``LiveConfig.ready`` imports this module).
 
-Round 16 (PLAN §21): a module also carries what the public store shows (``summary``,
+A module also carries what the public store shows (``summary``,
 ``description``, E007) and the verticals it belongs to (``verticals``, E008). What needs to read
 files (WORKBOOK, translations, baked icons, images) is not a check: ``register_apps`` validates it.
 
-PLAN-HUB round 2026-10-21: only a module declares the Home's hooks (``setup``, ``widgets``, ``bell``;
+Only a module declares the Home's hooks (``setup``, ``widgets``, ``bell``;
 E006), each a list of its dataclass (E009) whose ``operation`` is a query of the module itself
 (E010), whose ``permission`` is one of the module's (E011), whose ``refresh_on`` names events that
 some ``events.py`` declares (E012) and whose ``key`` is a snake_case name unique in its list (E013);
@@ -18,21 +18,21 @@ a widget renders by ``kind`` with its ``operation`` or by ``component`` (E014) a
 (E015), and a step's ``configured_when`` is a list of ``SetupCheck`` with one condition each (E016).
 They need the operations and the events registered, which ``LiveConfig.ready`` does before any check.
 
-PLAN-HUB round 2026-10-23: the device's notices of a module (``notices``) follow the same rules
+The device's notices of a module (``notices``) follow the same rules
 (E006, E009–E013), and their texts are templates on the fields of the rows of their query, which
 says what happened (``id``) and when (``at``) (E018).
 
-FIX-LIVE-SESSION-CLOSED-WAKES-ONLY-SESSION-LIST: ``settings.LIVE["session_events"]``, the events after which every
+``settings.LIVE["session_events"]``, the events after which every
 live stream of the channel re-reads its context, is a list of events that some ``events.py`` declares (E019).
 
-PLAN §30 (round 2026-10-22b): every operation tells the assistant what it is — a tool, ``ai=AI(description=…,
+Every operation tells the assistant what it is — a tool, ``ai=AI(description=…,
 risk=…)``, or not one, ``ai=INTERNAL`` — never by omission, with a risk of ``RISKS``; a ``dict`` with its
 ``description`` is still accepted (E017). Like the metadata checks, it looks at every registered operation.
 
-Docs plan 2026-10-31 (the assistant's knowledge and QA): every tool of the apps a project lists in
+Every tool of the apps a project lists in
 ``LIVE_ASSISTANT_ASKS_REQUIRED`` says what a person would type to ask for it (``AI.asks``) in English and Spanish, at
 least two distinct phrases each, none its own name nor longer than ``MAX_ASK_CHARS`` (E020). An app is listed once all
-of its tools say them: the Hub's hundreds of tools are not migrated at once.
+of its tools say them, so the apps take it on one at a time.
 """
 
 import re
@@ -83,10 +83,10 @@ MODULE_ONLY_FIELDS = (
 #: The hooks of a module (the Home's and the device's notices) and the dataclass of each item.
 HOOKS = {"setup": SetupStep, "widgets": Widget, "bell": BellCounter, "notices": DeviceNotice}
 HOOK_KEY_RE = re.compile(r"^[a-z][a-z0-9_]*$")
-# The columns of shared.app they are written to (round 16, spec §3.1).
+# The columns of shared.app they are written to.
 SUMMARY_MAX_LENGTH = 120
 NAME_MAX_LENGTH = 80
-# A vertical id names a template database, hub_template_<vertical>, so it has the shape of PLAN §15.2
+# A vertical id names a template database, hub_template_<vertical>, so it is a snake_case name
 # (no "__") and fits in Postgres' 63 characters with that prefix; "test" is the tests' template.
 VERTICAL_RE = re.compile(r"^[a-z][a-z0-9]*(_[a-z0-9]+)*$")
 VERTICAL_MAX_LENGTH = 63 - len("hub_template_")
@@ -138,8 +138,7 @@ def check_ai_declared(app_configs: Any = None, **kwargs: Any) -> list[checks.Che
     ``description``, and a risk, when it says one, of ``RISKS``."""
     hint = (
         "Declare ai=AI(description=…, risk='normal'|'high') for an assistant tool (its description tells the model, in "
-        "English, what it does; 'high' asks to type a word before it runs), or ai=INTERNAL for what is not one "
-        "(PLAN §30: every operation is a tool unless it says otherwise)."
+        "English, what it does; 'high' asks to type a word before it runs), or ai=INTERNAL for what is not one."
     )
     return [
         checks.Error(f"Operation {name!r} {problem}.", hint=hint, obj=name, id="live.E017")
@@ -363,7 +362,7 @@ def _vertical_errors(config: Any) -> list[checks.CheckMessage]:
 
 
 def _hook_errors(config: Any, events: frozenset[str]) -> list[checks.CheckMessage]:
-    """E009–E016: the Home's hooks of a module (PLAN-HUB round 2026-10-21)."""
+    """E009–E016: the Home's hooks of a module."""
     errors = []
     for hook, item_class in HOOKS.items():
         items = getattr(config, hook)

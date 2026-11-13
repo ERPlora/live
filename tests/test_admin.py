@@ -2,7 +2,7 @@
 
 The suite does not install ``django.contrib.admin`` (its catalogs and system checks would leak into
 other tests), so each test turns it on with ``override_settings``: its ``ready()`` autodiscovers
-``live.admin`` exactly as hub-next and saas-next do.
+``live.admin`` exactly as the Hub and the SaaS do.
 """
 
 import pytest
@@ -67,8 +67,8 @@ def names_shown_in_the_admin():
 
 
 def test_the_section_and_its_models_have_names_a_catalog_translates():
-    """A name in plain text, or taken from the class, stays in English in every language (the index of erplora.com's
-    admin showed «Live › Outbox events» in Spanish)."""
+    """A name in plain text, or taken from the class, stays in English in every language: a Spanish
+    reader would see «Live › Outbox events» in the admin's index."""
     from django.utils.functional import Promise
 
     assert [where for where, name in names_shown_in_the_admin().items() if not isinstance(name, Promise)] == []

@@ -1,4 +1,4 @@
-"""A cut of the database: a read waits and tries again, a write that may have been applied never repeats (saas#284).
+"""A cut of the database: a read waits and tries again, a write that may have been applied never repeats.
 
 Against the real Postgres, without mocking what can be provoked: ``pg_terminate_backend`` is the server cutting a
 connection, ``default_transaction_read_only`` the writer refusing writes, and ``DatabaseDoor`` (a TCP door in front of
@@ -482,7 +482,7 @@ def test_the_limit_is_shared_by_every_try_of_the_request(client):
 
 
 def test_without_the_setting_nothing_changes(client, settings, caplog):
-    """A project that has not asked for it (the Hub until hub#831) keeps today's answer, and the driver's error."""
+    """A project that has not asked for it keeps the plain 500 and the driver's error in its log: nothing waits."""
     settings.LIVE = {key: value for key, value in settings.LIVE.items() if key != "database_cut"}
     script["read"] = cut_once
 

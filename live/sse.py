@@ -1,4 +1,4 @@
-"""Server-Sent Events frames and the subscription list of ``/api/live`` (plan §4.1).
+"""Server-Sent Events frames and the subscription list of ``/api/live``.
 
 One stream per browser tab. The SDK declares its subscriptions when it opens the stream, as
 ``?s=<base64url JSON [{id, op, params}]>``; if they change it closes and reopens the stream. The

@@ -1,4 +1,4 @@
-"""``GET /api/live?s=…``: one Server-Sent Events stream per browser tab (plan §4.1).
+"""``GET /api/live?s=…``: one Server-Sent Events stream per browser tab.
 
 The subscriptions are declared when the stream opens (``s`` = base64url JSON
 ``[{id, op, params}]``); if they change, the SDK closes the stream and opens another. Frames:
@@ -54,7 +54,7 @@ async def live_stream(request) -> StreamingHttpResponse | JsonResponse:
         exc.reached_client()
         return marked(JsonResponse(exc.envelope(), status=exc.status), exc)
     except Http404:
-        # The builder rejects the Host (hub-next: not a hub's slug), as the ninja routes answer it.
+        # The builder rejects the Host (in the Hub: not a hub's slug), as the ninja routes answer it.
         return _envelope(404, "not_found", "Not found.")
     if ctx is None or ctx.actor is None:
         return _envelope(401, "unauthorized", "Sign in to open a live stream.")

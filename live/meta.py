@@ -2,7 +2,7 @@
 
 Every app of ours, platform and modules alike, extends ``LiveAppConfig`` and declares its
 permissions (``<app>.<action>``) and the permissions each role gets (``"demo.*"`` grants every
-``demo.`` permission). ``kind`` tells them apart (round 15, PLAN §20):
+``demo.`` permission). ``kind`` tells them apart:
 
 - ``"platform"`` (the default): always on, never turned on or off by a hub (``base``, ``control``…);
 - ``"app"``: a module of ``apps/`` that a hub turns on and off. Only a module carries the metadata
@@ -10,21 +10,20 @@ permissions (``<app>.<action>``) and the permissions each role gets (``"demo.*"`
   ``category``, ``premium``), its ``requires`` (an acyclic graph of module labels) and its menu
   entries. ``live.checks`` enforces it.
 
-Round 16 (PLAN §21) adds the public store's metadata of a module (``summary``, ``description``,
-``verticals``, ``listed``), which ``register_apps`` writes to ``shared.app``; the Hub's apps page
-still shows icon and name only.
+A module also carries the public store's metadata (``summary``, ``description``, ``verticals``,
+``listed``), which ``register_apps`` writes to ``shared.app``; the Hub's apps page still shows icon
+and name only.
 
-The PLAN-HUB round 2026-10-21 adds the Home's hooks of a module, the old manifest's ``setup``,
-``widgets`` and ``bell`` without a manifest: its steps of «Finish setting up your business»
+A module declares its hooks of the Home: its steps of «Finish setting up your business»
 (``SetupStep``), its panels of the dashboard (``Widget``) and its counters of the bell
 (``BellCounter``). Each names a query of the module's own ``queries.py``; the Hub's ``base`` runs them
 as the person of the request and aggregates them (``base.setup.status``, ``base.widget.list``,
 ``base.bell.counters``).
 
-The PLAN-HUB round 2026-10-23 adds the device's notices of a module (``DeviceNotice``): what it tells
-the device with a system notice, the old shell's notices of a booking or a kitchen order without the
-shell knowing the module. Base runs its query as the person of the request (``base.notice.list``),
-fills in its texts, and the shell tells each new row once on the device.
+A module declares its device notices too (``DeviceNotice``): what it tells the device with a
+system notice, such as a new booking or a kitchen order, without the shell knowing the module.
+Base runs its query as the person of the request (``base.notice.list``), fills in its texts, and
+the shell tells each new row once on the device.
 """
 
 from collections.abc import Iterable, Mapping, Sequence
@@ -60,7 +59,7 @@ class Nav:
 
 
 WidgetSize = Literal["sm", "md", "lg"]
-#: How a panel renders without a component of its own: the old board's kinds.
+#: How a panel renders without a component of its own.
 WidgetKind = Literal["kpi", "stat", "sparkline", "bar-list", "timeline", "chart"]
 WIDGET_SIZES: tuple[str, ...] = get_args(WidgetSize)
 WIDGET_KINDS: tuple[str, ...] = get_args(WidgetKind)
@@ -178,12 +177,12 @@ class DeviceNotice:
 
 class LiveAppConfig(AppConfig):
     kind: ClassVar[Literal["platform", "app"]] = "platform"
-    # Module metadata, round 15: the Hub's apps page (icon and name) and the right from the SaaS.
+    # Module metadata: the Hub's apps page (icon and name) and the right from the SaaS.
     # icon is an Iconify name with its set prefix; premium = turning it on needs a right.
     icon: ClassVar[str] = ""
     category: ClassVar[Category | None] = None
     premium: ClassVar[bool] = False
-    # Module metadata, round 16: the public store, registered in shared.app by register_apps.
+    # Module metadata: the public store, registered in shared.app by register_apps.
     summary: ClassVar[str] = ""  # one line, at most 120 characters, gettext_lazy
     description: ClassVar[str] = ""  # one paragraph, gettext_lazy
     verticals: ClassVar[list[str]] = []  # vertical ids; also derives HUB_TEMPLATE_APPS
@@ -192,11 +191,11 @@ class LiveAppConfig(AppConfig):
     navigation: ClassVar[list[Nav]] = []
     permissions: ClassVar[list[str]] = []
     role_permissions: ClassVar[dict[str, list[str]]] = {}
-    # Module metadata, PLAN-HUB round 2026-10-21: the Home's hooks, which base aggregates.
+    # Module metadata: the Home's hooks, which base aggregates.
     setup: ClassVar[list[SetupStep]] = []
     widgets: ClassVar[list[Widget]] = []
     bell: ClassVar[list[BellCounter]] = []
-    # Module metadata, PLAN-HUB round 2026-10-23: the device's notices, which base fills in.
+    # Module metadata: the device's notices, which base fills in.
     notices: ClassVar[list[DeviceNotice]] = []
     # The closed lists the app keeps where no field of its models holds them (inside a JSON: a website's palette), by
     # the datum's name, each value with the label its screens show (lazy): the assistant's card says a value by it as

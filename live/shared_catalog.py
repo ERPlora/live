@@ -1,7 +1,7 @@
-"""The contract of the `shared` schema of the `saas` database (round 16).
+"""The contract of the `shared` schema of the `saas` database.
 
-The SaaS owns the tables and their migrations (saas-next/apps); the Hub writes them through a
-mirror with managed = False (hub-next/shared). Both name the schema in db_table, already quoted.
+The SaaS owns the tables and their migrations (its `apps` app); the Hub writes them through a
+mirror with managed = False (its `shared` app). Both name the schema in db_table, already quoted.
 """
 
 from django.db import models
@@ -23,7 +23,7 @@ class AbstractApp(models.Model):
     description_es = models.TextField()
     icon = models.CharField(max_length=100)
     icon_svg = models.TextField()
-    # No choices: the SaaS tolerates an unknown one (§5.3).
+    # No choices: the SaaS tolerates a category it does not know.
     category = models.CharField(max_length=20)
     premium = models.BooleanField()
     requires = models.JSONField(default=list)
