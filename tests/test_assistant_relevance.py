@@ -920,6 +920,72 @@ def test_what_is_noted_of_someone_with_no_datum_its_card_takes_still_brings_the_
     assert all(names.index("customer.customer.update") < names.index(name) for name in noise), names[:6]
 
 
+@pytest.mark.parametrize(
+    ("said", "thing"),
+    [
+        ("anota en el turno una salida de 50 € de cambio", "salida"),
+        ("anota en el turno una entrada de 50 € de cambio", "entrada"),
+        ("apunta en la caja una salida de 15 € para comprar hielo", "salida"),
+        ("hay que anotar en el turno una salida de 20 € para el proveedor", "salida"),
+        # Where it is done goes on with what it is of («de Barra», «de la mesa 4») and with its name («la carpeta
+        # Facturas»): the thing acted on is named in a phrase of its own, after an article, a determiner or a number.
+        ("mete en el turno de Barra una entrada de 20 € de cambio", "entrada"),
+        ("añade a la cuenta de la mesa 4 una cerveza", "cerveza"),
+        ("crea en la carpeta Facturas un documento", "documento"),
+        ("mete en la caja 50 € de cambio", "cambio"),
+        # «Del» and «al» say where with their article; «en» and «a» before a determiner too.
+        ("anota del turno una salida de 15 €", "salida"),
+        ("apunta en esta caja una salida de 15 €", "salida"),
+        # With nothing named in a phrase of its own before another clause or command, where it is done is what the
+        # command acts on («anota en la cita de Ana…»: it writes on her appointment).
+        ("anota en la cita de Ana que use mascarilla", "cita"),
+        ("anota en la caja y luego una salida de 15 €", "caja"),
+        ("hay que anotarlo en la caja", "caja"),
+        # «A» before a name is whom it is done to, no place: what follows is no thing of its own.
+        ("apúntale a Ana el teléfono nuevo", "ana"),
+        ("anota una salida de 15 € en el turno", "salida"),
+    ],
+)
+def test_what_a_command_acts_on_is_named_after_where_it_is_done(said, thing):
+    """Where a command is done, said before what it does it to («anota en el turno una salida de 50 €»), is no thing it
+    acts on: the shift is where the money taken out is noted, as in «anota una salida de 50 € en el turno»
+    (ERPlora/live#94: read as the shift, the writes and reads of the staff's shifts came before noting the movement)."""
+    assert assistant.asked([said]).objects == {assistant._concept(thing)}
+
+
+#: The tools of the shift a sentence says something is noted in, its reads and its delete too, beside what is noted
+#: down: as the Hub's staff shifts, which share the word «turno» with the till's session.
+NOTED_IN_A_SHIFT = [
+    *NOTED_IN_PASSING,
+    tool("staff.schedule.detail", "Show a shift of the schedule: its member, its hours.", "query"),
+    tool("staff.schedule.list", "List the shifts of the schedule, by day.", "query"),
+    tool("staff.schedule.delete", "Delete a shift of the schedule."),
+]
+
+
+@pytest.mark.parametrize(
+    "asked",
+    [
+        "anota en el turno una salida de 50 € de cambio",
+        "anota en el turno una entrada de 50 € de cambio",
+        "apunta en el turno una salida de 20 € para el proveedor",
+        "mete en el turno de Barra una entrada de 20 € de cambio",
+        "anota del turno una salida de 15 € de cambio",
+        # Said after what is noted, as it always came.
+        "anota una salida de 50 € de cambio en el turno",
+        "mete una entrada de 20 € de cambio en el turno de Barra",
+    ],
+)
+def test_what_is_noted_comes_before_what_is_read_or_deleted_of_where_it_is_noted(asked):
+    """«Anota en el turno una salida de 50 €» notes a movement of the till down, wherever the shift is said: the reads
+    and the delete of the staff's shifts, which do none of what is asked, never come before it (ERPlora/live#94: the
+    movement came 95th in the Hub with «en el turno» first, against 24th after)."""
+    names = ranked(NOTED_IN_A_SHIFT, asked, app_words=till_apps)
+    assert "cash_register.movement.add" in names, names[:7]
+    before = names[: names.index("cash_register.movement.add")]
+    assert not {"staff.schedule.detail", "staff.schedule.list", "staff.schedule.delete"} & set(before), names[:7]
+
+
 #: What «desactiva» and «activa» ask for: switching a thing off or on, as an app's switch does, or deactivating and
 #: activating it, as a member, a price list or a rule are; the thing named says which.
 SWITCHING_OFF = {"disable", "deactivate"}
