@@ -2422,6 +2422,62 @@ def test_a_verb_said_after_ni_that_goes_on_from_sin_is_not_asked_whatever_verb_c
     assert assistant.asked([said]).verbs == verbs
 
 
+@pytest.mark.parametrize(
+    ("said", "verbs"),
+    [
+        # The readings of ERPlora/live#93: a command before the «sin», then a complaint or an aside.
+        ("quiero cerrar la caja sin contar ni cambiar el fondo y no me deja", {"close"}),
+        ("cierra la caja sin contar ni cambiar el fondo como siempre se puede", {"close"}),
+        ("da de baja a Ana sin borrar sus turnos ni cambiar su rol y me deja de salir en el cuadrante",
+         {"terminate", "withdraw"}),
+        ("anula el pedido sin cobrar ni imprimir el ticket me deja el camarero", {"cancel", "void"}),
+        # Its pronouns too.
+        ("anúlalo sin cobrar ni imprimir el ticket me deja el camarero", {"cancel", "void"}),
+        # The «sin» the «ni» goes on from is the last one: a dictated «sin prisa» before the command is another.
+        ("sin prisa cierra la caja sin contar ni cambiar el fondo y no me deja", {"close"}),
+    ],
+)
+def test_a_verb_said_after_ni_is_not_asked_when_an_action_is_asked_before_the_sin(said, verbs):
+    """«Quiero cerrar la caja sin contar ni cambiar el fondo y no me deja» asks to close the till without changing the
+    float: with an action asked before the «sin», the «ni» goes on with what is not to be done, and the «me deja» after
+    it is a complaint about the whole, not «not even» (ERPlora/live#93)."""
+    assert assistant.asked([said]).verbs == verbs
+
+
+def test_what_someone_can_do_after_cuando_is_that_clauses():
+    """«…cuando puedes» opens another clause, as «si» or «porque» do: what someone can do is that clause's, no «not
+    even», though «marca» is no verb asked before the «sin» (ERPlora/live#93)."""
+    said = "marca como cobrada la factura sin tocar caja ni cambiar importes cuando puedes"
+    assert assistant.asked([said]).verbs == set()
+
+
+@pytest.mark.parametrize(
+    ("said", "verbs"),
+    [
+        # The complaints of ERPlora/live#86 with the endings of ERPlora/live#93: nothing is asked before the «sin».
+        ("tengo una mesa sin cobrar ni cerrar la caja y no me deja", {"close"}),
+        ("la mesa 4 sigue sin cobrar ni imprimir el ticket me deja el camarero", {"print"}),
+        ("Ana sigue sin turnos ni cambiar su rol me deja", {"change", "set", "update"}),
+        # A verb said as what is not to be done asks for nothing before the «sin» either.
+        ("la mesa se fue sin pagar y sigue sin cobrar, ni cerrar la caja me deja", {"close"}),
+        # A verb's phrase asks only said as its own words: «queda de baja» says no «da de baja».
+        ("Ana se queda de baja sin turnos ni cambiar su rol me deja", {"change", "set", "update"}),
+        # Only what is said before the «sin» is asked before it.
+        ("tengo una mesa sin cobrar que muestra la cuenta, ni cerrar la caja me deja", {"list", "close"}),
+        # «Cuando» after what lets: still said of what cannot be done.
+        ("tengo una mesa sin cobrar ni cerrar la caja me deja cuando hay cola", {"close"}),
+        # «Como» opens no other clause: «como antes» says how.
+        ("tengo mesas sin cobrar ni cerrar la caja como antes puedo", {"close"}),
+        # A «sin» said after the «ni» is not the one it goes on from.
+        ("tengo una mesa sin cobrar ni cerrar la caja me deja sin el ticket", {"close"}),
+    ],
+)
+def test_a_verb_said_after_ni_is_still_not_even_when_nothing_is_asked_before_the_sin(said, verbs):
+    """With no action asked before the «sin», «me deja» or «puedo» after the infinitive still says it cannot even be
+    done (ERPlora/live#86)."""
+    assert assistant.asked([said]).verbs == verbs
+
+
 class SortedIn(Schema):
     name: str | None = None
     sort_order: int | None = None

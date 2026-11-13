@@ -284,8 +284,9 @@ _CAN = frozenset({"puedo", "puedes", "puede", "podemos", "pueden", "pude", "pudo
 _LETS = frozenset({"deja", "dejan", "dejo", "dejaba"})
 _TO_WHOM = frozenset({"me", "te", "le", "nos", "les"})
 #: The words that open another clause: what someone can do said after one is that clause's, no «not even» («…ni
-#: cambiar importes si puede», «…ni cambiar el fondo que me deja el turno», «…porque no puedo», «…pero no me deja»).
-_OTHER_CLAUSE = frozenset({"si", "que", "porque", "pero"})
+#: cambiar importes si puede», «…ni cambiar el fondo que me deja el turno», «…porque no puedo», «…pero no me deja»,
+#: «…cuando puedes»). «Como» is left out: «ni cerrar la caja como antes puedo» still cannot even close it.
+_OTHER_CLAUSE = frozenset({"si", "que", "porque", "pero", "cuando"})
 #: The words after which a verb says what someone will do, not what is asked («I'll approve it», «we will open»).
 _FUTURE = frozenset({"ll", "will"})
 #: The words after which a thing is named for what another is («para las próximas ventas», «for the new sales»): to the
@@ -839,14 +840,28 @@ def _not_even(words: list[str], at: int) -> bool:
     """Whether the infinitive ``words[at]`` after a ``_NOR`` is what someone cannot even do: a form of ``_CAN``, or of
     ``_LETS`` after ``_TO_WHOM``, said after it with no infinitive of its own after it («ni cerrar la caja me deja»,
     «ni cerrar puedo la caja»; «…ni cambiar importes y así puedo cuadrar la caja» is what «cuadrar» can do) and with no
-    ``_OTHER_CLAUSE`` before it («…ni cambiar importes si puede»)."""
+    ``_OTHER_CLAUSE`` before it («…ni cambiar importes si puede»), in a complaint: with an action asked before the
+    ``_WITHOUT`` (``_asked_before_without``), the «ni» goes on with what is not to be done («cierra la caja sin contar
+    ni cambiar el fondo y no me deja»)."""
     for later in range(at + 1, len(words)):
         word = words[later]
         if word in _OTHER_CLAUSE:
             return False
         if word in _CAN or (word in _LETS and words[later - 1] in _TO_WHOM):
-            return later + 1 == len(words) or not _infinitive(words[later + 1])
+            return (later + 1 == len(words) or not _infinitive(words[later + 1])) and not _asked_before_without(
+                words, at
+            )
     return False
+
+
+def _asked_before_without(words: list[str], at: int) -> bool:
+    """Whether an action is asked before the last ``_WITHOUT`` before ``words[at]``: a word of ``VERBS`` or one of its
+    phrases («da de baja»), but a verb said as what is not to be done (``_unasked``: «se fue sin pagar y sigue sin
+    cobrar»)."""
+    without = max(before for before in range(at) if words[before] in _WITHOUT)
+    heard = [word for before, word in enumerate(words[:without]) if not _unasked(words, before)]
+    said = f" {' '.join(heard)} "
+    return any(_verbs_of(word) for word in heard) or any(f" {phrase} " in said for phrase in _PHRASES)
 
 
 def _goes_on(words: list[str]) -> bool:
