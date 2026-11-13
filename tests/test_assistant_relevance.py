@@ -1581,6 +1581,103 @@ def test_the_switch_of_another_action_is_no_switch_of_what_is_turned_off():
     assert all(names.index(name) < names.index("flow.recipe.enable") for name in off), names[:6]
 
 
+class ThemeIn(Schema):
+    language: str
+    theme_mode: str
+    palette: str
+    ui_scale: int
+
+
+class DeviceModeIn(Schema):
+    mode: str
+
+
+#: The person's own look and the device in hand made shared or personal, as the Hub's say them, beside the switches of
+#: the Hub's things.
+THEME_AND_SWITCHES = [
+    *SWITCHED_BY_THEIR_ASKS,
+    tool("base.profile.preferences_set", "Sets the person's own language (Spanish, English or the business's) and "
+         "appearance.", input=ThemeIn,
+         asks={"es": ("ponme el idioma en inglés", "quiero el modo oscuro", "cámbiame la apariencia a clara"),
+               "en": ("switch me to English", "put the app in dark mode", "change my language to Spanish")}),
+    tool("base.device.mode_set", "Makes the device the person is using shared (a till several people use: PIN, a "
+         "shift) or personal (one person's: no PIN, 30 days).", input=DeviceModeIn,
+         asks={"es": ("pon esta tablet como caja compartida",), "en": ("make this tablet a shared till",)}),
+]
+SWITCHES = {"enable", "disable", "activate", "deactivate"}
+
+
+def themed(asked: str, language: str = "es") -> list[str]:
+    return ranked(THEME_AND_SWITCHES, asked, language, app_words=switched_apps, synonyms=SWITCHED_WORDS)
+
+
+@pytest.mark.parametrize(
+    "asked",
+    [
+        "desactiva el modo oscuro",
+        "activa el modo oscuro",
+        "apaga el modo oscuro",
+        "enciende el modo oscuro",
+        "quiero desactivar el modo oscuro",
+        "desactiva el modo claro",
+        "enciende el modo claro",
+        "activa el tema oscuro",
+        "apaga el tema oscuro",
+        "activa el tema claro",
+        "deshabilita el tema claro",
+    ],
+)
+def test_the_dark_or_light_mode_switched_is_the_persons_theme(asked):
+    """«Desactiva el modo oscuro» changes the person's theme: «modo oscuro» and «tema oscuro» (and their light ones) are
+    how Spanish names the theme a person's preferences take, as «dark mode» and «theme» name it in English, so that
+    change comes first (ERPlora/live#91: they named nothing it takes, and every switch of the Hub came before it)."""
+    names = themed(asked)
+    assert names[0] == "base.profile.preferences_set", names[:4]
+
+
+@pytest.mark.parametrize(
+    ("asked", "language"),
+    [
+        ("desactiva el modo oscuro", "es"),
+        ("enciende el modo claro", "es"),
+        ("apaga el tema oscuro", "es"),
+        ("turn off the dark mode", "en"),
+        ("switch on the dark mode", "en"),
+        ("enable the dark theme", "en"),
+    ],
+)
+def test_the_theme_switched_comes_before_every_switch_of_another_thing(asked, language):
+    """What turns the theme on or off is the change of the person's preferences, in either language: no switch of a
+    member, a rule, a series or an app comes before it (ERPlora/live#91)."""
+    names = themed(asked, language)
+    off_or_on = [name for name in names if name.rsplit(".", 1)[1] in SWITCHES]
+    assert len(off_or_on) >= 4  # positive control
+    assert all(names.index("base.profile.preferences_set") < names.index(name) for name in off_or_on), names[:6]
+
+
+def theme_named(said: str) -> bool:
+    return any("them" in concept for concept in assistant.asked([said]).concepts)
+
+
+@pytest.mark.parametrize(
+    ("said", "theme"),
+    [
+        ("activa el modo oscuro", True),
+        ("pon el modo claro", True),
+        ("activa el tema oscuro", True),
+        ("quiero el tema claro", True),
+        ("change the theme", True),
+        # «Tema» alone is also the matter, and «modo» a way: only the phrases name the theme.
+        ("desactiva el tema de los recordatorios", False),
+        ("cierra la caja, de modo que nadie cobre", False),
+        ("pon esta tablet en modo compartido", False),
+    ],
+)
+def test_only_the_dark_or_light_mode_or_theme_names_the_theme(said, theme):
+    """``asked``: «modo oscuro», «modo claro», «tema oscuro» and «tema claro» name the theme as «theme» does."""
+    assert theme_named(said) is theme
+
+
 def concepts_of(*said: str) -> frozenset[frozenset[str]]:
     return frozenset(assistant._concept(assistant._plain(word)) for word in said)
 

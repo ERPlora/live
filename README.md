@@ -329,7 +329,10 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   negocio va en `SYNONYMS` con su inglés aunque un menú la diga: «regla» es `rule` (live#73), y sin eso solo nombraba la
   app cuyo menú dice «Reglas», que al lado de otra cosa nombrada («la regla de los productos») ya no era la cosa; igual
   «método» es `method` (live#79): solo nombraba la app cuyo menú dice «Métodos», y al pedir «vuelve a activar el método
-  de pago de Bizum» encender Pagos iba antes que reactivar el método.
+  de pago de Bizum» encender Pagos iba antes que reactivar el método. «Modo oscuro», «modo claro», «tema oscuro» y
+  «tema claro» son el tema (`theme`) que toman las preferencias de la persona, como «dark mode» y «theme» en inglés:
+  «desactiva el modo oscuro» cambia las preferencias antes que cualquier interruptor (live#91); «tema» y «modo» a
+  secas no, que también son el asunto y una manera («de modo que»).
 
 **QA del asistente, derivada de las operaciones** (`live.assistant_qa`; plan 2026-10-31 del conocimiento y la QA del
 asistente), en dos capas:
