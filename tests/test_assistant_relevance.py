@@ -952,6 +952,7 @@ def test_what_is_noted_of_someone_with_no_datum_its_card_takes_still_brings_the_
         # English's «a» goes before what is added: no place, before a number, a letter or a name.
         ("add a 10% discount to table 4", "discount"),
         ("add a QR code to table 4", "code"),
+        ("add a 10% discount to the check of table 4", "discount"),
         # With nothing named in a phrase of its own before another clause or command, where it is done is what the
         # command acts on («anota en la cita de Ana…»: it writes on her appointment).
         ("anota en la cita de Ana que use mascarilla", "cita"),
