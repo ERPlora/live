@@ -2468,6 +2468,8 @@ def test_what_someone_can_do_after_cuando_is_that_clauses():
         ("tengo una mesa sin cobrar ni cerrar la caja me deja cuando hay cola", {"close"}),
         # «Como» opens no other clause: «como antes» says how.
         ("tengo mesas sin cobrar ni cerrar la caja como antes puedo", {"close"}),
+        # A «sin» said after the «ni» is not the one it goes on from.
+        ("tengo una mesa sin cobrar ni cerrar la caja me deja sin el ticket", {"close"}),
     ],
 )
 def test_a_verb_said_after_ni_is_still_not_even_when_nothing_is_asked_before_the_sin(said, verbs):
