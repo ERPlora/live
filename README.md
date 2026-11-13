@@ -291,7 +291,7 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   live#74); sin «sin» delante, o con un «no» entre el «sin» y el «ni», «ni» es «ni siquiera» y el verbo se pide
   («no sé ni cambiar el precio», «tengo una mesa sin cobrar y no puedo ni cerrar la caja»). También es «ni siquiera»
   sin ese «no» cuando tras su infinitivo va «poder» o «conseguir» conjugados, o «dejar» tras a quién deja («me deja»,
-  «nos dejó»; «lo dejo» no), sin un infinitivo propio detrás y antes de un «si», «que», «porque», «pero», «cuando» o «como» («tengo una
+  «nos dejó»; «lo dejo» no), sin un infinitivo propio detrás y antes de un «si», «que», «porque», «pero» o «cuando» («tengo una
   mesa sin cobrar, ni cerrar la caja me deja», «ni cancelar la reserva pudo»; live#86); «…ni cambiar importes si
   puede», «…cuando puedes» y «…y así puedo cuadrar la caja» siguen sin pedir «cambiar». Eso solo en una queja: si
   antes del «sin» ya se pidió una acción (un verbo o una frase de verbo que no sea lo que no se hace), el «ni» sigue

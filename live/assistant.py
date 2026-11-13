@@ -285,8 +285,8 @@ _LETS = frozenset({"deja", "dejan", "dejo", "dejaba"})
 _TO_WHOM = frozenset({"me", "te", "le", "nos", "les"})
 #: The words that open another clause: what someone can do said after one is that clause's, no «not even» («…ni
 #: cambiar importes si puede», «…ni cambiar el fondo que me deja el turno», «…porque no puedo», «…pero no me deja»,
-#: «…cuando puedes», «…como siempre se puede»).
-_OTHER_CLAUSE = frozenset({"si", "que", "porque", "pero", "cuando", "como"})
+#: «…cuando puedes»). «Como» is left out: «ni cerrar la caja como antes puedo» still cannot even close it.
+_OTHER_CLAUSE = frozenset({"si", "que", "porque", "pero", "cuando"})
 #: The words after which a verb says what someone will do, not what is asked («I'll approve it», «we will open»).
 _FUTURE = frozenset({"ll", "will"})
 #: The words after which a thing is named for what another is («para las próximas ventas», «for the new sales»): to the

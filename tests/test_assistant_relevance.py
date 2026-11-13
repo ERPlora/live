@@ -2444,16 +2444,10 @@ def test_a_verb_said_after_ni_is_not_asked_when_an_action_is_asked_before_the_si
     assert assistant.asked([said]).verbs == verbs
 
 
-@pytest.mark.parametrize(
-    "said",
-    [
-        "marca como cobrada la factura sin tocar caja ni cambiar importes cuando puedes",
-        "márcala cobrada sin tocar caja ni cambiar importes como siempre se puede",
-    ],
-)
-def test_what_someone_can_do_after_cuando_or_como_is_that_clauses(said):
-    """«…cuando puedes», «…como siempre se puede» open another clause, as «si» or «porque» do: what someone can do is
-    that clause's, no «not even» (ERPlora/live#93)."""
+def test_what_someone_can_do_after_cuando_is_that_clauses():
+    """«…cuando puedes» opens another clause, as «si» or «porque» do: what someone can do is that clause's, no «not
+    even», though «marca» is no verb asked before the «sin» (ERPlora/live#93)."""
+    said = "marca como cobrada la factura sin tocar caja ni cambiar importes cuando puedes"
     assert assistant.asked([said]).verbs == set()
 
 
@@ -2472,6 +2466,8 @@ def test_what_someone_can_do_after_cuando_or_como_is_that_clauses(said):
         ("tengo una mesa sin cobrar que muestra la cuenta, ni cerrar la caja me deja", {"list", "close"}),
         # «Cuando» after what lets: still said of what cannot be done.
         ("tengo una mesa sin cobrar ni cerrar la caja me deja cuando hay cola", {"close"}),
+        # «Como» opens no other clause: «como antes» says how.
+        ("tengo mesas sin cobrar ni cerrar la caja como antes puedo", {"close"}),
     ],
 )
 def test_a_verb_said_after_ni_is_still_not_even_when_nothing_is_asked_before_the_sin(said, verbs):
