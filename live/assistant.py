@@ -314,6 +314,14 @@ _CHANGES = frozenset({"update", "set"})
 #: in passing («anota una salida de 15 € de la caja»: no setting of the till; ERPlora/live#88).
 _NOTES = frozenset({"create", "add", "update"})
 _WRITTEN_ON = frozenset({"update"})
+#: The action of the words that put something somewhere («anota», «apunta», «añade», «mete»): where they put it, said
+#: before it, is no thing they act on («mete en el turno una entrada»). Where other verbs act, said first, is what they
+#: act on («borra del historial la cuenta», «pon en la web el horario»).
+_PUTS = frozenset({"add"})
+#: The words that open a phrase of its own, as an article, a possessive or «otro» do («en la caja», «su teléfono», «un
+#: documento», «otra salida»), but those of ``STOP_WORDS`` («una», «esta», «sus»): what is put after where it is put
+#: is named in one.
+_DETERMINERS = frozenset({"el", "la", "su", "mi", "tu", "un", "otro", "otra", "otros", "otras"})
 #: The words that say where a thing is noted or whose it is, not what is noted down («apunta en la ficha de Ana su
 #: teléfono nuevo», «anota de la caja una salida»): with its article («del», «al»), or before one or another word that
 #: names nothing yet («de la caja», «en su ficha»). Before a name, what follows is the datum («el número de teléfono»,
@@ -731,23 +739,74 @@ def _objects(
 ) -> tuple[set[frozenset[str]], set[frozenset[str]]]:
     """What the command of each sentence acts on: the first thing named from its verb on — the verb's own when it
     names one («cobra»: a sale), else the first word after it that names something («crea la carpeta»: a folder) —;
-    and of those, the ones named by a word after the verb (a record to find)."""
+    and of those, the ones named by a word after the verb (a record to find). Of a verb that puts something somewhere
+    (``_PUTS``), where it is put, said first, is no thing it acts on: what it puts is named after it
+    (``_named_after_where``: «anota en el turno una salida» notes the money taken out, as «anota una salida en el
+    turno» does; ERPlora/live#94)."""
     found: set[frozenset[str]] = set()
     after: set[frozenset[str]] = set()
     for words in sentences:
         seen = False
-        for word in words:
+        verb = ""
+        for at, word in enumerate(words):
             if word in acting or word in verbal:
                 own = _concept(word, extra) if word in acting and not seen else frozenset()
                 if len(own) > 1:
                     found.add(own)
                     break
-                seen = True
+                seen, verb = True, word
+            elif (
+                seen
+                and not _PUTS.isdisjoint(acting.get(verb, ()))
+                and _puts_where(words, at)
+                and (thing := _named_after_where(words, at)) is not None
+            ):
+                found.add(_concept(words[thing], extra))
+                after.add(_concept(words[thing], extra))
+                break
             elif seen and len(word) >= 3 and word not in STOP_WORDS:
                 found.add(_concept(word, extra))
                 after.add(_concept(word, extra))
                 break
     return found, after
+
+
+def _determiner(word: str) -> bool:
+    """Whether ``word`` opens a phrase of its own: a determiner (``_DETERMINERS``) or another word that names nothing
+    by itself (``STOP_WORDS``: «esta», «unos», «sus»)."""
+    return word in _DETERMINERS or word in STOP_WORDS
+
+
+def _puts_where(words: list[str], at: int) -> bool:
+    """Whether ``words[at]`` says where something is put, before what is put: a word of ``_WHERE`` with its article
+    (``_WITH_ITS_ARTICLE``: «del turno», «al carrito») or before a determiner («en el turno», «a la cuenta», «en esta
+    caja»). Before a name it is whom it is done to («apúntale a Ana…»), and English's «a» goes before a number, a letter
+    or a word («add a 10% discount», «add a QR code»)."""
+    after = words[at + 1] if at + 1 < len(words) else ""
+    return words[at] in _WHERE and (words[at] in _WITH_ITS_ARTICLE or _determiner(after))
+
+
+def _named_after_where(words: list[str], at: int) -> int | None:
+    """Where the thing is named that a command acts on when ``words[at]`` says first where it is put
+    (``_puts_where``): the first word that names something in a phrase of its own — after a determiner or a number no
+    word of ``_WHERE`` introduces —, before another clause or command (``_OTHER_CLAUSE``, ``_THEN``). Where it is put
+    goes on with what it is of and with its name: «anota en el turno de Barra una entrada» names the money brought in,
+    «añade a la carpeta Facturas un documento» a document; ``None`` when nothing is named so («anota en la cita de Ana
+    que…», «… de Ana QA de mañana»)."""
+    introduced = opened = False
+    for later in range(at, len(words)):
+        word = words[later]
+        if word in _OTHER_CLAUSE or word in _THEN:
+            return None
+        if word in _WHERE:
+            introduced = True
+        elif _determiner(word) or word.isdigit():
+            opened = opened or not introduced
+        elif len(word) >= 3:
+            if opened:
+                return later
+            introduced = False
+    return None
 
 
 def _starts_command(words: list[str], at: int) -> bool:
