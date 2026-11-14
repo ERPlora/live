@@ -5,6 +5,7 @@ a hundred. The list only shrinks: against origin/main it never gains a path nor 
 fits again leaves it, and a file that shrinks below its ceiling's hundred lowers it.
 """
 
+import re
 import subprocess
 from pathlib import Path, PurePosixPath
 
@@ -17,6 +18,7 @@ PRODUCTION_CAP = 1000
 TEST_CAP = 1500
 EXTENSIONS = (".py", ".sh")
 GENERATED_DIRS = frozenset({"migrations"})
+ISSUE_RE = re.compile(r"#[0-9]+")
 
 
 def git(*args: str) -> str:
@@ -27,7 +29,8 @@ def git(*args: str) -> str:
 
 def is_test(path: str) -> bool:
     parts = PurePosixPath(path).parts
-    return parts[0] == "tests" or parts[-1].startswith("test_") or parts[-1] == "conftest.py"
+    name = parts[-1]
+    return parts[0] == "tests" or (name.startswith("test_") and name.endswith(".py")) or name == "conftest.py"
 
 
 def cap(path: str) -> int:
@@ -47,7 +50,7 @@ def parse_allow(text: str) -> tuple[dict[str, int], list[str]]:
         if not line.strip() or line.startswith("#"):
             continue
         fields = line.split()
-        if len(fields) != 3 or not fields[0].isdigit() or not fields[2].startswith("#"):
+        if len(fields) != 3 or not fields[0].isdigit() or not ISSUE_RE.fullmatch(fields[2]):
             problems.append(f"{ALLOW}:{number}: {line!r} is not '<ceiling> <path> #<issue>'")
         elif fields[1] in ceilings:
             problems.append(f"{ALLOW}:{number}: {fields[1]} is listed twice")
@@ -126,6 +129,12 @@ def test_a_test_file_has_a_cap_of_1500_lines(path):
     assert size_problems({path: 1501}, {}) == [f"{path} has 1501 lines, over its cap of 1500: split it by responsibility"]
 
 
+def test_a_shell_script_outside_tests_has_the_production_cap():
+    assert size_problems({"live/test_run.sh": 1001}, {}) == [
+        "live/test_run.sh has 1001 lines, over its cap of 1000: split it by responsibility"
+    ]
+
+
 def test_a_listed_file_over_its_ceiling_fails():
     assert size_problems({"live/big.py": 2301}, {"live/big.py": 2300}) == [
         f"live/big.py has 2301 lines, over its ceiling of 2300 in {ALLOW}: it may not grow"
@@ -167,7 +176,8 @@ def test_the_list_may_not_gain_a_path_nor_raise_a_ceiling_against_the_baseline()
 
 
 @pytest.mark.parametrize(
-    "line", ["2300 live/big.py", "big live/big.py #141", "2300 live/big.py 141", "2300 live/big.py #141 extra"]
+    "line",
+    ["2300 live/big.py", "big live/big.py #141", "2300 live/big.py 141", "2300 live/big.py #", "2300 live/big.py #141 x"],
 )
 def test_a_malformed_line_of_the_list_fails(line):
     assert parse_allow(line) == ({}, [f"{ALLOW}:1: {line!r} is not '<ceiling> <path> #<issue>'"])
