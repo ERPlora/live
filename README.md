@@ -247,7 +247,9 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   «also» o con sus pronombres («dime», «búscame», «dame», «show me», «tell me»), y en cualquier otro sitio un verbo es
   de la cosa: «ponle a la primera lista el nombre «Verano»», «change for the price list the name» y «change for
   register 2 the name» renombran; live#57, live#59). «Ponle», «añade», «apunta» y «mete» añaden
-  (`add`); «exporta», «descarga», «download» exportan; «importa», «súbeme», «upload» importan; «borremos todos sus
+  (`add`); «registra» y «registrar» apuntan algo nuevo o lo añaden a lo que hay (`create`, `add`: decide lo nombrado,
+  «registra un cliente nuevo», «registra una salida de 15 € en el turno»; live#95), y el inglés «register» solo crea,
+  porque también es la caja («close the cash register»); «exporta», «descarga», «download» exportan; «importa», «súbeme», «upload» importan; «borremos todos sus
   datos» y «erase» borran del todo
   (`erase`); «empieza» y «start» abren; «sienta», «sentar» y «seat» abren una mesa o vuelven a sentar una cuenta aparcada
   (`open`, `restore`: decide la cosa nombrada), y sus formas se nombran juntas aunque la raíz las separe («sienta»,
@@ -320,7 +322,7 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   «abre la caja con 100 €»); al lado de una cosa nombrada («el registro de eventos») solo desempata. La acción pedida sobre la
   cosa nombrada suma 9, y 3 más si esa cosa es lo primero que nombra la orden desde su verbo (`Asked.objects`: «crea la
   carpeta Facturas» crea una carpeta, no una factura). En un verbo que mete o apunta algo («anota», «apunta», «añade»,
-  «mete»), el sitio dicho antes con su artículo o determinante («en el turno», «a la cuenta de la mesa 4», «del turno»)
+  «mete», «registra»), el sitio dicho antes con su artículo o determinante («en el turno», «a la cuenta de la mesa 4», «del turno»)
   no es lo que toca: lo es lo primero que se nombra después en una frase propia, tras un artículo, un determinante o un
   número («anota en el turno una salida de 50 €» apunta el movimiento, igual que «anota una salida de 50 € en el
   turno»; si no se nombra nada así, el sitio sigue siendo lo que toca: «anota en la cita de Ana que…»; live#94). En los

@@ -175,8 +175,10 @@ VERBS = {
     "create": ("crea", "crear", "creame", "alta", "anade", "anadir", "agrega", "agregar", "apunta", "apuntar",
                "anota", "anotar", "registra", "registrar", "reservar", "nuevo", "nueva", "add", "create", "new",
                "register", "book"),
-    "add": ("anade", "anadir", "agrega", "agregar", "apunta", "apuntar", "anota", "anotar", "mete", "meter", "ponle",
-            "add"),
+    # Registering writes something new down or adds it to what there is: «registra un cliente nuevo», «registra una
+    # salida de 15 € en el turno» (ERPlora/live#95). Never English's «register», which is also the till itself.
+    "add": ("anade", "anadir", "agrega", "agregar", "apunta", "apuntar", "anota", "anotar", "registra", "registrar",
+            "mete", "meter", "ponle", "add"),
     "update": ("cambia", "cambiar", "modifica", "modificar", "actualiza", "actualizar", "edita", "editar", "pon",
                "ponle", "poner", "sube", "subir", "configura", "configurar", "ajusta", "ajustar", "ordena", "ordenar",
                "anota", "anotar", "apunta", "apuntar", "update", "change", "edit", "set", "set up", "configure",

@@ -974,6 +974,11 @@ def test_what_is_noted_of_someone_with_no_datum_its_card_takes_still_brings_the_
         ("anota una salida de 15 € en el turno", "salida"),
         # Only a word of where says where; any other word said first is what the command acts on, as it always was.
         ("anota hoy una salida de 15 € en la caja", "hoy"),
+        # «Registra» adds what it registers where it says, as «anota» does (ERPlora/live#95).
+        ("registra en el turno una salida de 15 € para hielo", "salida"),
+        ("hay que registrar en la caja una salida de 15 €", "salida"),
+        ("regístrame en el turno de Barra una entrada de 20 € de cambio", "entrada"),
+        ("registra en la ficha de Ana que es alérgica al marisco", "ficha"),
     ],
 )
 def test_what_a_command_acts_on_is_named_after_where_it_is_done(said, thing):
@@ -1017,6 +1022,93 @@ def test_what_is_noted_comes_before_what_is_read_or_deleted_of_where_it_is_noted
     assert "cash_register.movement.add" in names, names[:7]
     before = names[: names.index("cash_register.movement.add")]
     assert not {"staff.schedule.detail", "staff.schedule.list", "staff.schedule.delete"} & set(before), names[:7]
+
+
+#: What «registra» asks for: writing something new down («registra un cliente nuevo») or adding it to what there is
+#: («registra una salida de 15 € en el turno»); the thing named says which.
+REGISTERING = {"create", "add"}
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        "registra una salida de 15 € para hielo en el turno",
+        "regístrame una salida de 15 € para hielo en el turno",
+        "regístralo en la caja: una salida de 15 € para comprar hielo",
+        "hay que registrar una salida de 20 € para el proveedor",
+        "hay que registrarla en la caja",
+        "registra un cliente nuevo",
+    ],
+)
+def test_registering_asks_to_write_down_or_to_add(said):
+    """«Registra» writes something new down («registra un cliente nuevo») or adds it to what there is («registra una
+    salida de 15 € en el turno»: a movement of the open session), as «anota» and «apunta» do but for writing on what is
+    named: with its pronouns and in the infinitive too (ERPlora/live#95: asked only to create, the movement came 125th
+    in the Hub)."""
+    assert assistant.asked([said]).verbs == REGISTERING
+
+
+def test_registering_in_english_still_asks_only_to_create():
+    """English's «register» is also the till itself («close the cash register»): asking to add with it would bring the
+    till's adds before closing it, so it still asks only to create (ERPlora/live#95)."""
+    assert assistant.asked(["register a new waiter, Pablo, at 12 € an hour"]).verbs == {"create"}
+
+
+#: The movement of the till as the Hub says it is asked for («apunta una salida de 35 € de la caja»), beside the shifts
+#: of the staff, which share the word «turno», the creates of what «registra» also writes down and the writes of things
+#: nobody names.
+REGISTERED_AT_THE_TILL = [
+    tool("cash_register.movement.add", "Record cash brought into the drawer or taken out of it in the open session.",
+         input=MovementIn, asks={"es": ("apunta una salida de 35 € de la caja", "mete 50 € de cambio en la caja")}),
+    tool("cash_register.movement.list", "List the money put in or taken out of a session.", "query"),
+    tool("staff.schedule.create", "Create a shift of the schedule for a member."),
+    tool("staff.schedule.update", "Change a shift of the schedule: its hours or its member."),
+    tool("staff.schedule.detail", "Show a shift of the schedule: its member, its hours.", "query"),
+    tool("staff.schedule.list", "List the shifts of the schedule, by day.", "query"),
+    tool("staff.schedule.delete", "Delete a shift of the schedule."),
+    tool("customer.customer.create", "Creates a new customer; only the name is required.", input=CustomerIn),
+    tool("inventory.product.create", "Create a product of the catalog with its name and its price.", input=ProductIn),
+    *NOISE,
+]
+
+
+@pytest.mark.parametrize(
+    "asked",
+    [
+        "registra una salida de 15 € para hielo en el turno",
+        "registra en el turno una salida de 15 € para hielo",
+        "regístrame una salida de 15 € para hielo en el turno",
+        "registrar una salida de 20 € para el proveedor en el turno",
+    ],
+)
+def test_what_is_registered_at_the_till_comes_before_the_writes_of_what_nobody_named(asked):
+    """«Registra una salida de 15 € para hielo en el turno» adds a movement to the open session: the write that adds
+    it comes before the creates of things nobody names and before the reads and the delete of the staff's shifts, which
+    do none of what is asked (ERPlora/live#95: read as creating only, it came 125th in the Hub, behind every create)."""
+    names = ranked(REGISTERED_AT_THE_TILL, asked, app_words=till_apps)
+    before = set(names[: names.index("cash_register.movement.add")])
+    nobody_named = {op.name for op in NOISE}
+    assert not before & nobody_named, names[:7]
+    assert not {"staff.schedule.detail", "staff.schedule.list", "staff.schedule.delete"} & before, names[:7]
+
+
+@pytest.mark.parametrize(
+    ("asked", "first"),
+    [
+        ("registra un cliente nuevo", "customer.customer.create"),
+        ("registra a Ana García como clienta nueva", "customer.customer.create"),
+        ("registra un producto nuevo: café con leche a 1,50 €", "inventory.product.create"),
+        ("registra un turno para Carmen el lunes de 9 a 14", "staff.schedule.create"),
+        # Without «nuevo» or «nueva», which ask to create by themselves: here only «registra» does.
+        ("registra a Ana García como clienta", "customer.customer.create"),
+        ("regístrame un cliente: Luis Pérez", "customer.customer.create"),
+        ("hay que registrar un producto: café con leche a 1,50 €", "inventory.product.create"),
+    ],
+)
+def test_what_is_registered_as_new_is_still_created(asked, first):
+    """Asking to add as well, «registra un cliente nuevo» still creates the customer, a product or a shift first: the
+    thing named says which (ERPlora/live#95)."""
+    assert ranked(REGISTERED_AT_THE_TILL, asked, app_words=till_apps)[0] == first
 
 
 #: What «desactiva» and «activa» ask for: switching a thing off or on, as an app's switch does, or deactivating and
