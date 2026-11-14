@@ -1438,8 +1438,9 @@ GOODS = assistant.asked(["entran"], GOODS_IN).concepts
         ("anota que habían entrado 12 unidades de tarta", "anota que entran 12 unidades de tarta"),
         ("registra que ya han entrado", "registra que ya entran"),
         ("nos han entrado 12 unidades de tarta, apúntalo", "nos entran 12 unidades de tarta, apúntalo"),
-        # A request is no question: it asks to note it down.
+        # A request is no question: it asks to note it down, or to look at what came in.
         ("¿puedes apuntar que han entrado 12 unidades de tarta?", "¿puedes apuntar que entran 12 unidades de tarta?"),
+        ("¿puedes mirar si han entrado 12 unidades de tarta?", "¿puedes mirar si entran 12 unidades de tarta?"),
     ],
 )
 def test_a_compound_past_in_the_plural_also_names_what_its_present_names(past, present):
@@ -1473,6 +1474,19 @@ def test_what_is_no_compound_past_of_goods_coming_in_names_no_goods(said):
     """Only the compound past of goods coming in, told or noted down, names them: never money that came in, a question
     about who came in, the singular nor «entrada» (ERPlora/live#122)."""
     assert not GOODS & assistant.asked([said], GOODS_IN).concepts
+
+
+@pytest.mark.parametrize(
+    ("said", "read"),
+    [
+        ("apunta que han entrado 12 unidades", "apunta que entran han entrado 12 unidades"),
+        ("anota que habían pagado la cuenta", "anota que pagan habian pagado la cuenta"),
+    ],
+)
+def test_a_compound_past_in_the_plural_is_read_with_its_present_before_it(said, read):
+    """The present goes before the auxiliary, so it is the first thing named after a word that notes it down, and is
+    the participle's root with the plural's «-an» («pagado»: «pagan»)."""
+    assert assistant._as_present(assistant._sentences(said)[0], frozenset()) == read.split()
 
 
 def test_a_compound_past_asks_for_nothing_its_present_would():
