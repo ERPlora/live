@@ -1024,9 +1024,10 @@ def test_what_is_noted_comes_before_what_is_read_or_deleted_of_where_it_is_noted
     assert not {"staff.schedule.detail", "staff.schedule.list", "staff.schedule.delete"} & set(before), names[:7]
 
 
-#: What «registra» asks for: writing something new down («registra un cliente nuevo») or adding it to what there is
-#: («registra una salida de 15 € en el turno»); the thing named says which.
-REGISTERING = {"create", "add"}
+#: What «registra» asks for: writing something new down («registra un cliente nuevo»), adding it to what there is
+#: («registra una salida de 15 € en el turno») or setting up a device («registra esta tablet»); the thing named says
+#: which.
+REGISTERING = {"create", "add", "register"}
 
 
 @pytest.mark.parametrize(
@@ -1048,10 +1049,11 @@ def test_registering_asks_to_write_down_or_to_add(said):
     assert assistant.asked([said]).verbs == REGISTERING
 
 
-def test_registering_in_english_still_asks_only_to_create():
+def test_registering_in_english_still_asks_no_add():
     """English's «register» is also the till itself («close the cash register»): asking to add with it would bring the
-    till's adds before closing it, so it still asks only to create (ERPlora/live#95)."""
-    assert assistant.asked(["register a new waiter, Pablo, at 12 € an hour"]).verbs == {"create"}
+    till's adds before closing it, so it still asks to create, and to register where it starts the command, never to
+    add (ERPlora/live#95, ERPlora/live#117)."""
+    assert assistant.asked(["register a new waiter, Pablo, at 12 € an hour"]).verbs == {"create", "register"}
 
 
 #: The movement of the till as the Hub says it is asked for («apunta una salida de 35 € de la caja»), beside the shifts
@@ -2320,6 +2322,110 @@ def test_a_name_put_on_a_device_renames_it(asked):
     the name do not make it any change that takes a ``name`` (ERPlora/live#47, 43rd of 40 in the Hub)."""
     names = ranked(DEVICES, asked)
     assert names[0] == "base.device.rename", names[:4]
+
+
+class DeviceIn(Schema):
+    name: str
+    printers: list[str]
+
+
+#: The device the person is using set up to print, as the Hub describes it, beside the other tools of devices, the till
+#: a device may be where something is registered, the creates of what «registra» also writes down and the writes of
+#: things nobody names.
+REGISTERED_DEVICES = [
+    tool("printing.device.register", "Set up the device the person is using to print, with its name and the printers "
+         "it reaches: from then on it prints their jobs with anybody's session.", input=DeviceIn,
+         asks={"es": ("deja este equipo encargado de la impresión de los tickets",),
+               "en": ("enroll this station as the one that prints",)}),
+    tool("printing.device.list", "List the devices set up to print and when each was last seen.", "query"),
+    tool("printing.device.update", "Change the name and the printers of a device set up to print.", input=DeviceIn),
+    tool("printing.device.retire", "Retire a device set up to print: its jobs go back to the queue."),
+    tool("base.device.list", "Lists the devices that use this business: tablets, laptops, phones.", "query"),
+    tool("base.device.rename", "Names a device of this business («Barra», «Cocina»).", input=NameIn),
+    tool("cash_register.session.open", "Open the till: start a cash session with its opening float."),
+    tool("cash_register.session.close", "Close the open cash session of the till with the cash counted."),
+    *REGISTERED_AT_THE_TILL,
+]
+
+
+@pytest.mark.parametrize(
+    ("asked", "language"),
+    [
+        ("registra esta tablet como Tablet Barra", "es"),
+        ("regístrame este ordenador como Caja 2", "es"),
+        ("hay que registrar la tablet nueva de la terraza", "es"),
+        ("registra este dispositivo como Tablet QA y dale acceso a la impresora Caja QA", "es"),
+        ("register this tablet as Bar tablet", "en"),
+        ("please register this laptop as Office", "en"),
+        ("can you register the new tablet for printing?", "en"),
+    ],
+)
+def test_a_device_registered_is_set_up_to_print(asked, language):
+    """«Registra esta tablet como Tablet Barra» sets the device up to print: registering a device asks for the action
+    of that name, before the creates and the adds of what nobody named (ERPlora/live#117: read as creating or adding
+    only, it came 61st in the Hub, 54th in English)."""
+    names = ranked(REGISTERED_DEVICES, asked, language, app_words=till_apps)
+    assert names[0] == "printing.device.register", names[:5]
+
+
+@pytest.mark.parametrize(
+    ("asked", "language", "first"),
+    [
+        # The device is where something is registered, not what is.
+        ("registra en esta tablet una salida de 15 € para hielo", "es", "cash_register.movement.add"),
+        ("registra una salida de 15 € desde la tablet de la barra", "es", "cash_register.movement.add"),
+        ("registra un cliente nuevo desde esta tablet", "es", "customer.customer.create"),
+        ("registra desde esta tablet una salida de 20 € para pan", "es", "cash_register.movement.add"),
+        ("registra con esta tablet una entrada de 50 € de cambio", "es", "cash_register.movement.add"),
+        # English's «register» is also the till: only where it starts the command does it register.
+        ("open the register on this tablet with a 100 € float", "en", "cash_register.session.open"),
+        ("close the register on the bar tablet", "en", "cash_register.session.close"),
+        ("register 2: close it from this tablet", "en", "cash_register.session.close"),
+        ("register on this tablet won't open, open it with a 50 € float", "en", "cash_register.session.open"),
+    ],
+)
+def test_a_device_named_but_not_registered_is_not_set_up_to_print(asked, language, first):
+    """A device named beside «registra» is set up to print only when it is what is registered: «registra en esta tablet
+    una salida de 15 €» notes the money down and «open the register on this tablet» opens the till, so their tools come
+    before setting the tablet up (ERPlora/live#117: with any device named, the money came 15th in the Hub, not 14th,
+    and opening the till 20th, not 8th)."""
+    names = ranked(REGISTERED_DEVICES, asked, language, app_words=till_apps)
+    assert names.index(first) < names.index("printing.device.register"), names[:5]
+
+
+@pytest.mark.parametrize(
+    ("said", "verbs"),
+    [
+        ("registra esta tablet como Tablet Barra", {"create", "add", "register"}),
+        ("regístrame este ordenador como Caja 2", {"create", "add", "register"}),
+        ("register this tablet as Bar tablet", {"create", "register"}),
+        ("please register this laptop as Office", {"create", "register"}),
+        ("rename it and register this device as Bar 2", {"rename", "create", "register"}),
+        ("rename it then register this device as Bar 2", {"rename", "create", "register"}),
+        # Said twice, as the command and as the till: the command still registers.
+        ("register this tablet and close the register", {"close", "create", "register"}),
+        # The device said right after as where or with what it is done is not what is registered.
+        ("registra desde esta tablet una salida de 20 €", {"create", "add"}),
+        ("registra con esta tablet una entrada de 50 €", {"create", "add"}),
+        ("regístrame desde este ordenador un cliente nuevo", {"create", "add"}),
+        # The till said by its number or with where it is, even first in the sentence.
+        ("register 2: close it from this tablet", {"close", "create"}),
+        ("register on this tablet won't open", {"open", "create"}),
+        ("register from the bar tablet is stuck", {"create"}),
+        ("registra 2 tablets nuevas para la terraza", {"create", "add", "register"}),
+        # English's «register» is also the till: anywhere but where a command starts it registers nothing.
+        ("open the register on this tablet", {"open", "create"}),
+        ("close the cash register", {"close", "create"}),
+        ("take 15 € out of the register for ice", {"create"}),
+        # What happened, noted down, sets nothing up (ERPlora/live#116).
+        ("registra que la tablet de la barra se ha roto", {"create", "add"}),
+        ("regístrame que entran 20 cafés", {"create", "add"}),
+    ],
+)
+def test_registering_asks_to_register_only_as_the_command(said, verbs):
+    """«Registra» and «register» ask to register what the command registers («registra esta tablet»), never where
+    English's «register» is the till nor what happened, noted down («registra que la tablet se ha roto»)."""
+    assert assistant.asked([said]).verbs == verbs
 
 
 @pytest.mark.parametrize(

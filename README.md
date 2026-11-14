@@ -248,8 +248,12 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   de la cosa: «ponle a la primera lista el nombre «Verano»», «change for the price list the name» y «change for
   register 2 the name» renombran; live#57, live#59). «Ponle», «añade», «apunta» y «mete» añaden
   (`add`); «registra» y «registrar» apuntan algo nuevo o lo añaden a lo que hay (`create`, `add`: decide lo nombrado,
-  «registra un cliente nuevo», «registra una salida de 15 € en el turno»; live#95), y el inglés «register» solo crea,
-  porque también es la caja («close the cash register»); «exporta», «descarga», «download» exportan; «importa», «súbeme», «upload» importan; «borremos todos sus
+  «registra un cliente nuevo», «registra una salida de 15 € en el turno»; live#95), y el inglés «register» crea sin
+  añadir, porque también es la caja («close the cash register»); los dos dan de alta (`register`) solo lo que la orden
+  registra («registra esta tablet como Barra»; una tablet nombrada como sitio, «registra en esta tablet una salida…»,
+  no), nunca justo antes de «que» (un hecho) ni de «desde», «con», «on» o «from» (con qué se hace: «registra desde esta
+  tablet una salida…») y, en inglés, solo donde empieza la orden y no ante su número («register this tablet», no
+  «open the register on this tablet» ni «register 2: close it»; live#117); «exporta», «descarga», «download» exportan; «importa», «súbeme», «upload» importan; «borremos todos sus
   datos» y «erase» borran del todo
   (`erase`); «empieza» y «start» abren; «sienta», «sentar» y «seat» abren una mesa o vuelven a sentar una cuenta aparcada
   (`open`, `restore`: decide la cosa nombrada), y sus formas se nombran juntas aunque la raíz las separe («sienta»,
