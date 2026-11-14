@@ -1113,6 +1113,136 @@ def test_what_is_registered_as_new_is_still_created(asked, first):
     assert ranked(REGISTERED_AT_THE_TILL, asked, app_words=till_apps)[0] == first
 
 
+EXPORTING_OR_PRINTING = {"export", "print"}
+
+
+@pytest.mark.parametrize(
+    ("said", "verbs"),
+    [
+        ("saca 15 € de la caja para comprar hielo", {"add"}),
+        ("sácame 10 € de la caja", {"add"}),
+        ("quiero sacar 15 € de la caja para comprar hielo", {"add"}),
+        ("saca 50 euros del cajón para llevarlos al banco", {"add"}),
+        ("saca 12,50 € de la caja para el pan", {"add"}),
+        # Where the money comes from, said before it.
+        ("saca de la caja 15 € para el hielo", {"add"}),
+        ("sácame del cajón 20 € para el pan", {"add"}),
+        ("take 20 € out of the till for the supplier", {"add"}),
+        ("take 15 euros out of the till for ice", {"add"}),
+        ("take €15 out of the till", {"add"}),
+        ("take out 15 € from the drawer for ice", {"add"}),
+        # Each currency by its name, one or many, and by its sign, before the number too.
+        ("saca 1 euro de la caja", {"add"}),
+        ("saca 20 eur de la caja", {"add"}),
+        ("saca 1 dólar de la caja", {"add"}),
+        ("saca 20 dólares de la caja", {"add"}),
+        ("saca 1 libra de la caja", {"add"}),
+        ("saca 20 libras de la caja", {"add"}),
+        ("take 1 dollar out of the till", {"add"}),
+        ("take 20 dollars out of the till", {"add"}),
+        ("take 1 pound out of the till", {"add"}),
+        ("take 10 pounds out of the till", {"add"}),
+        ("take $20 out of the drawer", {"add"}),
+        ("take £10 out of the till", {"add"}),
+        ("take € 15 out of the till", {"add"}),
+        # English's «register» there is the till: it still asks to create and never to register (ERPlora/live#117).
+        ("take 15 € out of the register for ice", {"add", "create"}),
+        # Said twice, once of money and once of a list: both are asked.
+        ("saca 15 € de la caja y saca el listado de clientes", {"add", "export", "print"}),
+        # Anything else taken out is exported, printed or taken out of where it is.
+        ("saca el listado de clientes", EXPORTING_OR_PRINTING),
+        ("saca 2 copias del tique de la venta 7", EXPORTING_OR_PRINTING),
+        ("take the coffee out of the drinks category", set()),
+        # A number without its currency is how many, not money.
+        ("saca 3 del almacén, se han caducado", EXPORTING_OR_PRINTING),
+        ("take 5 out of stock, we used them ourselves", set()),
+        ("take 2 out of table 4's check", set()),
+        # Money taken off with no «out» is no cash taken out of the till.
+        ("take 5 € off table 4's check", set()),
+        ("take a 15 € discount off table 4's check", set()),
+        # An «out» said far from the money is of something else.
+        ("take 15 € and check out the cart", set()),
+        # The word that takes out, where it is taken from or a number, when the sentence ends there.
+        ("hay que sacar", EXPORTING_OR_PRINTING),
+        ("saca de la", EXPORTING_OR_PRINTING),
+        ("de ese tique saca 3", EXPORTING_OR_PRINTING),
+    ],
+)
+def test_taking_money_out_asks_to_note_it_down(said, verbs):
+    """«Saca 15 € de la caja» and «take 15 € out of the till» note the money taken out down, as «mete 50 € en la caja»
+    notes what is put in: they ask to add, never to export or print (ERPlora/live#118: read as exporting or printing,
+    the till's movement came 12th in the Hub, and 81st in English, where «take» asked for nothing)."""
+    assert assistant.asked([said]).verbs == verbs
+
+
+class CountIn(Schema):
+    counted: int
+
+
+#: The till as the Hub says cash is taken out of it or counted, beside what «saca» also does — export a list, print a
+#: report or a receipt —, what else is taken out of where it is — stock written off, a line of a check —, a member
+#: clocked out («salida» and «out» are hers too) and a customer's purchases, what «para comprar» names.
+TAKEN_OUT_OF_THE_TILL = [
+    tool("cash_register.movement.add", "Record cash brought into the drawer or taken out of it in the open session.",
+         input=MovementIn, asks={"es": ("apunta una salida de 35 € de la caja", "mete 50 € de cambio en la caja"),
+                                 "en": ("record 20 € taken out to pay the supplier",)}),
+    tool("cash_register.movement.list", "List the money put in or taken out of a session.", "query"),
+    tool("cash_register.count.add", "Record a count of the cash in the drawer.", input=CountIn,
+         asks={"es": ("haz el arqueo de la caja",)}),
+    tool("cash_register.session.print", "Print the report of the open session: what the drawer should hold.",
+         asks={"es": ("saca el informe X de cómo va la caja",)}),
+    tool("customer.customer.export", "Export the customers to a spreadsheet, with their purchases."),
+    tool("sale.sale.print", "Print a copy of a sale's receipt.", asks={"es": ("sácame una copia del tique",)}),
+    tool("inventory.stock.write_off", "Write stock off: what broke, expired or the business used itself.",
+         asks={"en": ("write off what we used ourselves",)}),
+    tool("sale.order.remove_line", "Remove a line from an open check.", asks={"en": ("take the coffee off table 4",)}),
+    tool("attendance.record.clock_out", "Clocks the member out («ficha la salida de Ana»): the end of their working "
+         "day.", asks={"es": ("ficha mi salida",), "en": ("clock me out",)}),
+    tool("customer.purchase.list", "List what a customer bought.", "query"),
+    *NOISE,
+]
+
+
+@pytest.mark.parametrize(
+    ("asked", "language"),
+    [
+        ("saca 15 € de la caja para comprar hielo", "es"),
+        ("sácame 10 € de la caja", "es"),
+        ("saca de la caja 15 € para el hielo", "es"),
+        ("hay que sacar 30 € de la caja para el butano", "es"),
+        ("saca 15 € del turno para comprar hielo", "es"),
+        ("take 15 € out of the register for ice", "en"),
+        ("take out 15 € from the drawer for ice", "en"),
+        ("please take 10 € out of the register", "en"),
+    ],
+)
+def test_money_taken_out_of_the_till_is_noted_down_first(asked, language):
+    """«Saca 15 € de la caja para comprar hielo» notes the cash taken out down: the till's movement comes before
+    printing its report, exporting or reading what «comprar» names, counting the cash and the creates of what nobody
+    named (ERPlora/live#118). Spanish says no «salida»: the money taken out is one, as English says with its «out»,
+    and what it is for («para comprar hielo») is no purchase to find."""
+    names = ranked(TAKEN_OUT_OF_THE_TILL, asked, language, app_words=till_apps)
+    assert names[0] == "cash_register.movement.add", names[:5]
+
+
+@pytest.mark.parametrize(
+    ("asked", "language", "first"),
+    [
+        ("saca 2 copias del tique de la venta 7", "es", "sale.sale.print"),
+        ("saca el informe de cómo va la caja", "es", "cash_register.session.print"),
+        ("saca el listado de clientes", "es", "customer.customer.export"),
+        ("take 5 out of stock, we used them ourselves", "en", "inventory.stock.write_off"),
+        ("take 2 coffees out of table 4's check", "en", "sale.order.remove_line"),
+    ],
+)
+def test_what_is_taken_out_but_money_is_not_noted_down(asked, language, first):
+    """What «saca» takes out but money is exported or printed, and how many things «take … out» says is stock or a
+    line: none of it is the till's movement."""
+    names = ranked(TAKEN_OUT_OF_THE_TILL, asked, language, app_words=till_apps)
+    movement = names.index("cash_register.movement.add") if "cash_register.movement.add" in names else len(names)
+    assert names.index(first) < movement, names[:5]
+
+
 @pytest.mark.parametrize(
     ("said", "stated"),
     [
@@ -2416,7 +2546,8 @@ def test_a_device_named_but_not_registered_is_not_set_up_to_print(asked, languag
         # English's «register» is also the till: anywhere but where a command starts it registers nothing.
         ("open the register on this tablet", {"open", "create"}),
         ("close the cash register", {"close", "create"}),
-        ("take 15 € out of the register for ice", {"create"}),
+        # The money taken out asks to add it (ERPlora/live#118).
+        ("take 15 € out of the register for ice", {"add", "create"}),
         # What happened, noted down, sets nothing up (ERPlora/live#116).
         ("registra que la tablet de la barra se ha roto", {"create", "add"}),
         ("regístrame que entran 20 cafés", {"create", "add"}),

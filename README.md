@@ -253,7 +253,13 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   registra («registra esta tablet como Barra»; una tablet nombrada como sitio, «registra en esta tablet una salida…»,
   no), nunca justo antes de «que» (un hecho) ni de «desde», «con», «on» o «from» (con qué se hace: «registra desde esta
   tablet una salida…») y, en inglés, solo donde empieza la orden y no ante su número («register this tablet», no
-  «open the register on this tablet» ni «register 2: close it»; live#117); «exporta», «descarga», «download» exportan; «importa», «súbeme», «upload» importan; «borremos todos sus
+  «open the register on this tablet» ni «register 2: close it»; live#117); «exporta», «descarga», «download» exportan; «saca»
+  (y «sácame», «sacar») exporta o imprime (`export`, `print`: decide la cosa), salvo de dinero dicho con su moneda
+  justo detrás o tras de dónde sale («saca 15 € de la caja», «saca de la caja 15 €», «saca 50 euros del cajón», y en
+  inglés «take 15 € out of the till», «take out 15 €»): entonces apunta el dinero que sale (`add`; en español nombra
+  además la «salida», que el inglés ya dice con su «out») y no actúa sobre lo que va detrás («para comprar hielo» no
+  es una compra que buscar); un número sin moneda dice cuántos («saca 2 copias del tique», «take 5 out of stock»;
+  live#118); «importa», «súbeme», «upload» importan; «borremos todos sus
   datos» y «erase» borran del todo
   (`erase`); «empieza» y «start» abren; «sienta», «sentar» y «seat» abren una mesa o vuelven a sentar una cuenta aparcada
   (`open`, `restore`: decide la cosa nombrada), y sus formas se nombran juntas aunque la raíz las separe («sienta»,
