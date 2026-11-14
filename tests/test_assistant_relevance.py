@@ -1131,6 +1131,20 @@ EXPORTING_OR_PRINTING = {"export", "print"}
         ("take 15 euros out of the till for ice", {"add"}),
         ("take €15 out of the till", {"add"}),
         ("take out 15 € from the drawer for ice", {"add"}),
+        # Each currency by its name, one or many, and by its sign, before the number too.
+        ("saca 1 euro de la caja", {"add"}),
+        ("saca 20 eur de la caja", {"add"}),
+        ("saca 1 dólar de la caja", {"add"}),
+        ("saca 20 dólares de la caja", {"add"}),
+        ("saca 1 libra de la caja", {"add"}),
+        ("saca 20 libras de la caja", {"add"}),
+        ("take 1 dollar out of the till", {"add"}),
+        ("take 20 dollars out of the till", {"add"}),
+        ("take 1 pound out of the till", {"add"}),
+        ("take 10 pounds out of the till", {"add"}),
+        ("take $20 out of the drawer", {"add"}),
+        ("take £10 out of the till", {"add"}),
+        ("take € 15 out of the till", {"add"}),
         # English's «register» there is the till: it still asks to create and never to register (ERPlora/live#117).
         ("take 15 € out of the register for ice", {"add", "create"}),
         # Said twice, once of money and once of a list: both are asked.
@@ -1146,6 +1160,12 @@ EXPORTING_OR_PRINTING = {"export", "print"}
         # Money taken off with no «out» is no cash taken out of the till.
         ("take 5 € off table 4's check", set()),
         ("take a 15 € discount off table 4's check", set()),
+        # An «out» said far from the money is of something else.
+        ("take 15 € and check out the cart", set()),
+        # The word that takes out, where it is taken from or a number, when the sentence ends there.
+        ("hay que sacar", EXPORTING_OR_PRINTING),
+        ("saca de la", EXPORTING_OR_PRINTING),
+        ("de ese tique saca 3", EXPORTING_OR_PRINTING),
     ],
 )
 def test_taking_money_out_asks_to_note_it_down(said, verbs):
