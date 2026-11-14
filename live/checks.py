@@ -35,7 +35,9 @@ least two distinct phrases each, none its own name nor longer than ``MAX_ASK_CHA
 of its tools say them, so the apps take it on one at a time.
 
 An app's ``services`` or ``queries`` may be a package; importing a module of it is what registers its operations, so
-every module of the package is imported at startup, by the package's ``__init__.py`` (E021).
+every module of the package is imported at startup, by the package's ``__init__.py`` (E021; test modules and
+sub-packages are not operation modules). No module of the package is named ``services`` or ``queries``: an operation
+in it would pass for one of an app's ``services.py`` or ``queries.py`` (E022).
 """
 
 import pkgutil
@@ -247,18 +249,12 @@ def _asks_problems(op: operations.Operation) -> list[str]:
 
 @checks.register("live")
 def check_door_packages(app_configs: Any = None, **kwargs: Any) -> list[checks.CheckMessage]:
-    """E021: a module of an app's services or queries package that nothing imported at startup."""
-    return [
-        checks.Error(
-            f"{module} is never imported, so the operations it declares are not registered.",
-            hint=f"Import it in the __init__.py of {package.__name__}: from . import {module.rsplit('.', 1)[1]}",
-            obj=config,
-            id="live.E021",
-        )
-        for config in apps.get_app_configs()
-        for package in _door_packages(config)
-        for module in _unimported_modules(package)
-    ]
+    """E021 and E022: the modules of an app's services or queries package."""
+    errors: list[checks.CheckMessage] = []
+    for config in apps.get_app_configs():
+        for package in _door_packages(config):
+            errors += _door_package_errors(config, package)
+    return errors
 
 
 def _door_packages(config: Any) -> list[Any]:
@@ -266,9 +262,36 @@ def _door_packages(config: Any) -> list[Any]:
     return [module for module in found if module is not None and hasattr(module, "__path__")]
 
 
-def _unimported_modules(package: Any) -> list[str]:
-    names = (f"{package.__name__}.{info.name}" for info in pkgutil.iter_modules(package.__path__))
-    return [name for name in names if name not in sys.modules]
+def _door_package_errors(config: Any, package: Any) -> list[checks.CheckMessage]:
+    errors = []
+    for info in pkgutil.iter_modules(package.__path__):
+        module = f"{package.__name__}.{info.name}"
+        if info.name in operations.DOORS.values():
+            errors.append(
+                checks.Error(
+                    f"{module} is named like an app's {info.name}: an operation in it passes for one of {info.name}.py.",
+                    hint="Name the module after the entity or use case it covers.",
+                    obj=config,
+                    id="live.E022",
+                )
+            )
+        elif _declares_operations(info) and module not in sys.modules:
+            errors.append(
+                checks.Error(
+                    f"{module} is never imported, so the operations it declares are not registered.",
+                    hint=f"Import it in the __init__.py of {package.__name__}: from . import {info.name}",
+                    obj=config,
+                    id="live.E021",
+                )
+            )
+    return errors
+
+
+def _declares_operations(info: pkgutil.ModuleInfo) -> bool:
+    """Whether a module of a package may declare operations: not a test module, nor a sub-package (@operation rejects
+    an operation one level deeper)."""
+    name = info.name
+    return not (info.ispkg or name.startswith("test_") or name.endswith("_test") or name == "conftest")
 
 
 @checks.register("live")
