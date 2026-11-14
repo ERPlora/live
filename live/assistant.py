@@ -1196,7 +1196,9 @@ def relevant(
 
     The action asked (``VERBS``) of a thing the question names adds 9, 1 more when the tool's action is that verb
     itself (``create``, before ``bulk_create``) and 3 more when that thing is what the command acts on
-    (``Asked.objects``: «crea la carpeta Facturas» creates a folder, not an invoice); «activa la app» is
+    (``Asked.objects``: «crea la carpeta Facturas» creates a folder, not an invoice); setting a device up
+    (``_REGISTERS``) counts only when that thing is what the command acts on («registra esta tablet», never «registra en
+    esta tablet una salida…»); «activa la app» is
     ``base.app.enable``, never an operation of the app named after it, and so is «activa los clientes», an app named
     by its name. What a switch turns on or off (``Asked.switched``) that names no tool's thing but an app is the thing
     of the switch of that action whose asks name it, with the apps said beside it: «desactiva los recordatorios de
