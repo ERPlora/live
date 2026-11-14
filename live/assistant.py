@@ -329,6 +329,13 @@ _PUTS = frozenset({"add"})
 #: written where («registra en la ficha de Ana que…»).
 _THAT = frozenset({"que"})
 _STATES = frozenset({"create", "add"})
+#: The forms of «haber» that, right before a participle in «-ado», say what happened in the plural («han entrado»,
+#: «habían entrado»): told or noted down, the compound past is also its present («entran»), said before it, so it names
+#: what the present names and is what a word that notes it down acts on («apunta que han entrado 12 unidades de tarta»
+#: receives the goods, as «apunta que entran…» does; ERPlora/live#122). Never of money said right after it («han
+#: entrado 100 €»), nor when that present asks for an action («han cuadrado» is no «cuadran»), nor in a question.
+_HAVE = frozenset({"han", "habian"})
+_PARTICIPLE, _PRESENT = "ado", "an"
 #: Setting a device up (``VERBS``: «registra esta tablet»): asked only where the word is the command (``_registers``),
 #: and of a tool only when what the command acts on is that tool's thing — a tablet named as where something is
 #: registered («registra en esta tablet una salida de 15 €») is not set up (ERPlora/live#117).
@@ -942,6 +949,25 @@ def _takes_money_out(words: list[str], at: int, amounts: Collection[str]) -> boo
     return words[at + 1 : at + 2] == [_OUT] and _money(words, at + 2, amounts)
 
 
+def _as_present(words: list[str], amounts: Collection[str]) -> list[str]:
+    """``words`` with the present of each compound past in the plural (``_HAVE``) said before it: «han entrado» is read
+    «entran han entrado». Not of money said right after the participle (``_money``: «han entrado 100 €») nor of a
+    present that asks for an action («han cuadrado»)."""
+    read: list[str] = []
+    for at, word in enumerate(words):
+        participle = words[at + 1] if at + 1 < len(words) else ""
+        present = participle.removesuffix(_PARTICIPLE) + _PRESENT
+        if (
+            word in _HAVE
+            and participle.endswith(_PARTICIPLE)
+            and not _verbs_of(present)
+            and not _money(words, at + 2, amounts)
+        ):
+            read.append(present)
+        read.append(word)
+    return read
+
+
 def _noted(words: list[str], at: int, extra: tuple[tuple[str, ...], ...]) -> set[frozenset[str]]:
     """What the word that notes something down ``words[at]`` notes: every thing named after it, until another command
     starts (``_starts_command``), but the one a word of ``_WHERE`` says, with its article, it is noted in or whose it is
@@ -1107,6 +1133,12 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
     for text in texts:
         # A yes to what was asked before asks for nothing of its own: the write it agrees to is in the texts before.
         sentences = _without_yes(_sentences(text))
+        amounts = _amounts(text)
+        question = _is_question(text, sentences) and not any(_opening(words)[1] for words in sentences)
+        # What happened in the plural, told or noted down, is also said in the present («han entrado»: «entran»); asked
+        # about («¿quiénes han entrado…?»), it is what a read finds, as said.
+        if not question:
+            sentences = [_as_present(words, amounts) for words in sentences]
         # What asks to be done: every word but a verb that says what is not to be done («sin cambiar», ``_unasked``) or
         # what someone will do («I'll approve it», ``_foretold``).
         heard = [
@@ -1132,7 +1164,6 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
                 acting[word] = of - _REGISTERS
         # Money taken out notes it down; a word said again of anything else still asks for what it did («saca 15 € de
         # la caja y saca el listado de clientes»).
-        amounts = _amounts(text)
         taken_out = {
             (index, at)
             for index, words in enumerate(heard)
@@ -1175,7 +1206,6 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
         acted, named_after = _objects(heard, acting, verbal, extra, taken_out)
         objects |= acted
         records |= named_after
-        question = _is_question(text, sentences) and not any(_opening(words)[1] for words in sentences)
         if question and not doing:
             asked_about = said - READ_VERBS
             about |= {_concept(word, extra) for word, of in acting.items() if of & asked_about}
