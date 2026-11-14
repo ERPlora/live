@@ -232,6 +232,13 @@ registro, importe, nombre de la app); `PlainWords` no lee nada (euros con 2 deci
 Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda del negocio, `refers`) viven en su
 `base/assistant.py`.
 
+`live.assistant` es un paquete, un módulo por responsabilidad (live#141): `tools` (qué operación es herramienta, su
+nombre, su descripción y su esquema), `vocabulary` (los verbos y las palabras con que se lee una frase), `stemming`
+(raíces y frases), `reading` (`asked`), `ranking` (`relevant`), `fields` (qué es cada dato de una escritura), `cards` (la
+tarjeta, `Words`) y `running` (`run_tool`, `preview`, `rounds`). Todo se importa de `live.assistant`, que reexporta lo
+que leen el Hub, el SaaS y el resto de live (`tests/test_assistant_exports.py`); un test que sustituye una función
+la parchea en el módulo que la llama (`assistant.ranking.asks_of`, `assistant.cards.choice_label`), no en el paquete.
+
 `relevant` pesa lo que la gente dice para pedir una herramienta (sus `asks`, en cualquier idioma) como su descripción:
 1 por cosa nombrada.
 
