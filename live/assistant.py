@@ -355,6 +355,12 @@ _TAKEN_OUT = frozenset({"add"})
 #: What money taken out is, which Spanish's «saca» does not say: an outflow of the till («una salida de 15 €»). English
 #: says it with its «out».
 _OUTFLOW = "salida"
+#: The words that say money came in («entran 100 € en el turno», «ha entrado 100 € en caja»): of money, right after
+#: them or after where it comes in (``_money_after``), they name the till's cash (``_TILL``), never what a project names
+#: by them (the goods «entran» receive in the Hub), and are no thing the command acts on (ERPlora/live#123). Of anything
+#: else they are what they were: «entran 12 unidades de tarta» are goods.
+_COMES_IN = frozenset({"entra", "entran", "entrado"})
+_TILL = "caja"
 #: A number said with its currency's name after it («50 euros») or its sign before or after it, decimals too («15 €»,
 #: «12,50 €», «€15», «$20»): the sign is no word, so it is read from the text.
 _CURRENCIES = frozenset({"euro", "euros", "eur", "dolar", "dolares", "dollar", "dollars", "libra", "libras", "pound",
@@ -783,22 +789,23 @@ def _objects(
     acting: Mapping[str, frozenset[str]],
     verbal: Collection[str],
     extra: tuple,
-    taken_out: Collection[tuple[int, int]] = (),
+    of_money: Collection[tuple[int, int]] = (),
 ) -> tuple[set[frozenset[str]], set[frozenset[str]]]:
     """What the command of each sentence acts on: the first thing named from its verb on — the verb's own when it
     names one («cobra»: a sale), else the first word after it that names something («crea la carpeta»: a folder) —;
     and of those, the ones named by a word after the verb (a record to find). Of a verb that puts something somewhere
     (``_PUTS``), where it is put, said first, is no thing it acts on: what it puts is named after it
     (``_named_after_where``: «anota en el turno una salida» notes the money taken out, as «anota una salida en el
-    turno» does; ERPlora/live#94). A verb that takes money out (``taken_out``, by sentence and word) acts on the money,
-    no thing named («saca 15 € de la caja para comprar hielo»)."""
+    turno» does; ERPlora/live#94). A verb that takes money out, or a word that says money came in (``of_money``, by
+    sentence and word), acts on the money, no thing named («saca 15 € de la caja para comprar hielo», «apunta que entran
+    100 € de propina»)."""
     found: set[frozenset[str]] = set()
     after: set[frozenset[str]] = set()
     for index, words in enumerate(sentences):
         seen = False
         verb = ""
         for at, word in enumerate(words):
-            if (index, at) in taken_out:
+            if (index, at) in of_money:
                 break
             if word in acting or word in verbal:
                 own = _concept(word, extra) if word in acting and not seen else frozenset()
@@ -929,19 +936,31 @@ def _money(words: list[str], at: int, amounts: Collection[str]) -> bool:
     return words[at] in amounts or (at + 1 < len(words) and words[at + 1] in _CURRENCIES)
 
 
+def _money_after(words: list[str], at: int, amounts: Collection[str]) -> bool:
+    """Whether money (``_money``) is said right after ``words[at]`` or after where it goes or comes from, said first
+    («15 € de la caja», «de la caja 15 €», «en caja 100 €»)."""
+    money = at + 1
+    if money < len(words) and words[money] in _WHERE:
+        money += 1
+        while money < len(words) and _determiner(words[money]):
+            money += 1
+        money += 1
+    return _money(words, money, amounts)
+
+
+def _comes_in(words: list[str], at: int, amounts: Collection[str]) -> bool:
+    """Whether the word ``words[at]`` says money came in (``_COMES_IN``): «entran 100 €», «han entrado en caja 100 €»
+    (``_money_after``)."""
+    return words[at] in _COMES_IN and _money_after(words, at, amounts)
+
+
 def _takes_money_out(words: list[str], at: int, amounts: Collection[str]) -> bool:
     """Whether the word ``words[at]`` takes money out (``_TAKES_OUT``): «saca» right before the money or before where it
     comes from and then the money («saca 15 € de la caja», «sácame del cajón 20 €»), «take» before the money and its
     «out» («take 15 € out of the till», «take 15 euros out») or before «out» and the money («take out 15 €»)."""
     word = words[at]
     if word in _TAKES_OUT or _unclitic(word) in _TAKES_OUT:
-        money = at + 1
-        if money < len(words) and words[money] in _WHERE:
-            money += 1
-            while money < len(words) and _determiner(words[money]):
-                money += 1
-            money += 1
-        return _money(words, money, amounts)
+        return _money_after(words, at, amounts)
     if word != _TAKE:
         return False
     if _money(words, at + 1, amounts):
@@ -951,8 +970,8 @@ def _takes_money_out(words: list[str], at: int, amounts: Collection[str]) -> boo
 
 def _as_present(words: list[str], amounts: Collection[str]) -> list[str]:
     """``words`` with the present of each compound past in the plural (``_HAVE``) said before it: «han entrado» is read
-    «entran han entrado». Not of money said right after the participle (``_money``: «han entrado 100 €») nor of a
-    present that asks for an action («han cuadrado»)."""
+    «entran han entrado». Not of money said right after the participle or after where it comes in (``_money_after``:
+    «han entrado 100 €», «han entrado en caja 100 €») nor of a present that asks for an action («han cuadrado»)."""
     read: list[str] = []
     for at, word in enumerate(words):
         participle = words[at + 1] if at + 1 < len(words) else ""
@@ -961,7 +980,7 @@ def _as_present(words: list[str], amounts: Collection[str]) -> list[str]:
             word in _HAVE
             and participle.endswith(_PARTICIPLE)
             and not _verbs_of(present)
-            and not _money(words, at + 2, amounts)
+            and not _money_after(words, at + 1, amounts)
         ):
             read.append(present)
         read.append(word)
@@ -1173,6 +1192,12 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
         for word in {heard[index][at] for index, at in taken_out}:
             said_so = {(index, at) for index, words in enumerate(heard) for at, one in enumerate(words) if one == word}
             acting[word] = _TAKEN_OUT if said_so <= taken_out else acting.get(word, frozenset()) | _TAKEN_OUT
+        came_in = {
+            (index, at)
+            for index, words in enumerate(heard)
+            for at in range(len(words))
+            if _comes_in(words, at, amounts)
+        }
         doing = _how_to(sentences)
         if doing and doing != "-" and doing not in acting:
             acting[doing] = _verbs_of(doing[:-1] + "a") or _verbs_of(doing[:-1] + "e")
@@ -1197,13 +1222,16 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
             (word, _FOR_WHAT.isdisjoint(words[:at])) for words in sentences for at, word in enumerate(words)
             if (word not in verbal or word in _PHRASE_NAMES) and len(word) >= 3 and word not in STOP_WORDS
             and ((word not in acting and not _unasked(words, at)) or len(_concept(word, extra)) > 1)
+            and not _comes_in(words, at, amounts)
         ]
         concepts |= {_concept(word, extra) for word, _ in naming}
         if any(heard[index][at] != _TAKE for index, at in taken_out):
             concepts.add(_concept(_OUTFLOW, extra))
+        if came_in:
+            concepts.add(_concept(_TILL, extra))
         direct |= {_concept(word, extra) for word, outside in naming if outside}
         concepts |= {group for phrase, group in phrases_named if any(phrase in one for one in joined)}
-        acted, named_after = _objects(heard, acting, verbal, extra, taken_out)
+        acted, named_after = _objects(heard, acting, verbal, extra, taken_out | came_in)
         objects |= acted
         records |= named_after
         if question and not doing:
