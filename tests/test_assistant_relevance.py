@@ -1551,6 +1551,13 @@ def test_money_that_comes_in_names_the_till_and_not_the_goods(said):
     assert (GOODS <= said_as.concepts) == ("unidades" in said)
 
 
+@pytest.mark.parametrize("said", ["apunta que entran 100 € de propina", "apunta que entran en el turno 100 € de propina"])
+def test_what_is_said_after_money_that_comes_in_is_no_thing_the_command_acts_on(said):
+    """The command acts on the money that came in: where it comes in («el turno», a staff's shift too) and what it is
+    («propina») are no thing it acts on."""
+    assert not assistant.asked([said]).objects
+
+
 @pytest.mark.parametrize(
     "said",
     [
