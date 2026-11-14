@@ -1099,6 +1099,10 @@ def test_what_is_registered_at_the_till_comes_before_the_writes_of_what_nobody_n
         ("registra a Ana García como clienta nueva", "customer.customer.create"),
         ("registra un producto nuevo: café con leche a 1,50 €", "inventory.product.create"),
         ("registra un turno para Carmen el lunes de 9 a 14", "staff.schedule.create"),
+        # Without «nuevo» or «nueva», which ask to create by themselves: here only «registra» does.
+        ("registra a Ana García como clienta", "customer.customer.create"),
+        ("regístrame un cliente: Luis Pérez", "customer.customer.create"),
+        ("hay que registrar un producto: café con leche a 1,50 €", "inventory.product.create"),
     ],
 )
 def test_what_is_registered_as_new_is_still_created(asked, first):
