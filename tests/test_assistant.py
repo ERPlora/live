@@ -381,7 +381,7 @@ LISTS = {
 @pytest.fixture
 def lists(monkeypatch):
     """A write of every kind of list, and the labels its app gives a closed list: «s» and «m»."""
-    monkeypatch.setattr(assistant, "choice_label", lambda app, entity, name, value: {"s": "Small", "m": "Medium"}.get(value))
+    monkeypatch.setattr(assistant.cards, "choice_label", lambda app, entity, name, value: {"s": "Small", "m": "Medium"}.get(value))
     return op("testapp.probe.lists", ai=CREATE, input=ListsIn)
 
 
@@ -409,7 +409,7 @@ def test_records_the_card_leaves_out_are_still_said_in_words_never_by_their_id(l
 
 def test_a_list_with_one_item_left_as_sent_is_not_named(lists, monkeypatch):
     """A value of a closed list its app gives no label, or a moment that is none: as sent, so the list is not named."""
-    monkeypatch.setattr(assistant, "choice_label", lambda app, entity, name, value: {"s": "Small"}.get(value))
+    monkeypatch.setattr(assistant.cards, "choice_label", lambda app, entity, name, value: {"s": "Small"}.get(value))
     card = assistant.card(lists, {"sizes": ["s", "m"], "days": ["2026-11-02", "soon"]}, "en")
     assert named(card) == {"sizes": False, "days": False}
 
@@ -477,7 +477,7 @@ def test_an_empty_datum_beside_its_record_does_not_count(lines):
 def test_a_line_is_named_only_when_the_datum_it_carries_alone_is_said_in_words(lines, monkeypatch):
     """The one datum of a line is judged as an item of a list is: a day, a value of a closed list by its label; one left
     as sent (no label, no day) is not, or the screen would say a code."""
-    monkeypatch.setattr(assistant, "choice_label", lambda app, entity, name, value: {"s": "Small"}.get(value))
+    monkeypatch.setattr(assistant.cards, "choice_label", lambda app, entity, name, value: {"s": "Small"}.get(value))
     card = assistant.card(lines, {"whens": [{"day": "2026-11-02"}, {"size": "s"}]}, "en")
     assert named(card) == {"whens": True}
     assert fields(card)["whens"]["value"][1] == {"size": "Small"}
@@ -740,7 +740,7 @@ MODEL_CHOICES = {
 @pytest.fixture
 def rectify(monkeypatch):
     monkeypatch.setattr(
-        assistant, "choice_label", lambda app, entity, name, value: MODEL_CHOICES.get((app, name), {}).get(value)
+        assistant.cards, "choice_label", lambda app, entity, name, value: MODEL_CHOICES.get((app, name), {}).get(value)
     )
     return op("testapp.probe.rectify", ai=CREATE, input=RectifyIn)
 

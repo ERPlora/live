@@ -191,7 +191,7 @@ def test_a_tools_asks_are_read_once_however_many_turns_rank_it(monkeypatch):
     """The QA ranks once per ask of a catalogue of hundreds: what each tool says is read once, not once per turn."""
     read = Counter()
     real = assistant.asks_of
-    monkeypatch.setattr(assistant, "asks_of", lambda op: read.update([op.name]) or real(op))
+    monkeypatch.setattr(assistant.ranking, "asks_of", lambda op: read.update([op.name]) or real(op))
     tools = {
         op.name: op
         for op in (tool(f"x.thing{i}.create", "Creates a thing.", asks={"es": ("créame una cosa", "otra cosa")})
