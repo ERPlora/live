@@ -277,7 +277,12 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   sobre ello— lo que nombra no es un dato que tomen («registra que entran 20 cafés a 0,55 € la unidad» recibe la
   mercancía; la cantidad no es la de una línea de la cuenta ni la de un producto nuevo). Si trata de otra cosa, sus
   datos siguen diciendo qué escritura lo apunta («apunta que el viernes vienen 6 a cenar a nombre de Luis» es una
-  reserva; live#116), y
+  reserva; live#116). El pasado compuesto en plural de un verbo en «-ar» («han entrado», «habían entrado») se lee
+  también como su presente, dicho delante y sin quitar lo dicho («entran han entrado»): nombra lo que nombra el
+  presente y es sobre lo que actúa el verbo que lo apunta («apunta que han entrado 12 unidades de tarta» recibe la
+  mercancía, como «apunta que entran…»); no si lo que entra, dicho justo detrás, es dinero («han entrado 100 €»), ni si
+  ese presente pide una acción («han cuadrado» no es «cuadran»), ni en una pregunta («¿quiénes han entrado alguna
+  vez?»), y el singular («ha entrado» es «entra») y los participios en «-ido» se leen como se dicen (live#122), y
   «retira» y «retirar» lo quitan, lo retiran o lo retiran
   como permiso (`delete`, `remove`, `retire`, `withdraw`: decide la cosa nombrada, «retira la mesa 90», «retira el
   dispositivo», «retira su consentimiento»; en inglés, «retire» y «withdraw»), también con sus pronombres
