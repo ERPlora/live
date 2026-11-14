@@ -2375,9 +2375,13 @@ def test_a_device_registered_is_set_up_to_print(asked, language):
         ("registra en esta tablet una salida de 15 € para hielo", "es", "cash_register.movement.add"),
         ("registra una salida de 15 € desde la tablet de la barra", "es", "cash_register.movement.add"),
         ("registra un cliente nuevo desde esta tablet", "es", "customer.customer.create"),
+        ("registra desde esta tablet una salida de 20 € para pan", "es", "cash_register.movement.add"),
+        ("registra con esta tablet una entrada de 50 € de cambio", "es", "cash_register.movement.add"),
         # English's «register» is also the till: only where it starts the command does it register.
         ("open the register on this tablet with a 100 € float", "en", "cash_register.session.open"),
         ("close the register on the bar tablet", "en", "cash_register.session.close"),
+        ("register 2: close it from this tablet", "en", "cash_register.session.close"),
+        ("register on this tablet won't open, open it with a 50 € float", "en", "cash_register.session.open"),
     ],
 )
 def test_a_device_named_but_not_registered_is_not_set_up_to_print(asked, language, first):
@@ -2397,6 +2401,18 @@ def test_a_device_named_but_not_registered_is_not_set_up_to_print(asked, languag
         ("register this tablet as Bar tablet", {"create", "register"}),
         ("please register this laptop as Office", {"create", "register"}),
         ("rename it and register this device as Bar 2", {"rename", "create", "register"}),
+        ("rename it then register this device as Bar 2", {"rename", "create", "register"}),
+        # Said twice, as the command and as the till: the command still registers.
+        ("register this tablet and close the register", {"close", "create", "register"}),
+        # The device said right after as where or with what it is done is not what is registered.
+        ("registra desde esta tablet una salida de 20 €", {"create", "add"}),
+        ("registra con esta tablet una entrada de 50 €", {"create", "add"}),
+        ("regístrame desde este ordenador un cliente nuevo", {"create", "add"}),
+        # The till said by its number or with where it is, even first in the sentence.
+        ("register 2: close it from this tablet", {"close", "create"}),
+        ("register on this tablet won't open", {"open", "create"}),
+        ("register from the bar tablet is stuck", {"create"}),
+        ("registra 2 tablets nuevas para la terraza", {"create", "add", "register"}),
         # English's «register» is also the till: anywhere but where a command starts it registers nothing.
         ("open the register on this tablet", {"open", "create"}),
         ("close the cash register", {"close", "create"}),

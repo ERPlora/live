@@ -333,6 +333,9 @@ _STATES = frozenset({"create", "add"})
 #: and of a tool only when what the command acts on is that tool's thing — a tablet named as where something is
 #: registered («registra en esta tablet una salida de 15 €») is not set up (ERPlora/live#117).
 _REGISTERS = frozenset({"register"})
+#: What says, right after the word that registers, where or with what it is done: the device named so is not what is
+#: registered («registra desde esta tablet una salida de 20 €», «registra con esta tablet…»).
+_REGISTERED_FROM = frozenset({"desde", "con", "on", "from"})
 #: The words that open a phrase of its own, as an article, a possessive or «otro» do («en la caja», «su teléfono», «un
 #: documento», «otra salida»), but those of ``STOP_WORDS`` («una», «esta», «sus»): what is put after where it is put
 #: is named in one.
@@ -870,12 +873,16 @@ def _registers(words: list[str], at: int) -> bool:
     where it notes down what happened («registra que la tablet se ha roto»), and English's «register», which is also
     the till («open the register on this tablet», «close the cash register»), only where it starts the command: first,
     after the words of a request, or after ``_THEN`` («register this tablet as Bar», «please register…», «and
-    register…»)."""
-    if at + 1 < len(words) and words[at + 1] in _THAT:
+    register…»), and never before its number («register 2: close it»). Nor right before where or with what it is done
+    (``_REGISTERED_FROM``: «registra desde esta tablet una salida», «register on this tablet won't open»)."""
+    after = words[at + 1] if at + 1 < len(words) else ""
+    if after in _THAT or after in _REGISTERED_FROM:
         return False
     if words[at] != "register":
         return True
-    return at == len(words) - len(_opening(words)[0]) or (at > 0 and words[at - 1] in _THEN)
+    return not after.isdigit() and (
+        at == len(words) - len(_opening(words)[0]) or (at > 0 and words[at - 1] in _THEN)
+    )
 
 
 def _noted(words: list[str], at: int, extra: tuple[tuple[str, ...], ...]) -> set[frozenset[str]]:
