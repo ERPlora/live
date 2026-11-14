@@ -489,4 +489,48 @@ Hace falta un Postgres. El de `erplora-next` vale tal cual: desde su raíz, `doc
 postgres` (jamás `down -v`). Si no, cualquier Postgres 17 apuntado con las variables `DB_NAME`,
 `DB_USER`, `DB_PASSWORD`, `DB_HOST` y `DB_PORT` (por defecto `hub`/`hub`/`hub`/`127.0.0.1`/`5432`,
 las del `compose.yaml`). Los ajustes de prueba están en `tests/settings.py` y la app mínima de
-apoyo en `tests/testapp/`.
+apoyo en `tests/testapp/`. Dos suites a la vez contra el mismo Postgres (otra sesión, el hook de abajo) se separan
+con `TEST_DB_NAME`, que da nombre a la BD de test (`TEST_DB_NAME=test_live_yo uv run pytest -q`); sin ella, `test_hub`.
+
+## Comprobaciones antes del push (sin CI)
+
+El repositorio no usa GitHub Actions (Ioan, 2026-11-10: en la organización, solo `ERPlora/aws`). Lo que corría el
+workflow `test` en cada push a `main` y en cada PR lo corre el hook versionado `.githooks/pre-push` en la máquina que
+empuja, y un rojo para el push con el paso que falló. No hay variable para saltárselo.
+
+Se activa una vez por clon, en el Mac y en el Linux (pide `uv` y el Postgres de arriba):
+
+```bash
+git clone https://github.com/ERPlora/live.git && cd live
+git config core.hooksPath .githooks
+```
+
+Como submódulo de `hub` o de `saas`, el ajuste va al repo del submódulo (`.git/modules/packages/live/config` del repo
+padre) y vale para todos sus worktrees:
+
+```bash
+git -C hub/packages/live config core.hooksPath .githooks   # desde la raíz de erplora-next; igual con saas/packages/live
+```
+
+Solo cuando el commit que tiene fuera el submódulo, y cada worktree suyo, ya traiga `.githooks/`: con una ruta que no
+existe, git no ejecuta ningún hook, tampoco los globales, y no avisa.
+
+- **Qué comprueba**, sobre una copia limpia del commit que se empuja (un worktree temporal, nunca el árbol de
+  trabajo) y en el orden del workflow: `uv sync --locked`, que el Postgres esté en alcance (lo que hacía el
+  healthcheck del servicio del job, con la misma conexión que abrirá la suite) y `uv run --locked pytest -q`. Sin
+  Postgres para antes de pytest y dice cómo levantarlo: `docker compose up -d` desde la raíz de erplora-next (jamás
+  `down -v`), o las variables `DB_*` hacia otro. Si la sonda se rompe por otra cosa (un `tests/settings.py` roto en el
+  commit), para igual pero no manda a levantar ningún Postgres.
+- **Su propia BD de test**: pytest corre con `TEST_DB_NAME=test_live_prepush_<12 hex>`, una por worktree, para no
+  borrar la de otra sesión que corre la suite a la vez; lo que deja un push cortado lo borra el siguiente del mismo
+  worktree. El entorno de quien empuja no cambia lo que se prueba: su `TEST_DB_NAME`, `DJANGO_SETTINGS_MODULE`,
+  `PYTEST_ADDOPTS`, `PYTHONPATH` y `VIRTUAL_ENV` no llegan a la suite; las `DB_*`, sí.
+- **El `actionlint`** del workflow no se porta: solo revisaba `.github/workflows/`, que se va con él.
+- **Cuándo**: en todo push de cualquier rama, como el workflow, que corría en cada PR y no filtraba rutas. Borrar una
+  rama no comprueba nada. Tarda lo que la suite: minuto y medio en un Mac con Apple Silicon.
+- **Primero los hooks globales**: un `core.hooksPath` del repo sustituye al global, así que cada hook de `.githooks/`
+  (`pre-push`, `pre-commit`, `commit-msg` y `applypatch-msg`) ejecuta antes el del mismo nombre de
+  `git config --global core.hooksPath`, si existe, con los mismos argumentos y la misma entrada; si falla, para. Sin
+  hooks globales (un clon nuevo, el Linux) no hacen nada más.
+- Batería de los hooks: `bash .githooks/pre-push.test.sh` (bash 5; en el Mac, el de Homebrew: el 3.2 da verdes
+  falsos).

@@ -23,6 +23,9 @@ DATABASES = {
         "PASSWORD": os.environ.get("DB_PASSWORD", "hub"),
         "HOST": os.environ.get("DB_HOST", "127.0.0.1"),
         "PORT": os.environ.get("DB_PORT", "5432"),
+        # Two runs of the suite at once (another session, the pre-push hook) each set their own TEST_DB_NAME,
+        # so neither drops the other's test database. Unset, Django's default: test_ + NAME (test_hub).
+        "TEST": {"NAME": os.environ.get("TEST_DB_NAME") or None},
     }
 }
 # A second alias of the same database, for the operations that run on a project's own alias

@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+# pre-push of ERPlora/live: what the removed `test` workflow checked on GitHub runs here, before the
+# push leaves the machine (GitHub Actions is kept for ERPlora/aws only).
+#   1. The machine-wide pre-push runs first, with the same arguments and the same stdin: a repo-local
+#      core.hooksPath replaces the global one, and without this it would stop running unnoticed.
+#   2. Every pushed commit is checked out clean in a temporary worktree, as the CI did, and the
+#      checks run there: what is checked is what is pushed, never the working tree. The workflow ran
+#      on every push to main and every pull request, with no path filter: every push is checked.
+#   3. The suite needs a Postgres (on GitHub, a service of the job; here, the one of erplora-next's
+#      compose.yaml or any other through DB_*): a probe aborts early, saying how to start it, when
+#      it is out of reach. pytest runs on a test database of its own per working tree, so that it
+#      never drops the one of a session running the suite at the same time.
+# The workflow's actionlint step is not ported: it linted .github/workflows, and its only file went
+# away with it. A red check aborts the push. There is no switch to skip it.
+# Battery: bash .githooks/pre-push.test.sh
+set -u
+
+zero=0000000000000000000000000000000000000000
+hook_dir=$(cd "$(dirname "$0")" && pwd -P)
+scratch=$(mktemp -d "${TMPDIR:-/tmp}/live-pre-push.XXXXXX") || exit 1
+tree=
+cleanup() {
+  [ -n "$tree" ] && git worktree remove --force "$tree" > /dev/null 2>&1
+  rm -rf "${scratch:?}"
+  git worktree prune > /dev/null 2>&1
+}
+trap cleanup EXIT
+# Kept byte for byte: the global hook and this one read the same refs.
+cat > "$scratch/stdin"
+
+global=$(git config --global --path --get core.hooksPath 2>/dev/null || true)
+if [ -n "$global" ] && [ -x "$global/pre-push" ] && [ "$(cd "$global" 2>/dev/null && pwd -P)" != "$hook_dir" ]; then
+  if ! "$global/pre-push" "$@" < "$scratch/stdin"; then
+    echo "pre-push: the global pre-push hook ($global/pre-push) rejected the push" >&2
+    exit 1
+  fi
+fi
+
+# One test database per working tree (each worktree has its own git dir): two pushes from two
+# checkouts never share it, and the leftover of a killed run is dropped by the next one.
+test_db="test_live_prepush_$(git rev-parse --absolute-git-dir | git hash-object --stdin | cut -c1-12)"
+
+# One step of the workflow: $1 ref, $2 short sha, then the command. Its stdin is /dev/null: the
+# loop below reads the refs of the push from stdin, and a step must never eat them.
+step() {
+  local ref=$1 short=$2
+  shift 2
+  echo "pre-push: $* ($short)" >&2
+  if ! "$@" >&2 < /dev/null; then
+    echo "pre-push: $* failed on $short ($ref): push aborted" >&2
+    return 1
+  fi
+}
+
+# The job's Postgres service had a health check (pg_isready -U hub -d hub): the same connection the
+# suite will open (tests/settings.py and its DB_* variables), with a short timeout. The probe exits 3
+# when Postgres is out of reach; anything else that breaks it (a broken tests/settings.py) is no
+# reason to start a Postgres, and the abort says so.
+postgres_reachable() {
+  local ref=$1 short=$2 rc
+  echo "pre-push: Postgres probe ($short)" >&2
+  PGCONNECT_TIMEOUT=${PGCONNECT_TIMEOUT:-5} uv run --locked python - >&2 <<'PY'
+import os
+import sys
+
+import django
+
+os.environ["DJANGO_SETTINGS_MODULE"] = "tests.settings"
+django.setup()
+
+from django.db import OperationalError, connection  # noqa: E402
+
+db = connection.settings_dict
+try:
+    connection.ensure_connection()
+except OperationalError as error:
+    detail = " ".join(str(error).split())
+    print(f"Postgres at {db['HOST']}:{db['PORT']} (database {db['NAME']}, user {db['USER']}): {detail}", file=sys.stderr)
+    sys.exit(3)
+connection.close()
+PY
+  rc=$?
+  [ "$rc" -eq 0 ] && return 0
+  if [ "$rc" -eq 3 ]; then
+    echo "pre-push: Postgres is not reachable, the suite cannot run on $short ($ref): push aborted" >&2
+    echo "pre-push: start the local one from the erplora-next root with \`docker compose up -d\` (never \`down -v\`)," >&2
+    echo "pre-push: or point DB_HOST, DB_PORT, DB_NAME, DB_USER and DB_PASSWORD at another Postgres (README, «Cómo se prueba»)" >&2
+  else
+    echo "pre-push: the Postgres probe failed on $short ($ref): push aborted" >&2
+  fi
+  return 1
+}
+
+# The steps of the test workflow, in its order, in the checkout of the pushed commit.
+run_checks() {
+  step "$1" "$2" uv sync --locked &&
+    postgres_reachable "$1" "$2" &&
+    step "$1" "$2" uv run --locked pytest -q
+}
+
+checked=
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ -n "${local_sha:-}" ] || continue
+  # Deleting a remote branch uploads nothing: there is nothing to check.
+  [ "$local_sha" = "$zero" ] && continue
+  # A new branch (remote_sha all zeros) is checked like an update: no path filter to apply.
+  [ "${remote_sha:-$zero}" = "$zero" ] && local_ref="$local_ref, new branch $remote_ref"
+  case " $checked " in *" $local_sha "*) continue ;; esac
+  checked="$checked $local_sha"
+  short=$(git rev-parse --short "$local_sha")
+  if ! command -v uv > /dev/null 2>&1; then
+    echo "pre-push: uv is missing, the checks cannot run: push aborted (README, «Comprobaciones antes del push»)" >&2
+    exit 1
+  fi
+  tree="$scratch/tree"
+  if ! git worktree add --quiet --detach "$tree" "$local_sha" > /dev/null 2>&1; then
+    echo "pre-push: could not check out $short in a temporary worktree: push aborted" >&2
+    exit 1
+  fi
+  # The checks run as on a fresh clone and as the CI did: no variable of this push points git at
+  # another repo, and nothing of the caller's shell picks other settings, other options, other
+  # modules or another session's test database.
+  if ! (
+    cd "$tree" &&
+      unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_COMMON_DIR \
+        DJANGO_SETTINGS_MODULE PYTEST_ADDOPTS PYTHONPATH VIRTUAL_ENV &&
+      export TEST_DB_NAME="$test_db" &&
+      run_checks "$local_ref" "$short"
+  ); then
+    exit 1
+  fi
+  git worktree remove --force "$tree" > /dev/null 2>&1
+  tree=
+done < "$scratch/stdin"
+exit 0

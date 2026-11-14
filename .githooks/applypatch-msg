@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# A repo-local core.hooksPath (.githooks) replaces the machine-wide one: run the global hook of this
+# name with the same arguments and return its exit code. Without one (a fresh clone, Linux), exit 0.
+# The same file is commit-msg, pre-commit and applypatch-msg. Battery: bash .githooks/pre-push.test.sh
+set -u
+name=$(basename "$0")
+hook_dir=$(cd "$(dirname "$0")" && pwd -P)
+global=$(git config --global --path --get core.hooksPath 2>/dev/null || true)
+if [ -n "$global" ] && [ -x "$global/$name" ] && [ "$(cd "$global" 2>/dev/null && pwd -P)" != "$hook_dir" ]; then
+  exec "$global/$name" "$@"
+fi
+exit 0
