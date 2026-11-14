@@ -321,9 +321,9 @@ _WRITTEN_ON = frozenset({"update"})
 #: act on («borra del historial la cuenta», «pon en la web el horario»).
 _PUTS = frozenset({"add"})
 #: The word after which a word that notes something down or puts it somewhere says what happened («registra que entran
-#: 20 cafés…», «apunta que Carmen prefiere las mañanas»): the create and the add it asks for note that down, and what
-#: the fact names is no datum they take (ERPlora/live#116). Said later, it says what is written where («registra en la
-#: ficha de Ana que…»).
+#: 20 cafés…», «apunta que Carmen prefiere las mañanas»): the create and the add it asks for note that down, and when
+#: the fact is another tool's doing, what it names is no datum they take (ERPlora/live#116). Said later, it says what is
+#: written where («registra en la ficha de Ana que…»).
 _THAT = frozenset({"que"})
 _STATES = frozenset({"create", "add"})
 #: The words that open a phrase of its own, as an article, a possessive or «otro» do («en la caja», «su teléfono», «un
@@ -1187,8 +1187,11 @@ def relevant(
     nuevo a Ana»): of no thing named, a write that takes only what another word names in passing adds nothing («anota
     una salida de 15 € de la caja» notes a movement down, not the till's settings, which take the cash register;
     ERPlora/live#88), and one that takes what is noted down, or nothing named, adds what any other write does. A create
-    or an add asked only by a word that notes down what happened (``Asked.stated``: «registra que entran 20 cafés a 0,55 €
-    la unidad») takes nothing the fact names: of no thing named, a write that takes it adds nothing (ERPlora/live#116).
+    or an add asked only by a word that notes down what happened (``Asked.stated``) takes nothing the fact names when the
+    fact is another tool's doing: what it is about is what a tool's action acts on and no write asked acts on it
+    («registra que entran 20 cafés a 0,55 € la unidad»: receiving goods), and then, of no thing named, a write that takes
+    it adds nothing; about anything else, the fact's data still say which write notes it down («apunta que el viernes
+    vienen 6 a cenar a nombre de Luis»: a reservation; ERPlora/live#116).
 
     A write of a thing named after its verb brings its reads 3 («borra el cliente Ana»: the read that finds Ana). A
     question that asks to know and to do nothing puts the reads first (1), a thing's list before its other reads (1),
@@ -1246,6 +1249,13 @@ def _relevant(
             for op in tools.values()
         )
         for concept in said.objects
+    )
+    # What happened, noted down («registra que entran 20 cafés…»), is another tool's doing when what it is about is what
+    # a tool's action acts on («entran»: ``stock.receive``) and no write asked acts on it: its data are not the create's
+    # or the add's asked so. About anything else («vienen 6 a cenar a nombre de Luis», «la clienta Ana…»), its data
+    # still say which write notes it down.
+    done_by_another = not aimed_at and any(
+        not concept.isdisjoint(_parts(op.name.split(".")[2])[0]) for op in tools.values() for concept in said.objects
     )
     # What a switch turns on or off that the catalogue names as no thing, beside the apps said with it («los
     # recordatorios» of «desactiva los recordatorios de las citas», «the appointment reminders»): only what people say
@@ -1322,8 +1332,8 @@ def _relevant(
                 # What «anota» writes on is a thing named, or what it notes down («apúntale el teléfono nuevo a Ana»): a
                 # write that takes only what another word names in passing is none of it («anota una salida de 15 €
                 # de la caja»: the till's settings take the cash register, not the money taken out). What happened, noted
-                # down («registra que entran 20 cafés a 0,55 € la unidad»), gives the create or the add asked so none of
-                # what it names: the quantity is the goods', not a check line's.
+                # down as another tool's doing («registra que entran 20 cafés a 0,55 € la unidad»), gives the create or
+                # the add asked so none of what it names: the quantity is the goods', not a check line's.
                 in_passing = (
                     takes
                     and writes
@@ -1332,7 +1342,7 @@ def _relevant(
                             writes <= said.written_on
                             and not any(not concept.isdisjoint(taken) for concept in said.noted)
                         )
-                        or writes <= said.stated
+                        or (done_by_another and writes <= said.stated)
                     )
                 )
                 if not in_passing:

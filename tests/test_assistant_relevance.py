@@ -1126,6 +1126,8 @@ def test_what_is_registered_as_new_is_still_created(asked, first):
         ("registra en la ficha de Ana que es alérgica al marisco", set()),
         ("registra una clienta nueva que se llama Marta", set()),
         ("registra una salida de 15 € en el turno", set()),
+        # «Que» said right before the verb is no fact the verb notes down (the review of ERPlora/live#121).
+        ("hay que registrar una salida de 15 € en el turno", set()),
         # Asked by another word too, the action is that word's.
         ("registra que entran 20 cafés y añade dos a la mesa 4", set()),
         ("crea un aviso que diga «Sin gluten»", set()),
@@ -1187,7 +1189,8 @@ RECEIVED = [
     *NOISE,
 ]
 #: The Hub's words for goods coming in and for how many.
-RECEIVED_WORDS = (("entra", "entran", "recibe", "recibir", "receive", "albarán"), ("unidad", "cantidad", "quantity"))
+RECEIVED_WORDS = (("entra", "entran", "recibe", "recibir", "receive", "albarán"),
+                  ("unidad", "unidades", "cantidad", "quantity"))
 
 
 @pytest.mark.parametrize(
@@ -1231,6 +1234,61 @@ def test_what_is_noted_down_as_what_happened_still_adds_what_it_names(asked, fir
     names = ranked(RECEIVED, asked, synonyms=(*RECEIVED_WORDS, *CHECK))
     writes = [name for name in names if not name.endswith((".list", ".detail"))]
     assert writes[0] == first, names[:6]
+
+
+class BlockedTimeIn(Schema):
+    staff: str
+    starts_at: str
+    ends_at: str
+
+
+class SessionMovementIn(Schema):
+    session: str
+    type: str
+    amount: int
+
+
+#: Facts whose data say which write notes them down, as the Hub's: a reservation by its guest's name, a customer's note
+#: by the customer, a check's line by its quantity, a member's blocked time by the member, a movement by the session of
+#: the till. A customer is also what a tool's action acts on (a conversation's ``link_customer``), and so is a session
+#: no write asked here acts on (the till's ``session.close`` is of a session, not on it).
+FACTS = [
+    *RECEIVED,
+    tool("reservation.reservation.create", "Takes a reservation: the guest, the day and time, the party size.",
+         input=ReservationIn),
+    tool("appointment.blocked_time.create", "Block a member's time in the agenda: when they do not work.",
+         input=BlockedTimeIn),
+    tool("cash_register.movement.add", "Record cash brought into the drawer or taken out of it.",
+         input=SessionMovementIn),
+    tool("cash_register.session.close", "Close the open session of the till."),
+    tool("customer.customer.create", "Creates a new customer; only the name is required.", input=CustomerIn),
+    tool("customer.customer.list", "List the customers.", "query"),
+    tool("customer.customer.detail", "Show a customer's card.", "query"),
+    tool("whatsapp_inbox.conversation.link_customer", "Link a conversation to a customer's card."),
+]
+
+
+@pytest.mark.parametrize(
+    ("asked", "noted_by"),
+    [
+        ("apunta que el viernes vienen 6 a cenar a nombre de Luis", "reservation.reservation.create"),
+        ("registra que la clienta Ana es alérgica al marisco", "customer.note.add"),
+        ("añade que quieren dos unidades más de tarta", "sale.order.add_line"),
+        ("anota que Carmen no trabaja el lunes por la mañana", "appointment.blocked_time.create"),
+        # What the fact is about names no tool's action: the session is what a movement is added to.
+        ("anota que la sesión de caja ha tenido una entrada de 50 €", "cash_register.movement.add"),
+    ],
+)
+def test_what_is_noted_down_as_what_happened_still_gives_its_data_to_the_write_they_name(asked, noted_by):
+    """The data of a fact are what says which write notes it down when the fact is about nothing another tool does
+    («apunta que el viernes vienen 6 a cenar a nombre de Luis»: a reservation, by its guest's name): that write comes
+    before the writes of what nobody named and before every read (the review of ERPlora/live#121: taking the data of
+    every fact from the writes it asks for, the reservation came 50th in the Hub, the customer's note 39th behind the
+    reads of the customer, the check's line 54th and the member's blocked time 172nd)."""
+    names = ranked(FACTS, asked, synonyms=(*RECEIVED_WORDS, *CHECK))
+    assert noted_by in names, names[:6]
+    nobody_named_or_read = {op.name for op in FACTS if op in NOISE or op.kind == "query"}
+    assert not set(names[: names.index(noted_by)]) & nobody_named_or_read, names[:6]
 
 
 #: What «desactiva» and «activa» ask for: switching a thing off or on, as an app's switch does, or deactivating and

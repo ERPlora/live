@@ -262,9 +262,12 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   «apúntale a Ana el nuevo teléfono», «apunta el número de teléfono de Ana»), nunca en un ajuste que solo toma lo que
   se nombra de paso («anota una salida de 15 € de la caja» apunta un movimiento, no cambia los ajustes de la caja;
   live#88). Dichos justo antes de «que» («registra que…», «apunta que…», «anota que…», «añade que…»), apuntan lo que
-  ha pasado: siguen pidiendo `create` y `add` (la nota de «apunta que Carmen prefiere las mañanas»), pero lo que nombra
-  el hecho no es un dato que tomen («registra que entran 20 cafés a 0,55 € la unidad» recibe la mercancía; la cantidad
-  no es la de una línea de la cuenta ni la de un producto nuevo; live#116), y
+  ha pasado: siguen pidiendo `create` y `add` (la nota de «apunta que Carmen prefiere las mañanas»), y cuando el hecho
+  es lo que hace otra herramienta —trata de lo que nombra la acción de una herramienta y ninguna escritura pedida actúa
+  sobre ello— lo que nombra no es un dato que tomen («registra que entran 20 cafés a 0,55 € la unidad» recibe la
+  mercancía; la cantidad no es la de una línea de la cuenta ni la de un producto nuevo). Si trata de otra cosa, sus
+  datos siguen diciendo qué escritura lo apunta («apunta que el viernes vienen 6 a cenar a nombre de Luis» es una
+  reserva; live#116), y
   «retira» y «retirar» lo quitan, lo retiran o lo retiran
   como permiso (`delete`, `remove`, `retire`, `withdraw`: decide la cosa nombrada, «retira la mesa 90», «retira el
   dispositivo», «retira su consentimiento»; en inglés, «retire» y «withdraw»), también con sus pronombres
