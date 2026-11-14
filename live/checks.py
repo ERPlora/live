@@ -33,14 +33,20 @@ Every tool of the apps a project lists in
 ``LIVE_ASSISTANT_ASKS_REQUIRED`` says what a person would type to ask for it (``AI.asks``) in English and Spanish, at
 least two distinct phrases each, none its own name nor longer than ``MAX_ASK_CHARS`` (E020). An app is listed once all
 of its tools say them, so the apps take it on one at a time.
+
+An app's ``services`` or ``queries`` may be a package; importing a module of it is what registers its operations, so
+every module of the package is imported at startup, by the package's ``__init__.py`` (E021).
 """
 
+import pkgutil
 import re
 import string
+import sys
 import typing
 from collections.abc import Mapping
 from typing import Any
 
+from django.apps import apps
 from django.conf import settings
 from django.core import checks
 from django.utils import translation
@@ -240,6 +246,32 @@ def _asks_problems(op: operations.Operation) -> list[str]:
 
 
 @checks.register("live")
+def check_door_packages(app_configs: Any = None, **kwargs: Any) -> list[checks.CheckMessage]:
+    """E021: a module of an app's services or queries package that nothing imported at startup."""
+    return [
+        checks.Error(
+            f"{module} is never imported, so the operations it declares are not registered.",
+            hint=f"Import it in the __init__.py of {package.__name__}: from . import {module.rsplit('.', 1)[1]}",
+            obj=config,
+            id="live.E021",
+        )
+        for config in apps.get_app_configs()
+        for package in _door_packages(config)
+        for module in _unimported_modules(package)
+    ]
+
+
+def _door_packages(config: Any) -> list[Any]:
+    found = (sys.modules.get(f"{config.name}.{door}") for door in operations.DOORS.values())
+    return [module for module in found if module is not None and hasattr(module, "__path__")]
+
+
+def _unimported_modules(package: Any) -> list[str]:
+    names = (f"{package.__name__}.{info.name}" for info in pkgutil.iter_modules(package.__path__))
+    return [name for name in names if name not in sys.modules]
+
+
+@checks.register("live")
 def check_session_events(app_configs: Any = None, **kwargs: Any) -> list[checks.CheckMessage]:
     """E019: ``LIVE["session_events"]`` (optional) is a list of event names that some ``events.py`` declares."""
     value = getattr(settings, "LIVE", {}).get("session_events", [])
@@ -423,7 +455,8 @@ def _item_problems(config: Any, item: Any, events: frozenset[str]) -> list[tuple
             (
                 "live.E010",
                 operation_problem,
-                f"Name a query (kind='query') of {config.label}'s queries.py, e.g. '{config.label}.<entity>.status'.",
+                f"Name a query (kind='query') of {config.label}'s queries.py or queries/ package,"
+                f" e.g. '{config.label}.<entity>.status'.",
             )
         )
     if item.permission is not None and item.permission not in config.permissions:

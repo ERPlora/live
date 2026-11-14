@@ -1,7 +1,8 @@
 """Operations: every read and write declared once with ``@operation``.
 
-A ``query`` lives in an app's ``queries.py`` and runs in a ``READ ONLY`` transaction with a local
-``statement_timeout``; a ``command`` lives in ``services.py`` and runs in its own transaction. The
+A ``query`` lives in an app's ``queries.py`` (or a module of its ``queries/`` package) and runs in a ``READ ONLY``
+transaction with a local ``statement_timeout``; a ``command`` lives in ``services.py`` (or ``services/``) and runs in
+its own transaction. The
 ninja route, the live subscription, the assistant and the API keys all call the same
 ``Operation``, which checks the permission, opens the transaction, validates the output and, for a
 command, hands the names of the events it recorded to ``notify_hook`` after the COMMIT.
@@ -51,7 +52,9 @@ from live.errors import LiveMisuse, PermissionDenied
 Kind = Literal["query", "command"]
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
 QUERY_STATEMENT_TIMEOUT = "5s"
-_MODULE_SUFFIX: dict[str, str] = {"query": ".queries", "command": ".services"}
+# Where an operation of each kind is declared: the app's services or queries, a file (``<app>.services``) or a module
+# of that package (``<app>.services.<module>``). One level only: live.E021 checks the package's own modules.
+DOORS: dict[str, str] = {"query": "queries", "command": "services"}
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -251,6 +254,12 @@ class Operation:
 registry: dict[str, Operation] = {}
 
 
+def _in_door(module: str, door: str) -> bool:
+    """Whether ``module`` is ``<app>.<door>`` or ``<app>.<door>.<module>``."""
+    parts = module.split(".")
+    return (len(parts) >= 2 and parts[-1] == door) or (len(parts) >= 3 and parts[-2] == door)
+
+
 def _declaration(op: Operation) -> tuple:
     return (op.fn, op.kind, op.permission, op.input, op.output, op.expose_api, op.ai, op.database, op.repeatable)
 
@@ -276,7 +285,7 @@ def operation(
     """
     if not NAME_RE.match(name):
         raise LiveMisuse(f"Operation name {name!r} must be <app>.<entity>.<action> (lowercase snake_case).")
-    if kind not in _MODULE_SUFFIX:
+    if kind not in DOORS:
         raise LiveMisuse(f"Operation {name!r}: kind must be 'query' or 'command', not {kind!r}.")
     for role, schema in (("input", input), ("output", output)):
         if not (isinstance(schema, type) and issubclass(schema, Schema)):
@@ -285,9 +294,12 @@ def operation(
         raise LiveMisuse(f"Operation {name!r}: repeatable is the word of a command that uses its database.")
 
     def register(fn: F) -> Operation:
-        suffix = _MODULE_SUFFIX[kind]
-        if not fn.__module__.endswith(suffix):
-            raise LiveMisuse(f"Operation {name!r}: a {kind} must be declared in a {suffix[1:]}.py module, not in {fn.__module__}.")
+        door = DOORS[kind]
+        if not _in_door(fn.__module__, door):
+            raise LiveMisuse(
+                f"Operation {name!r}: a {kind} must be declared in {door}.py or in a module of a {door}/ package,"
+                f" not in {fn.__module__}."
+            )
         declared = Operation(
             name=name,
             kind=kind,

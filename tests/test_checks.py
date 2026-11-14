@@ -657,6 +657,12 @@ def test_an_operation_of_another_app_is_e010_even_if_the_prefix_only_starts_alik
     assert message.id == "live.E010"
 
 
+def test_the_e010_hint_names_the_queries_file_and_the_queries_package(run):
+    [message] = run(module("stock", bell=[counter(operation="stock.catalog.ghost")]))
+
+    assert "stock's queries.py or queries/ package" in message.hint
+
+
 def test_each_hook_with_a_wrong_operation_is_its_own_e010(run):
     messages = run(
         module(

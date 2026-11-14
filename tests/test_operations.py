@@ -141,6 +141,33 @@ def test_command_outside_services_module_is_rejected(module):
     assert "x.thing.do" not in registry
 
 
+@pytest.mark.parametrize(("kind", "module"), [("query", "x.queries.thing"), ("command", "x.services.thing")])
+def test_an_operation_in_a_module_of_its_package_is_registered(kind, module):
+    op = declare(kind=kind, module=module)
+
+    assert registry["x.thing.do"] is op
+
+
+@pytest.mark.parametrize(
+    "module", ["x.services.thing", "x.queries.thing.part", "queries.thing", "x.queries_extra.thing", "x.helpers.thing"]
+)
+def test_query_outside_the_queries_package_is_rejected(module):
+    with pytest.raises(LiveMisuse, match=r"a query must be declared in queries\.py or in a module of a queries/ package"):
+        declare(kind="query", module=module)
+
+    assert "x.thing.do" not in registry
+
+
+@pytest.mark.parametrize(
+    "module", ["x.queries.thing", "x.services.thing.part", "services.thing", "x.services_extra.thing", "x.helpers"]
+)
+def test_command_outside_the_services_package_is_rejected(module):
+    with pytest.raises(LiveMisuse, match=rf"a command must be declared in services\.py or in a module of a services/ package, not in {module}\."):
+        declare(kind="command", module=module)
+
+    assert "x.thing.do" not in registry
+
+
 def test_unknown_kind_is_rejected():
     with pytest.raises(LiveMisuse):
         declare(kind="mutation", module="x.services")
