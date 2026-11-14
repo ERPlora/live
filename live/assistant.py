@@ -585,7 +585,7 @@ def _apart(word: str) -> str | None:
 
 
 @lru_cache(maxsize=65_536)
-def stem(word: str) -> str:
+def stem(word: str) -> str:  # noqa: C901
     """``word`` (plain: lowercase, no accents) cut to its stem, Spanish or English: the pronouns of a command off
     («cóbrale» is «cobra»), a plural «s» and one ending of a verb or a gender off, then five letters at most («vendí»,
     «vendido», «vendimos» → «vend»; «clientes», «client» → «clien»). The root keeps four letters, three for a plural
@@ -1123,7 +1123,7 @@ def _split_naming(sentences: list[list[str]]) -> set[tuple[str, str]]:
     return found
 
 
-def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked:
+def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked:  # noqa: C901, PLR0912, PLR0915
     """What ``texts`` ask (``Asked``): what each of their words names (``_concept``, with the project's ``synonyms``; a
     word of a verb's phrase names nothing, nor a verb but by its synonyms: «show me», «dame»), the actions they ask for
     (``VERBS``, a command with its pronouns too; money taken out, ``_TAKES_OUT``, asks to add it) and whether they ask
@@ -1311,7 +1311,7 @@ def _parts(action: str) -> tuple[frozenset[str], frozenset[str], frozenset[str]]
     return _stems_of(" ".join(acted_on)), _stems_of(" ".join(doing)), _stems_of(" ".join(words[cut:]))
 
 
-def relevant(
+def relevant(  # noqa: PLR0913
     tools: dict[str, Operation],
     texts: Iterable[str],
     language: str,
@@ -1365,7 +1365,7 @@ def relevant(
     return _relevant(tools, texts, language, always=always, app_words=app_words, synonyms=synonyms, howto=howto)
 
 
-def _relevant(
+def _relevant(  # noqa: C901, PLR0913, PLR0915
     tools: dict[str, Operation],
     texts: Iterable[str],
     language: str,
@@ -1449,7 +1449,7 @@ def _relevant(
             for rest, apps in unnamed
         ]
 
-    def score(op: Operation) -> int:
+    def score(op: Operation) -> int:  # noqa: C901, PLR0912
         app, entity, action = op.name.split(".")
         named_app, named_entity = app_words(app, language), _stems_of(entity.replace("_", " "))
         acted_on, doing, qualified = _parts(action)
@@ -1930,7 +1930,7 @@ def fitting(value: Any, prop: dict, defs: dict, depth: int = 0) -> dict:
     return resolved(prop, defs)
 
 
-def said(value: Any, prop: dict, defs: dict, name: str, words: Words, inner: bool = False) -> Any:
+def said(value: Any, prop: dict, defs: dict, name: str, words: Words, inner: bool = False) -> Any:  # noqa: PLR0911, PLR0913, PLR0917
     """``value`` in words as its schema ``prop`` declares it, at any depth: a moment as the person's language writes it
     (``Words.moment``), a value of a closed list by the label its app's models give it (``choice_label``; of the field
     its schema marks, ``CHOICES_OF``), a record by
@@ -2052,7 +2052,7 @@ def _said_in_words(value: list, spoken: list, prop: dict, defs: dict) -> bool:
     )
 
 
-def field(
+def field(  # noqa: C901, PLR0913, PLR0917
     name: str, label: str, prop: dict, defs: dict, value: Any, money: dict | None = None, words: Words | None = None
 ) -> dict | None:
     """One datum of a card, as its schema ``prop`` declares it: a secret hidden (``hidden``) and, with the ``words``

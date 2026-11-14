@@ -160,7 +160,7 @@ class Operation:
         risk = "high" if declared.get("risk") == "high" else "normal"
         return AI(description, risk, declared.get("preview"), declared.get("asks") or {})
 
-    def __call__(self, ctx: OperationContext, data: Schema) -> Schema:
+    def __call__(self, ctx: OperationContext, data: Schema) -> Schema:  # noqa: PLR0912
         if not ctx.has(self.permission):
             # Translated now, in the caller's language (the request's, or the live stream's).
             raise PermissionDenied(
@@ -255,7 +255,7 @@ def _declaration(op: Operation) -> tuple:
     return (op.fn, op.kind, op.permission, op.input, op.output, op.expose_api, op.ai, op.database, op.repeatable)
 
 
-def operation(
+def operation(  # noqa: PLR0913
     name: str,
     *,
     kind: Kind,
