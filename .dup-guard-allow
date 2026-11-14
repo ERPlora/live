@@ -1,0 +1,2 @@
+duplicados live/assistant/ranking.py:96-104 clon heredado de main (live/assistant.py:1316-1324): la firma de relevant, el envoltorio público de _relevant, que repite sus argumentos; live#141 solo mueve el fichero al paquete live/assistant/, sin tocar una línea
+duplicados live/assistant/ranking.py:150-158 clon heredado de main (live/assistant.py:1370-1378): la firma de _relevant, la otra copia de la de relevant; live#141 solo mueve el fichero al paquete live/assistant/, sin tocar una línea
