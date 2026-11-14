@@ -61,7 +61,7 @@ def _checked(top: int) -> None:
         raise ValueError(f"top must be between 1 and {MAX_TOOLS} (what a turn offers at most), not {top}.")
 
 
-def _positions(
+def _positions(  # noqa: PLR0913
     tools: dict[str, Operation],
     language: str,
     *,
@@ -91,7 +91,7 @@ def _positions(
             yield op, ask, offered.index(op.name) + 1 if op.name in offered else None
 
 
-def misses(
+def misses(  # noqa: PLR0913
     tools: dict[str, Operation],
     *,
     language: str,
@@ -116,7 +116,7 @@ def misses(
     return sorted(found, key=lambda miss: (miss.tool_name, miss.ask))
 
 
-def report(
+def report(  # noqa: PLR0913
     tools: dict[str, Operation],
     language: str,
     top: int = 10,

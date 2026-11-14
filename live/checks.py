@@ -198,7 +198,7 @@ def check_assistant_asks(app_configs: Any = None, **kwargs: Any) -> list[checks.
     return errors
 
 
-def _asks_problems(op: operations.Operation) -> list[str]:
+def _asks_problems(op: operations.Operation) -> list[str]:  # noqa: C901
     """Why ``op``'s asks (its ``ai=``'s, as declared) do not tell what a person would type to ask for it."""
     declared = op.ai
     asks = declared.asks if isinstance(declared, operations.AI) else declared.get("asks")

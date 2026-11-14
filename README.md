@@ -500,3 +500,18 @@ postgres` (jamás `down -v`). Si no, cualquier Postgres 17 apuntado con las vari
 `DB_USER`, `DB_PASSWORD`, `DB_HOST` y `DB_PORT` (por defecto `hub`/`hub`/`hub`/`127.0.0.1`/`5432`,
 las del `compose.yaml`). Los ajustes de prueba están en `tests/settings.py` y la app mínima de
 apoyo en `tests/testapp/`.
+
+### Tamaño de los ficheros y límites de las funciones
+
+La suite comprueba también la regla de tamaño y responsabilidad única:
+
+- `tests/test_file_size.py`: ningún fichero versionado `.py` o `.sh` pasa de 1.000 líneas físicas (los de tests,
+  bajo `tests/` o llamados `test_*.py` o `conftest.py`, de 1.500), sin contar las migraciones. Los que hoy se pasan
+  están en `.file-size-allow`, una línea por fichero (`<techo> <ruta> #<issue>`, techo = su tamaño redondeado hacia
+  arriba a la centena). La lista solo encoge: frente a la de `origin/main` no gana rutas ni sube techos, un fichero
+  que vuelve a caber o que ya no existe sale de ella, y uno que baja de la centena de su techo lo baja. Sin
+  `origin/main` (un clon sin ese ref) el test falla: `git fetch origin main` antes de la suite.
+- `tests/test_function_limits.py` corre `ruff check` con solo `C901` (complejidad ≤ 10), `PLR0911` (≤ 6 retornos),
+  `PLR0912` (≤ 12 ramas), `PLR0913` y `PLR0917` (≤ 5 argumentos, salvo en tests), `PLR0915` (≤ 50 sentencias) y
+  `RUF100`. Las funciones que hoy se pasan llevan `# noqa: <regla>`, y `RUF100` hace fallar el que sobra. `ruff
+  format` no cambia nada (`[tool.ruff.format] exclude = ["*"]`). A mano: `uv run ruff check`.

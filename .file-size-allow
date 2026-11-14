@@ -1,0 +1,5 @@
+# Code files over their cap today (production 1000 lines, tests 1500): <ceiling> <path> #<issue>.
+# The ceiling is the file's size the day it was listed, rounded up to a hundred. The list only shrinks
+# (tests/test_file_size.py): no new path, no higher ceiling, and a file back under its cap leaves it.
+2300 live/assistant.py #141
+3700 tests/test_assistant_relevance.py #141

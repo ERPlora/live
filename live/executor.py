@@ -145,7 +145,7 @@ class _Gate:
 
 
 class Executor:
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         *,
         max_workers: int = 3,
@@ -224,7 +224,7 @@ class Executor:
             # one re-read alone.
             await self._reread(stream)
 
-    async def _run_subs(self, stream: Stream, subs: list[Subscription]) -> bool:
+    async def _run_subs(self, stream: Stream, subs: list[Subscription]) -> bool:  # noqa: C901
         """Run ``subs`` in order and queue their frames; whether any of them ran (and so re-read the stream's context).
 
         A passing error is its scope's (its hub busy for a moment): the pass stops at that subscription, waits once,
@@ -337,7 +337,7 @@ class Executor:
             close_old_connections()
         return None
 
-    def _run_in_language(self, stream: Stream, sub: Subscription) -> bytes | None:
+    def _run_in_language(self, stream: Stream, sub: Subscription) -> bytes | None:  # noqa: PLR0911
         try:
             builder = get_builder()
             with _entered(builder, stream.ctx):
