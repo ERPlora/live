@@ -1520,6 +1520,89 @@ def test_goods_noted_down_as_come_in_are_received_before_what_takes_their_quanti
     assert not before & {"sale.order.add_line", "cart_checkout.item.add", "inventory.product.create"}, names[:6]
 
 
+#: The till's cash, as live names it («caja», «cash», «drawer», «till»).
+TILL = assistant.asked(["caja"]).concepts
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        "apunta que entran 100 € en el turno",
+        "registra que entran 100 € en el turno",
+        "anota que entran 50 euros de cambio",
+        "apunta que entra 20 € de propina en el turno",
+        "anota que ha entrado 100 € en el turno",
+        "apunta que han entrado 100 € en el turno",
+        # Said after where it comes in.
+        "apunta que entran en el turno 100 €",
+        "anota que han entrado en el turno 100 €",
+        # Said in the second sentence of the text.
+        "apúntalo, entran 100 € en el turno",
+        # Said again of goods, those are still named.
+        "apunta que entran 100 € en el turno y que entran 12 unidades de tarta",
+    ],
+)
+def test_money_that_comes_in_names_the_till_and_not_the_goods(said):
+    """«Apunta que entran 100 € en el turno» notes down money brought into the till: «entran», «entra» and «entrado»,
+    with money said right after them or after where it comes in, name the till's cash, never the goods a project names
+    by them, and are no thing the command acts on (ERPlora/live#123: read as goods coming in, the till's movement came
+    51st in the Hub)."""
+    said_as = assistant.asked([said], GOODS_IN)
+    assert TILL <= said_as.concepts
+    assert not GOODS & said_as.objects
+    assert (GOODS <= said_as.concepts) == ("unidades" in said)
+
+
+@pytest.mark.parametrize("said", ["apunta que entran 100 € de propina", "apunta que entran en el turno 100 € de propina"])
+def test_what_is_said_after_money_that_comes_in_is_no_thing_the_command_acts_on(said):
+    """The command acts on the money that came in: where it comes in («el turno», a staff's shift too) and what it is
+    («propina») are no thing it acts on."""
+    assert not assistant.asked([said]).objects
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        # A number without its currency says how many.
+        "apunta que entran 12 unidades de tarta",
+        "apunta que entran en el almacén 12 unidades de tarta",
+        # Money said later is what the goods cost.
+        "registra que entran 20 cafés más a 0,55 € la unidad",
+        "apunta que han entrado 12 unidades de tarta a 3 €",
+        # A dictation cut short after the word or after where it comes in.
+        "apunta que entran",
+        "apunta que entran en el",
+    ],
+)
+def test_what_comes_in_but_money_still_names_the_goods(said):
+    """What comes in but money is still what a project names by the word: the goods, and no till."""
+    said_as = assistant.asked([said], GOODS_IN)
+    assert GOODS <= said_as.concepts
+    assert not TILL & said_as.concepts
+
+
+#: The till as the Hub has it, beside the goods it receives.
+CAME_IN = [*TAKEN_OUT_OF_THE_TILL, RECEIVED[0]]
+
+
+@pytest.mark.parametrize(
+    "asked",
+    [
+        "apunta que entran 100 € en el turno",
+        "registra que entran 100 € en el turno",
+        "anota que han entrado 100 € en el turno",
+        "apunta que entran en el turno 50 € de cambio",
+    ],
+)
+def test_money_noted_down_as_come_in_is_the_tills_movement(asked):
+    """Money noted down as come in is the till's movement: before receiving goods and before the writes of what nobody
+    named (ERPlora/live#123)."""
+    names = ranked(CAME_IN, asked, synonyms=GOODS_IN, app_words=till_apps)
+    assert "cash_register.movement.add" in names, names[:6]
+    before = set(names[: names.index("cash_register.movement.add")])
+    assert not before & {"inventory.stock.receive", *(op.name for op in NOISE)}, names[:6]
+
+
 #: What «desactiva» and «activa» ask for: switching a thing off or on, as an app's switch does, or deactivating and
 #: activating it, as a member, a price list or a rule are; the thing named says which.
 SWITCHING_OFF = {"disable", "deactivate"}
