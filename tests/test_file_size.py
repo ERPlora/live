@@ -198,8 +198,9 @@ def test_a_baseline_without_the_list_has_nothing_to_compare_with(monkeypatch):
 
 def test_every_code_file_of_the_repo_keeps_to_its_cap_or_its_ceiling():
     ceilings, problems = parse_allow((ROOT / ALLOW).read_text())
+    problems += size_problems(tracked_sizes(), ceilings)
 
-    assert problems + size_problems(tracked_sizes(), ceilings) == []
+    assert not problems, "\n".join(problems)
 
 
 def test_the_list_only_shrinks_against_origin_main():
@@ -207,5 +208,6 @@ def test_the_list_only_shrinks_against_origin_main():
     if baseline is None:
         pytest.skip(f"{BASELINE} has no {ALLOW} yet: this branch brings the first one")
     ceilings, _ = parse_allow((ROOT / ALLOW).read_text())
+    problems = ratchet_problems(ceilings, parse_allow(baseline)[0])
 
-    assert ratchet_problems(ceilings, parse_allow(baseline)[0]) == []
+    assert not problems, "\n".join(problems)
