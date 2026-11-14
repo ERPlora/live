@@ -59,6 +59,11 @@ jobs:
           tar -xzf "$RUNNER_TEMP/actionlint.tar.gz" -C "$RUNNER_TEMP" actionlint
           "$RUNNER_TEMP/actionlint" -color
 
+      # tests/test_file_size.py compares .file-size-allow with the one on main; the checkout fetched only this ref,
+      # and without origin/main that test fails instead of passing.
+      - name: Fetch main
+        run: git fetch --no-tags --depth=1 origin +refs/heads/main:refs/remotes/origin/main
+
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
       # --locked: uv.lock must match pyproject.toml (no separate `uv lock --check`).
       - run: uv sync --locked
