@@ -186,6 +186,9 @@ VERBS = {
                "ponle el nombre", "ponle nombre", "pon de nombre", "pon el nombre", "poner el nombre",
                "change the name", "change its name"),
     "change": ("cambia", "cambiar", "change"),
+    # Registering a device sets it up («registra esta tablet como Barra»): only what the command registers, and in
+    # English only where it starts the command (``_registers``; ERPlora/live#117).
+    "register": ("registra", "registrar", "register"),
     "reorder": ("ordena", "ordenar", "reorder"),
     "rename": ("renombra", "renombrar", "rename", "cambia el nombre", "cambiale el nombre", "cambiar el nombre",
                "ponle de nombre", "ponle el nombre", "ponle nombre", "pon de nombre", "pon el nombre",
@@ -326,6 +329,10 @@ _PUTS = frozenset({"add"})
 #: written where («registra en la ficha de Ana que…»).
 _THAT = frozenset({"que"})
 _STATES = frozenset({"create", "add"})
+#: Setting a device up (``VERBS``: «registra esta tablet»): asked only where the word is the command (``_registers``),
+#: and of a tool only when what the command acts on is that tool's thing — a tablet named as where something is
+#: registered («registra en esta tablet una salida de 15 €») is not set up (ERPlora/live#117).
+_REGISTERS = frozenset({"register"})
 #: The words that open a phrase of its own, as an article, a possessive or «otro» do («en la caja», «su teléfono», «un
 #: documento», «otra salida»), but those of ``STOP_WORDS`` («una», «esta», «sus»): what is put after where it is put
 #: is named in one.
@@ -858,6 +865,19 @@ def _notes_what_happened(words: list[str], at: int, actions: frozenset[str]) -> 
     return actions <= _NOTES and not _PUTS.isdisjoint(actions) and at + 1 < len(words) and words[at + 1] in _THAT
 
 
+def _registers(words: list[str], at: int) -> bool:
+    """Whether the word ``words[at]`` asks there to set something up (``_REGISTERS``): never right before ``_THAT``,
+    where it notes down what happened («registra que la tablet se ha roto»), and English's «register», which is also
+    the till («open the register on this tablet», «close the cash register»), only where it starts the command: first,
+    after the words of a request, or after ``_THEN`` («register this tablet as Bar», «please register…», «and
+    register…»)."""
+    if at + 1 < len(words) and words[at + 1] in _THAT:
+        return False
+    if words[at] != "register":
+        return True
+    return at == len(words) - len(_opening(words)[0]) or (at > 0 and words[at - 1] in _THEN)
+
+
 def _noted(words: list[str], at: int, extra: tuple[tuple[str, ...], ...]) -> set[frozenset[str]]:
     """What the word that notes something down ``words[at]`` notes: every thing named after it, until another command
     starts (``_starts_command``), but the one a word of ``_WHERE`` says, with its article, it is noted in or whose it is
@@ -1040,6 +1060,11 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
             for word in words:
                 if word not in verbal and (of := _verbs_of(word)):
                     acting[word] = of
+        for word, of in list(acting.items()):
+            if not _REGISTERS.isdisjoint(of) and not any(
+                _registers(words, at) for words in heard for at, one in enumerate(words) if one == word
+            ):
+                acting[word] = of - _REGISTERS
         doing = _how_to(sentences)
         if doing and doing != "-" and doing not in acting:
             acting[doing] = _verbs_of(doing[:-1] + "a") or _verbs_of(doing[:-1] + "e")
@@ -1324,6 +1349,8 @@ def _relevant(
         takes = named(taken)
         points = places + named(_stems_of(description(op))) + named(asks(op)) + takes
         matched = verbs.intersection(acts)
+        if not aimed:
+            matched -= _REGISTERS
         if matched:
             if thing:
                 points += 9 + (action in verbs) + 3 * aimed
