@@ -336,6 +336,23 @@ _REGISTERS = frozenset({"register"})
 #: What says, right after the word that registers, where or with what it is done: the device named so is not what is
 #: registered («registra desde esta tablet una salida de 20 €», «registra con esta tablet…»).
 _REGISTERED_FROM = frozenset({"desde", "con", "on", "from"})
+#: The words that take something out: Spanish's «saca» («sácame», «sacar») and English's «take» with its «out». Of money
+#: (``_money``), right after them or after where it comes from («saca 15 € de la caja», «saca de la caja 15 €», «take
+#: 15 € out of the till», «take out 15 €»), they note the money taken out down (``_TAKEN_OUT``: adding it, as the till's
+#: cash-out), never export nor print it, and act on nothing named after it («para comprar hielo» is what it is for).
+#: Of anything else they are what they were: «saca el listado» exports, «saca 2 copias del tique» prints, «take 5 out
+#: of stock» says how many (ERPlora/live#118).
+_TAKES_OUT = frozenset({"saca", "sacar"})
+_TAKE, _OUT = "take", "out"
+_TAKEN_OUT = frozenset({"add"})
+#: What money taken out is, which Spanish's «saca» does not say: an outflow of the till («una salida de 15 €»). English
+#: says it with its «out».
+_OUTFLOW = "salida"
+#: A number said with its currency's name after it («50 euros») or its sign before or after it, decimals too («15 €»,
+#: «12,50 €», «€15», «$20»): the sign is no word, so it is read from the text.
+_CURRENCIES = frozenset({"euro", "euros", "eur", "dolar", "dolares", "dollar", "dollars", "libra", "libras", "pound",
+                         "pounds"})
+_WITH_ITS_SIGN = re.compile(r"(\d+)(?:[.,]\d+)?\s?[€$£]|[€$£]\s?(\d+)")
 #: The words that open a phrase of its own, as an article, a possessive or «otro» do («en la caja», «su teléfono», «un
 #: documento», «otra salida»), but those of ``STOP_WORDS`` («una», «esta», «sus»): what is put after where it is put
 #: is named in one.
@@ -755,20 +772,27 @@ def _is_question(text: str, sentences: list[list[str]]) -> bool:
 
 
 def _objects(
-    sentences: list[list[str]], acting: Mapping[str, frozenset[str]], verbal: Collection[str], extra: tuple
+    sentences: list[list[str]],
+    acting: Mapping[str, frozenset[str]],
+    verbal: Collection[str],
+    extra: tuple,
+    taken_out: Collection[tuple[int, int]] = (),
 ) -> tuple[set[frozenset[str]], set[frozenset[str]]]:
     """What the command of each sentence acts on: the first thing named from its verb on — the verb's own when it
     names one («cobra»: a sale), else the first word after it that names something («crea la carpeta»: a folder) —;
     and of those, the ones named by a word after the verb (a record to find). Of a verb that puts something somewhere
     (``_PUTS``), where it is put, said first, is no thing it acts on: what it puts is named after it
     (``_named_after_where``: «anota en el turno una salida» notes the money taken out, as «anota una salida en el
-    turno» does; ERPlora/live#94)."""
+    turno» does; ERPlora/live#94). A verb that takes money out (``taken_out``, by sentence and word) acts on the money,
+    no thing named («saca 15 € de la caja para comprar hielo»)."""
     found: set[frozenset[str]] = set()
     after: set[frozenset[str]] = set()
-    for words in sentences:
+    for index, words in enumerate(sentences):
         seen = False
         verb = ""
         for at, word in enumerate(words):
+            if (index, at) in taken_out:
+                break
             if word in acting or word in verbal:
                 own = _concept(word, extra) if word in acting and not seen else frozenset()
                 if len(own) > 1:
@@ -883,6 +907,39 @@ def _registers(words: list[str], at: int) -> bool:
     return not after.isdigit() and (
         at == len(words) - len(_opening(words)[0]) or (at > 0 and words[at - 1] in _THEN)
     )
+
+
+def _amounts(text: str) -> frozenset[str]:
+    """The numbers ``text`` says with their currency's sign («15 €», «€15», «12,50 €» → «15», «12»)."""
+    return frozenset(before or after for before, after in _WITH_ITS_SIGN.findall(text))
+
+
+def _money(words: list[str], at: int, amounts: Collection[str]) -> bool:
+    """Whether ``words[at]`` is money: a number said with its currency's sign (``amounts``) or name («50 euros»). Any
+    other number says how many («saca 2 copias», «take 5 out of stock»)."""
+    if at >= len(words) or not words[at].isdigit():
+        return False
+    return words[at] in amounts or (at + 1 < len(words) and words[at + 1] in _CURRENCIES)
+
+
+def _takes_money_out(words: list[str], at: int, amounts: Collection[str]) -> bool:
+    """Whether the word ``words[at]`` takes money out (``_TAKES_OUT``): «saca» right before the money or before where it
+    comes from and then the money («saca 15 € de la caja», «sácame del cajón 20 €»), «take» before the money and its
+    «out» («take 15 € out of the till», «take 15 euros out») or before «out» and the money («take out 15 €»)."""
+    word = words[at]
+    if word in _TAKES_OUT or _unclitic(word) in _TAKES_OUT:
+        money = at + 1
+        if money < len(words) and words[money] in _WHERE:
+            money += 1
+            while money < len(words) and _determiner(words[money]):
+                money += 1
+            money += 1
+        return _money(words, money, amounts)
+    if word != _TAKE:
+        return False
+    if _money(words, at + 1, amounts):
+        return _OUT in words[at + 2 : at + 4]
+    return words[at + 1 : at + 2] == [_OUT] and _money(words, at + 2, amounts)
 
 
 def _noted(words: list[str], at: int, extra: tuple[tuple[str, ...], ...]) -> set[frozenset[str]]:
@@ -1024,9 +1081,10 @@ def _split_naming(sentences: list[list[str]]) -> set[tuple[str, str]]:
 def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked:
     """What ``texts`` ask (``Asked``): what each of their words names (``_concept``, with the project's ``synonyms``; a
     word of a verb's phrase names nothing, nor a verb but by its synonyms: «show me», «dame»), the actions they ask for
-    (``VERBS``, a command with its pronouns too) and whether they ask to know (a question, ``_is_question``, or a read
-    of ``READ_VERBS``). A question asks to do nothing it names unless it is a request («can you…?») or asks how («how
-    do I…?»): its other actions are what it asks about (``Asked.about``)."""
+    (``VERBS``, a command with its pronouns too; money taken out, ``_TAKES_OUT``, asks to add it) and whether they ask
+    to know (a question, ``_is_question``, or a read of ``READ_VERBS``). A question asks to do nothing it names unless
+    it is a request («can you…?») or asks how («how do I…?»): its other actions are what it asks about
+    (``Asked.about``)."""
     extra = _groups(synonyms)
     phrases_named = _synonyms(extra)[1]
     concepts: set[frozenset[str]] = set()
@@ -1072,6 +1130,18 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
                 _registers(words, at) for words in heard for at, one in enumerate(words) if one == word
             ):
                 acting[word] = of - _REGISTERS
+        # Money taken out notes it down; a word said again of anything else still asks for what it did («saca 15 € de
+        # la caja y saca el listado de clientes»).
+        amounts = _amounts(text)
+        taken_out = {
+            (index, at)
+            for index, words in enumerate(heard)
+            for at in range(len(words))
+            if _takes_money_out(words, at, amounts)
+        }
+        for word in {heard[index][at] for index, at in taken_out}:
+            said_so = {(index, at) for index, words in enumerate(heard) for at, one in enumerate(words) if one == word}
+            acting[word] = _TAKEN_OUT if said_so <= taken_out else acting.get(word, frozenset()) | _TAKEN_OUT
         doing = _how_to(sentences)
         if doing and doing != "-" and doing not in acting:
             acting[doing] = _verbs_of(doing[:-1] + "a") or _verbs_of(doing[:-1] + "e")
@@ -1098,9 +1168,11 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
             and ((word not in acting and not _unasked(words, at)) or len(_concept(word, extra)) > 1)
         ]
         concepts |= {_concept(word, extra) for word, _ in naming}
+        if any(heard[index][at] != _TAKE for index, at in taken_out):
+            concepts.add(_concept(_OUTFLOW, extra))
         direct |= {_concept(word, extra) for word, outside in naming if outside}
         concepts |= {group for phrase, group in phrases_named if any(phrase in one for one in joined)}
-        acted, named_after = _objects(heard, acting, verbal, extra)
+        acted, named_after = _objects(heard, acting, verbal, extra, taken_out)
         objects |= acted
         records |= named_after
         question = _is_question(text, sentences) and not any(_opening(words)[1] for words in sentences)
