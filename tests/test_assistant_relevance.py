@@ -1111,6 +1111,186 @@ def test_what_is_registered_as_new_is_still_created(asked, first):
     assert ranked(REGISTERED_AT_THE_TILL, asked, app_words=till_apps)[0] == first
 
 
+@pytest.mark.parametrize(
+    ("said", "stated"),
+    [
+        ("registra que entran 20 cafés más a 0,55 € la unidad con el albarán ALB-QA-01", {"create", "add"}),
+        ("apunta que Carmen prefiere las mañanas", {"create", "add"}),
+        ("anota que el pago del pedido QA-WEB-1 falló", {"create", "add"}),
+        ("añade que Carmen prefiere las mañanas", {"create", "add"}),
+        ("regístrame que entran 20 cafés", {"create", "add"}),
+        ("hay que registrar que Luis no se presentó a su reserva", {"create", "add"}),
+        # Only what is noted down: the change «apunta» asks for is still what it writes on (``written_on``).
+        ("apunta que Ana es alérgica al marisco", {"create", "add"}),
+        # «Que» said later is no fact noted down by the verb: it says what is written where.
+        ("registra en la ficha de Ana que es alérgica al marisco", set()),
+        ("registra una clienta nueva que se llama Marta", set()),
+        ("registra una salida de 15 € en el turno", set()),
+        # «Que» said right before the verb is no fact the verb notes down (the review of ERPlora/live#121).
+        ("hay que registrar una salida de 15 € en el turno", set()),
+        # Asked by another word too, the action is that word's.
+        ("registra que entran 20 cafés y añade dos a la mesa 4", set()),
+        ("crea un aviso que diga «Sin gluten»", set()),
+        ("ponle que es alérgica al marisco", set()),
+        # A word that only creates says what the new thing is like after «que»: nothing happened.
+        ("una carta nueva que tenga postres", set()),
+        # A question that asks to know asks for no write at all.
+        ("¿hay que registrar que Luis no vino a su reserva?", set()),
+    ],
+)
+def test_what_is_noted_down_as_what_happened_is_said_apart(said, stated):
+    """A word that notes something down said right before «que» notes down what happened («registra que entran 20
+    cafés…», «apunta que Carmen prefiere las mañanas»): the create and the add it asks for, asked by no other word, are
+    ``Asked.stated`` (ERPlora/live#116)."""
+    assert assistant.asked([said]).stated == stated
+
+
+class ReceiptIn(Schema):
+    items: list[str]
+    reference: str | None = None
+
+
+class LineIn(Schema):
+    order: str
+    product: str
+    quantity: int
+
+
+class CartItemIn(Schema):
+    product: str
+    quantity: int
+    unit_price: int | None = None
+
+
+class StockedProductIn(Schema):
+    name: str
+    price: int | None = None
+    quantity: int | None = None
+
+
+class NoteIn(Schema):
+    customer: str
+    content: str
+
+
+#: Goods received as the Hub says it («registra que entran 20 cafés… con el albarán»), beside the writes that take the
+#: quantity a sentence names (a check's line to add or to change, a cart's item, a product with its initial stock) and a
+#: customer's note.
+RECEIVED = [
+    tool("inventory.stock.receive", "Receive goods from a supplier with their delivery note: each product's quantity "
+         "and cost.", input=ReceiptIn),
+    tool("sale.order.add_line", "Add a product to an open check, with its quantity.", input=LineIn),
+    tool("sale.order.update_line", "Change a line of an open check: its quantity, its note.", input=LineIn),
+    tool("cart_checkout.item.add", "Add a product to a customer's cart, with its quantity.", input=CartItemIn),
+    tool("inventory.product.create", "Create a product of the catalog with its name, its price and its initial stock.",
+         input=StockedProductIn),
+    tool("customer.note.add", "Add a note to a customer's card: what to keep in mind of them.", input=NoteIn,
+         asks={"es": ("añade una nota a Marta: prefiere venir por la tarde",)}),
+    *NOISE,
+]
+#: The Hub's words for goods coming in and for how many.
+RECEIVED_WORDS = (("entra", "entran", "recibe", "recibir", "receive", "albarán"),
+                  ("unidad", "unidades", "cantidad", "quantity"))
+
+
+@pytest.mark.parametrize(
+    "asked",
+    [
+        "registra que entran 20 cafés más a 0,55 € la unidad con el albarán ALB-QA-01",
+        "apunta que entran 20 cafés más a 0,55 € la unidad con el albarán ALB-QA-01",
+        "anota que entran 20 cafés más a 0,55 € la unidad con el albarán ALB-QA-01",
+        "hay que registrar que entran 12 cajas de agua a 3 € la unidad",
+    ],
+)
+def test_what_is_noted_down_as_what_happened_brings_what_does_it_before_what_takes_its_data(asked):
+    """«Registra que entran 20 cafés más a 0,55 € la unidad» notes down goods that came in: what follows «que» is what
+    happened, and the quantity it names is no datum given to a check's line, a cart's item or a new product
+    (ERPlora/live#116: those writes took the 7 points of a write that takes what is named, and receiving the goods came
+    12th in the Hub)."""
+    names = ranked(RECEIVED, asked, synonyms=RECEIVED_WORDS)
+    assert "inventory.stock.receive" in names, names[:6]
+    before = set(names[: names.index("inventory.stock.receive")])
+    assert not before & {"sale.order.add_line", "cart_checkout.item.add", "inventory.product.create"}, names[:6]
+
+
+@pytest.mark.parametrize(
+    ("asked", "first"),
+    [
+        # A note of what happened is still added, as a write that takes nothing named: as the Hub's customer notes are
+        # asked for («apunta que Carmen prefiere las mañanas»), naming neither the customer nor the note.
+        ("apunta que Carmen prefiere las mañanas", "customer.note.add"),
+        ("anota que Luis prefiere la mesa de la ventana", "customer.note.add"),
+        # What a fact names that a write adds to is still what it adds to: the check of table 4.
+        ("apunta que el pedido de la mesa 4 lleva otra caña", "sale.order.add_line"),
+        # Asked by another word too, the write still takes the data named.
+        ("añade 20 cafés a la cuenta, a 0,55 € la unidad", "sale.order.add_line"),
+    ],
+)
+def test_what_is_noted_down_as_what_happened_still_adds_what_it_names(asked, first):
+    """Noting down what happened still asks to add: the customer's note of «apunta que Carmen prefiere las mañanas»
+    comes before the writes of what nobody named, and «apunta que el pedido de la mesa 4 lleva otra caña» still adds to
+    the check it names before changing its lines (ERPlora/live#116 leaves out only the data a fact names: with no add
+    at all, the note came 40th in the Hub, and with no thing either, the line left what a turn offers)."""
+    names = ranked(RECEIVED, asked, synonyms=(*RECEIVED_WORDS, *CHECK))
+    writes = [name for name in names if not name.endswith((".list", ".detail"))]
+    assert writes[0] == first, names[:6]
+
+
+class BlockedTimeIn(Schema):
+    staff: str
+    starts_at: str
+    ends_at: str
+
+
+class SessionMovementIn(Schema):
+    session: str
+    type: str
+    amount: int
+
+
+#: Facts whose data say which write notes them down, as the Hub's: a reservation by its guest's name, a customer's note
+#: by the customer, a check's line by its quantity, a member's blocked time by the member, a movement by the session of
+#: the till. A customer is also what a tool's action acts on (a conversation's ``link_customer``), and so is a session
+#: no write asked here acts on (the till's ``session.close`` is of a session, not on it).
+FACTS = [
+    *RECEIVED,
+    tool("reservation.reservation.create", "Takes a reservation: the guest, the day and time, the party size.",
+         input=ReservationIn),
+    tool("appointment.blocked_time.create", "Block a member's time in the agenda: when they do not work.",
+         input=BlockedTimeIn),
+    tool("cash_register.movement.add", "Record cash brought into the drawer or taken out of it.",
+         input=SessionMovementIn),
+    tool("cash_register.session.close", "Close the open session of the till."),
+    tool("customer.customer.create", "Creates a new customer; only the name is required.", input=CustomerIn),
+    tool("customer.customer.list", "List the customers.", "query"),
+    tool("customer.customer.detail", "Show a customer's card.", "query"),
+    tool("whatsapp_inbox.conversation.link_customer", "Link a conversation to a customer's card."),
+]
+
+
+@pytest.mark.parametrize(
+    ("asked", "noted_by"),
+    [
+        ("apunta que el viernes vienen 6 a cenar a nombre de Luis", "reservation.reservation.create"),
+        ("registra que la clienta Ana es alérgica al marisco", "customer.note.add"),
+        ("añade que quieren dos unidades más de tarta", "sale.order.add_line"),
+        ("anota que Carmen no trabaja el lunes por la mañana", "appointment.blocked_time.create"),
+        # What the fact is about names no tool's action: the session is what a movement is added to.
+        ("anota que la sesión de caja ha tenido una entrada de 50 €", "cash_register.movement.add"),
+    ],
+)
+def test_what_is_noted_down_as_what_happened_still_gives_its_data_to_the_write_they_name(asked, noted_by):
+    """The data of a fact are what says which write notes it down when the fact is about nothing another tool does
+    («apunta que el viernes vienen 6 a cenar a nombre de Luis»: a reservation, by its guest's name): that write comes
+    before the writes of what nobody named and before every read (the review of ERPlora/live#121: taking the data of
+    every fact from the writes it asks for, the reservation came 50th in the Hub, the customer's note 39th behind the
+    reads of the customer, the check's line 54th and the member's blocked time 172nd)."""
+    names = ranked(FACTS, asked, synonyms=(*RECEIVED_WORDS, *CHECK))
+    assert noted_by in names, names[:6]
+    nobody_named_or_read = {op.name for op in FACTS if op in NOISE or op.kind == "query"}
+    assert not set(names[: names.index(noted_by)]) & nobody_named_or_read, names[:6]
+
+
 #: What «desactiva» and «activa» ask for: switching a thing off or on, as an app's switch does, or deactivating and
 #: activating it, as a member, a price list or a rule are; the thing named says which.
 SWITCHING_OFF = {"disable", "deactivate"}

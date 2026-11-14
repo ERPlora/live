@@ -320,6 +320,12 @@ _WRITTEN_ON = frozenset({"update"})
 #: before it, is no thing they act on («mete en el turno una entrada»). Where other verbs act, said first, is what they
 #: act on («borra del historial la cuenta», «pon en la web el horario»).
 _PUTS = frozenset({"add"})
+#: The word after which a word that notes something down or puts it somewhere says what happened («registra que entran
+#: 20 cafés…», «apunta que Carmen prefiere las mañanas»): the create and the add it asks for note that down, and when
+#: the fact is another tool's doing, what it names is no datum they take (ERPlora/live#116). Said later, it says what is
+#: written where («registra en la ficha de Ana que…»).
+_THAT = frozenset({"que"})
+_STATES = frozenset({"create", "add"})
 #: The words that open a phrase of its own, as an article, a possessive or «otro» do («en la caja», «su teléfono», «un
 #: documento», «otra salida»), but those of ``STOP_WORDS`` («una», «esta», «sus»): what is put after where it is put
 #: is named in one.
@@ -648,7 +654,8 @@ class Asked(NamedTuple):
     (``_WRITTEN_ON`` of «anota», «apunta»; ERPlora/live#88): no other word asks for them; ``noted`` is what such a word
     notes down (``_noted``: the new phone of «apunta en la ficha de Ana su teléfono nuevo»). ``switched`` is what each
     switch said turns on or off, one set of things per switch (``_switched``: «los recordatorios» of «desactiva los
-    recordatorios de las citas»; ERPlora/live#89)."""
+    recordatorios de las citas»; ERPlora/live#89). ``stated`` are the create and the add asked only by a word that notes
+    down what happened (``_THAT``: «registra que entran 20 cafés…»; ERPlora/live#116)."""
 
     concepts: frozenset[frozenset[str]]
     verbs: frozenset[str]
@@ -661,6 +668,7 @@ class Asked(NamedTuple):
     written_on: frozenset[str] = frozenset()
     noted: frozenset[frozenset[str]] = frozenset()
     switched: frozenset[frozenset[frozenset[str]]] = frozenset()
+    stated: frozenset[str] = frozenset()
 
 
 def _phrase_verbs(phrase: str) -> frozenset[str]:
@@ -843,6 +851,13 @@ def _unasked(words: list[str], at: int) -> bool:
     return negated and bool(_verbs_of(word)) and _infinitive(word)
 
 
+def _notes_what_happened(words: list[str], at: int, actions: frozenset[str]) -> bool:
+    """Whether the word ``words[at]``, asking for ``actions``, notes down what happened: a word that notes something
+    down or puts it somewhere (``_NOTES``, with ``_PUTS``) said right before ``_THAT`` («registra que…», «apúntame
+    que…»)."""
+    return actions <= _NOTES and not _PUTS.isdisjoint(actions) and at + 1 < len(words) and words[at + 1] in _THAT
+
+
 def _noted(words: list[str], at: int, extra: tuple[tuple[str, ...], ...]) -> set[frozenset[str]]:
     """What the word that notes something down ``words[at]`` notes: every thing named after it, until another command
     starts (``_starts_command``), but the one a word of ``_WHERE`` says, with its article, it is noted in or whose it is
@@ -1000,6 +1015,9 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
     others: set[str] = set()
     noted: set[frozenset[str]] = set()
     switched: set[frozenset[frozenset[str]]] = set()
+    # The actions asked by a word that notes down what happened (``_notes_what_happened``) and those any other word asks.
+    stating: set[str] = set()
+    asking: set[str] = set()
     reading = howto = False
     for text in texts:
         # A yes to what was asked before asks for nothing of its own: the write it agrees to is in the texts before.
@@ -1036,6 +1054,8 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
             for at, word in enumerate(words):
                 if acting.get(word) == _NOTES:
                     noted |= _noted(words, at, extra)
+                if word in acting:
+                    (stating if _notes_what_happened(words, at, acting[word]) else asking).update(acting[word])
             switched |= _switched(words, found, verbal, extra)
         # A word that asks (a verb) names a thing only through its synonyms («cobra»: a sale); «show», «dame» none. So
         # does a verb not asked («sin cobrar»: still a sale); what someone will do is no verb asked, and names as any
@@ -1076,6 +1096,7 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
         frozenset((noting - others) & verbs),
         frozenset(noted),
         frozenset(switched),
+        frozenset((stating - asking) & _STATES & verbs),
     )
 
 
@@ -1165,7 +1186,12 @@ def relevant(
     ``Asked.written_on``) writes on a thing named or on what is noted down (``Asked.noted``: «apúntale el teléfono
     nuevo a Ana»): of no thing named, a write that takes only what another word names in passing adds nothing («anota
     una salida de 15 € de la caja» notes a movement down, not the till's settings, which take the cash register;
-    ERPlora/live#88), and one that takes what is noted down, or nothing named, adds what any other write does.
+    ERPlora/live#88), and one that takes what is noted down, or nothing named, adds what any other write does. A create
+    or an add asked only by a word that notes down what happened (``Asked.stated``) takes nothing the fact names when the
+    fact is another tool's doing: what it is about is what a tool's action acts on and no write asked acts on it
+    («registra que entran 20 cafés a 0,55 € la unidad»: receiving goods), and then, of no thing named, a write that takes
+    it adds nothing; about anything else, the fact's data still say which write notes it down («apunta que el viernes
+    vienen 6 a cenar a nombre de Luis»: a reservation; ERPlora/live#116).
 
     A write of a thing named after its verb brings its reads 3 («borra el cliente Ana»: the read that finds Ana). A
     question that asks to know and to do nothing puts the reads first (1), a thing's list before its other reads (1),
@@ -1223,6 +1249,13 @@ def _relevant(
             for op in tools.values()
         )
         for concept in said.objects
+    )
+    # What happened, noted down («registra que entran 20 cafés…»), is another tool's doing when what it is about is what
+    # a tool's action acts on («entran»: ``stock.receive``) and no write asked acts on it: its data are not the create's
+    # or the add's asked so. About anything else («vienen 6 a cenar a nombre de Luis», «la clienta Ana…»), its data
+    # still say which write notes it down.
+    done_by_another = not aimed_at and any(
+        not concept.isdisjoint(_parts(op.name.split(".")[2])[0]) for op in tools.values() for concept in said.objects
     )
     # What a switch turns on or off that the catalogue names as no thing, beside the apps said with it («los
     # recordatorios» of «desactiva los recordatorios de las citas», «the appointment reminders»): only what people say
@@ -1298,12 +1331,19 @@ def _relevant(
                 writes = matched - READ_VERBS
                 # What «anota» writes on is a thing named, or what it notes down («apúntale el teléfono nuevo a Ana»): a
                 # write that takes only what another word names in passing is none of it («anota una salida de 15 €
-                # de la caja»: the till's settings take the cash register, not the money taken out).
+                # de la caja»: the till's settings take the cash register, not the money taken out). What happened, noted
+                # down as another tool's doing («registra que entran 20 cafés a 0,55 € la unidad»), gives the create or
+                # the add asked so none of what it names: the quantity is the goods', not a check line's.
                 in_passing = (
                     takes
                     and writes
-                    and writes <= said.written_on
-                    and not any(not concept.isdisjoint(taken) for concept in said.noted)
+                    and (
+                        (
+                            writes <= said.written_on
+                            and not any(not concept.isdisjoint(taken) for concept in said.noted)
+                        )
+                        or (done_by_another and writes <= said.stated)
+                    )
                 )
                 if not in_passing:
                     points += 7 if takes and writes else 3 if writes and not aimed_at else 1 if app_named else 0
