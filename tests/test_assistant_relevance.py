@@ -1423,6 +1423,103 @@ def test_what_is_noted_down_as_what_happened_still_gives_its_data_to_the_write_t
     assert not set(names[: names.index(noted_by)]) & nobody_named_or_read, names[:6]
 
 
+#: The Hub's own words for goods coming in: «entran», never «entra» nor «entrada», whose stem is that of «entre», of
+#: the money brought into the till and of a clock-in («ficha la entrada»).
+GOODS_IN = (("albarán", "mercancía", "entran", "recibir", "recibe", "recibido", "receive", "received", "goods",
+             "delivery note"),)
+GOODS = assistant.asked(["entran"], GOODS_IN).concepts
+
+
+@pytest.mark.parametrize(
+    ("past", "present"),
+    [
+        ("apunta que han entrado 12 unidades de tarta", "apunta que entran 12 unidades de tarta"),
+        ("registra que han entrado 12 unidades de tarta", "registra que entran 12 unidades de tarta"),
+        ("anota que habían entrado 12 unidades de tarta", "anota que entran 12 unidades de tarta"),
+        ("registra que ya han entrado", "registra que ya entran"),
+        ("nos han entrado 12 unidades de tarta, apúntalo", "nos entran 12 unidades de tarta, apúntalo"),
+        # Said in any sentence of the text, not only the first.
+        ("apúntalo, han entrado 12 unidades de tarta", "apúntalo, entran 12 unidades de tarta"),
+        # A request is no question: it asks to note it down, or to look at what came in.
+        ("¿puedes apuntar que han entrado 12 unidades de tarta?", "¿puedes apuntar que entran 12 unidades de tarta?"),
+        ("¿puedes mirar si han entrado 12 unidades de tarta?", "¿puedes mirar si entran 12 unidades de tarta?"),
+    ],
+)
+def test_a_compound_past_in_the_plural_also_names_what_its_present_names(past, present):
+    """«Han entrado» is the verb «entran» said in the past: it names what the present names (the goods, as the Hub's
+    words say them) and is what a word that notes it down acts on, asking for nothing more (ERPlora/live#122: its
+    auxiliary was what «apunta» acted on, and «entrado» is cut as «entrada» is, so receiving the goods came 152nd)."""
+    past_said, present_said = assistant.asked([past], GOODS_IN), assistant.asked([present], GOODS_IN)
+    assert GOODS <= present_said.concepts <= past_said.concepts
+    assert past_said.objects == present_said.objects
+    assert (past_said.verbs, past_said.stated) == (present_said.verbs, present_said.stated)
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        # What came in, said right after, is money: the till's, not the goods.
+        "anota que han entrado 100 € en caja",
+        "anota que han entrado 100 euros en caja",
+        # A question about what happened asks to know it, not to note it down.
+        "¿quiénes han entrado alguna vez en el negocio?",
+        # Only the plural: «ha entrado» is «entra», which names no goods.
+        "apunta que ha entrado una caja de leche",
+        # «Entrada» never names the goods: money brought into the till, a clock-in.
+        "registra una entrada de 50 € en la caja",
+        "ficha la entrada de Ana",
+        # A dictation cut short after the auxiliary.
+        "apunta que han",
+    ],
+)
+def test_what_is_no_compound_past_of_goods_coming_in_names_no_goods(said):
+    """Only the compound past of goods coming in, told or noted down, names them: never money that came in, a question
+    about who came in, the singular nor «entrada» (ERPlora/live#122)."""
+    assert not GOODS & assistant.asked([said], GOODS_IN).concepts
+
+
+@pytest.mark.parametrize(
+    ("said", "read"),
+    [
+        ("apunta que han entrado 12 unidades", "apunta que entran han entrado 12 unidades"),
+        ("anota que habían pagado la cuenta", "anota que pagan habian pagado la cuenta"),
+    ],
+)
+def test_a_compound_past_in_the_plural_is_read_with_its_present_before_it(said, read):
+    """The present goes before the auxiliary, so it is the first thing named after a word that notes it down, and is
+    the participle's root with the plural's «-an» («pagado»: «pagan»)."""
+    assert assistant._as_present(assistant._sentences(said)[0], frozenset()) == read.split()
+
+
+def test_a_compound_past_asks_for_nothing_its_present_would():
+    """«Han cuadrado» is no «cuadran» asking to check the till: what happened is no command."""
+    assert assistant.asked(["apunta que han cuadrado las cajas de ayer"]).verbs == {"create", "add", "update"}
+
+
+def test_only_a_participle_in_ado_is_read_as_its_present():
+    """The present of a participle in «-ido» («venden», «reciben») is no word a project names: the compound past is
+    read as said, its auxiliary the first word after the verb that notes it down."""
+    assert assistant.asked(["apunta que han vendido 12 unidades de tarta"]).objects == {frozenset({"han"})}
+
+
+@pytest.mark.parametrize(
+    "asked",
+    [
+        "apunta que han entrado 12 unidades de tarta",
+        "registra que han entrado 12 unidades de tarta",
+        "anota que habían entrado 12 unidades de tarta",
+    ],
+)
+def test_goods_noted_down_as_come_in_are_received_before_what_takes_their_quantity(asked):
+    """«Apunta que han entrado 12 unidades de tarta» notes down goods that came in, as «apunta que entran…» does: they
+    are received before a check's line, a cart's item or a new product takes the quantity (ERPlora/live#122: 152nd in
+    the Hub, behind the cart's items)."""
+    names = ranked(RECEIVED, asked, synonyms=(*GOODS_IN, RECEIVED_WORDS[1]))
+    assert "inventory.stock.receive" in names, names[:6]
+    before = set(names[: names.index("inventory.stock.receive")])
+    assert not before & {"sale.order.add_line", "cart_checkout.item.add", "inventory.product.create"}, names[:6]
+
+
 #: What «desactiva» and «activa» ask for: switching a thing off or on, as an app's switch does, or deactivating and
 #: activating it, as a member, a price list or a rule are; the thing named says which.
 SWITCHING_OFF = {"disable", "deactivate"}
