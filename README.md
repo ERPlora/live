@@ -280,9 +280,14 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   reserva; live#116). El pasado compuesto en plural de un verbo en «-ar» («han entrado», «habían entrado») se lee
   también como su presente, dicho delante y sin quitar lo dicho («entran han entrado»): nombra lo que nombra el
   presente y es sobre lo que actúa el verbo que lo apunta («apunta que han entrado 12 unidades de tarta» recibe la
-  mercancía, como «apunta que entran…»); no si lo que entra, dicho justo detrás, es dinero («han entrado 100 €»), ni si
-  ese presente pide una acción («han cuadrado» no es «cuadran»), ni en una pregunta («¿quiénes han entrado alguna
-  vez?»), y el singular («ha entrado» es «entra») y los participios en «-ido» se leen como se dicen (live#122), y
+  mercancía, como «apunta que entran…»); no si lo que entra, dicho justo detrás o tras dónde entra, es dinero («han
+  entrado 100 €», «han entrado en caja 100 €»), ni si ese presente pide una acción («han cuadrado» no es «cuadran»), ni
+  en una pregunta («¿quiénes han entrado alguna vez?»), y el singular («ha entrado» es «entra») y los participios en
+  «-ido» se leen como se dicen (live#122). «Entran», «entra» y «entrado» con dinero justo detrás o tras dónde entra
+  («apunta que entran 100 € en el turno», «anota que ha entrado 100 € en caja», «han entrado en el turno 100 €»)
+  nombran la caja, nunca lo que el proyecto nombra con ellas (la mercancía que recibe el Hub), y no son la cosa sobre la
+  que actúa la orden: apuntan el dinero que entra en la caja; lo que entra sin moneda sigue siendo lo que era («entran
+  12 unidades de tarta», live#123), y
   «retira» y «retirar» lo quitan, lo retiran o lo retiran
   como permiso (`delete`, `remove`, `retire`, `withdraw`: decide la cosa nombrada, «retira la mesa 90», «retira el
   dispositivo», «retira su consentimiento»; en inglés, «retire» y «withdraw»), también con sus pronombres
