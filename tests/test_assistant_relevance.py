@@ -1438,6 +1438,8 @@ GOODS = assistant.asked(["entran"], GOODS_IN).concepts
         ("anota que habían entrado 12 unidades de tarta", "anota que entran 12 unidades de tarta"),
         ("registra que ya han entrado", "registra que ya entran"),
         ("nos han entrado 12 unidades de tarta, apúntalo", "nos entran 12 unidades de tarta, apúntalo"),
+        # Said in any sentence of the text, not only the first.
+        ("apúntalo, han entrado 12 unidades de tarta", "apúntalo, entran 12 unidades de tarta"),
         # A request is no question: it asks to note it down, or to look at what came in.
         ("¿puedes apuntar que han entrado 12 unidades de tarta?", "¿puedes apuntar que entran 12 unidades de tarta?"),
         ("¿puedes mirar si han entrado 12 unidades de tarta?", "¿puedes mirar si entran 12 unidades de tarta?"),
