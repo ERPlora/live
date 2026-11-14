@@ -4,6 +4,9 @@ import pytest
 from django.db import connections
 from psycopg.conninfo import make_conninfo
 
+# An app that tests/test_apps.py loads in a fresh interpreter; its test-named modules are fixtures, not tests.
+collect_ignore = ["packagedoors"]
+
 
 @pytest.fixture
 def db_dsn(django_db_setup):

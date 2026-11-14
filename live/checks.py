@@ -33,14 +33,22 @@ Every tool of the apps a project lists in
 ``LIVE_ASSISTANT_ASKS_REQUIRED`` says what a person would type to ask for it (``AI.asks``) in English and Spanish, at
 least two distinct phrases each, none its own name nor longer than ``MAX_ASK_CHARS`` (E020). An app is listed once all
 of its tools say them, so the apps take it on one at a time.
+
+An app's ``services`` or ``queries`` may be a package; importing a module of it is what registers its operations, so
+every module of the package is imported at startup, by the package's ``__init__.py`` (E021; test modules and
+sub-packages are not operation modules). No module of the package is named ``services`` or ``queries``: an operation
+in it would pass for one of an app's ``services.py`` or ``queries.py`` (E022).
 """
 
+import pkgutil
 import re
 import string
+import sys
 import typing
 from collections.abc import Mapping
 from typing import Any
 
+from django.apps import apps
 from django.conf import settings
 from django.core import checks
 from django.utils import translation
@@ -240,6 +248,53 @@ def _asks_problems(op: operations.Operation) -> list[str]:
 
 
 @checks.register("live")
+def check_door_packages(app_configs: Any = None, **kwargs: Any) -> list[checks.CheckMessage]:
+    """E021 and E022: the modules of an app's services or queries package."""
+    errors: list[checks.CheckMessage] = []
+    for config in apps.get_app_configs():
+        for package in _door_packages(config):
+            errors += _door_package_errors(config, package)
+    return errors
+
+
+def _door_packages(config: Any) -> list[Any]:
+    found = (sys.modules.get(f"{config.name}.{door}") for door in operations.DOORS.values())
+    return [module for module in found if module is not None and hasattr(module, "__path__")]
+
+
+def _door_package_errors(config: Any, package: Any) -> list[checks.CheckMessage]:
+    errors = []
+    for info in pkgutil.iter_modules(package.__path__):
+        module = f"{package.__name__}.{info.name}"
+        if info.name in operations.DOORS.values():
+            errors.append(
+                checks.Error(
+                    f"{module} is named like an app's {info.name}: an operation in it passes for one of {info.name}.py.",
+                    hint="Name the module after the entity or use case it covers.",
+                    obj=config,
+                    id="live.E022",
+                )
+            )
+        elif _declares_operations(info) and module not in sys.modules:
+            errors.append(
+                checks.Error(
+                    f"{module} is never imported, so the operations it declares are not registered.",
+                    hint=f"Import it in the __init__.py of {package.__name__}: from . import {info.name}",
+                    obj=config,
+                    id="live.E021",
+                )
+            )
+    return errors
+
+
+def _declares_operations(info: pkgutil.ModuleInfo) -> bool:
+    """Whether a module of a package may declare operations: not a test module, nor a sub-package (@operation rejects
+    an operation one level deeper)."""
+    name = info.name
+    return not (info.ispkg or name.startswith("test_") or name.endswith("_test") or name == "conftest")
+
+
+@checks.register("live")
 def check_session_events(app_configs: Any = None, **kwargs: Any) -> list[checks.CheckMessage]:
     """E019: ``LIVE["session_events"]`` (optional) is a list of event names that some ``events.py`` declares."""
     value = getattr(settings, "LIVE", {}).get("session_events", [])
@@ -423,7 +478,8 @@ def _item_problems(config: Any, item: Any, events: frozenset[str]) -> list[tuple
             (
                 "live.E010",
                 operation_problem,
-                f"Name a query (kind='query') of {config.label}'s queries.py, e.g. '{config.label}.<entity>.status'.",
+                f"Name a query (kind='query') of {config.label}'s queries.py or queries/ package,"
+                f" e.g. '{config.label}.<entity>.status'.",
             )
         )
     if item.permission is not None and item.permission not in config.permissions:
