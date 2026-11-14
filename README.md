@@ -17,7 +17,9 @@ desde la tenencia, `use_hub`) y el SaaS el suyo (el usuario); el resto (`live.sp
 
 - **Operaciones**: `@operation("<app>.<entidad>.<acción>", kind="query"|"command", permission, input,
   output, expose_api=False, ai=…, database=True)`; `query` solo en `queries.py` (transacción `READ ONLY`,
-  `statement_timeout` 5 s), `command` solo en `services.py`. Con `database=False` la operación no toca
+  `statement_timeout` 5 s), `command` solo en `services.py`. Cada uno puede ser un fichero o un paquete de un nivel
+  (`services/<módulo>.py`, `queries/<módulo>.py`) cuyo `__init__.py` importa cada submódulo: importarlo es lo que
+  registra sus operaciones, y `live.E021` avisa del submódulo que nadie importa. Con `database=False` la operación no toca
   ninguna BD y corre **sin** transacción (lo que espera a la red, p. ej. la respuesta de otro servicio: la
   espera no retiene una conexión); conserva el permiso, el gancho `LIVE["operation_database"]` y la salida
   validada, y una consulta a cualquier BD, un evento o un `on_commit` dentro es `LiveMisuse`. Cada ruta ninja llama a `run_operation`
@@ -182,6 +184,8 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
     caracteres; o el propio ajuste que no es una tupla de etiquetas o que nombra una app sin operaciones (una errata
     dejaría pasar todo). Una app se lista cuando todas sus herramientas las dicen: los cientos del Hub no se migran de
     una vez. `live.E017` no cambia.
+  - `live.E021`: un submódulo del paquete `services/` o `queries/` de una app instalada que nadie importó al
+    arrancar (lo importa el `__init__.py` del paquete): sus operaciones no estarían registradas.
 
   Los checks de los hooks necesitan las operaciones y los eventos registrados, cosa que
   `LiveConfig.ready` hace antes de cualquier check. La app de pruebas (`tests/testapp`) es un módulo

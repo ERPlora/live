@@ -36,11 +36,25 @@ print(json.dumps({
 """
 
 
-def fresh_setup() -> dict:
+# The same, with an app whose services and queries are packages (tests/packagedoors).
+PACKAGE_DOORS_SETUP = """
+import json
+import django
+django.setup()
+from django.core import checks
+from live import operations
+print(json.dumps({
+    "operations": sorted(name for name in operations.registry if name.startswith("packagedoors.")),
+    "e021": sorted([message.msg, message.hint] for message in checks.run_checks(tags=["live"]) if message.id == "live.E021"),
+}))
+"""
+
+
+def fresh_setup(script: str = FRESH_SETUP, settings: str = "tests.settings") -> dict:
     result = subprocess.run(
-        [sys.executable, "-c", FRESH_SETUP],
+        [sys.executable, "-c", script],
         cwd=PACKAGE_ROOT,
-        env={**os.environ, "DJANGO_SETTINGS_MODULE": "tests.settings"},
+        env={**os.environ, "DJANGO_SETTINGS_MODULE": settings},
         capture_output=True,
         text=True,
         check=False,
@@ -63,6 +77,22 @@ def test_django_setup_discovers_the_queries_and_services_of_installed_apps():
 
     assert TESTAPP_OPERATIONS <= set(state["operations"])
     assert {"tests.testapp.queries", "tests.testapp.services"} <= set(state["modules"])
+
+
+def test_django_setup_registers_the_operations_of_the_modules_a_door_package_imports():
+    state = fresh_setup(PACKAGE_DOORS_SETUP, settings="tests.settings_packagedoors")
+
+    assert state["operations"] == ["packagedoors.stock.adjust", "packagedoors.stock.level"]
+
+
+def test_a_module_of_a_services_or_queries_package_that_nothing_imports_is_e021():
+    state = fresh_setup(PACKAGE_DOORS_SETUP, settings="tests.settings_packagedoors")
+
+    assert [msg.split(" ", 1)[0] for msg, _ in state["e021"]] == [
+        "tests.packagedoors.queries.forgotten",
+        "tests.packagedoors.services.forgotten",
+    ]
+    assert all("from . import forgotten" in hint for _, hint in state["e021"])
 
 
 def test_django_setup_wires_the_outbox_as_notify_hook():
