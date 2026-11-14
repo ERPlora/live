@@ -1536,6 +1536,8 @@ TILL = assistant.asked(["caja"]).concepts
         # Said after where it comes in.
         "apunta que entran en el turno 100 €",
         "anota que han entrado en el turno 100 €",
+        # Said in the second sentence of the text.
+        "apúntalo, entran 100 € en el turno",
         # Said again of goods, those are still named.
         "apunta que entran 100 € en el turno y que entran 12 unidades de tarta",
     ],
