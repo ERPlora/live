@@ -26,6 +26,10 @@ page or a session read, in :class:`DatabaseCutMiddleware`, which goes first in `
 into a response at every layer, so it can only look at the response, which the project's ``handler500`` marks with
 :func:`current_cut` and :func:`marked`. A live stream waits in ``live.executor``, as any passing failure.
 
+**What is logged.** Only the answer. Django logs a 503 where it turns the cut into a response, before the middleware
+decides whether to repeat the request: under the middleware, :func:`marked` stops that log, and the middleware logs the
+503 it answers with, once, with the error that cut it. A read that waited and answered 200 logs no error.
+
 Past the limit, or when it may not repeat: 503 with ``Retry-After``, never a 500. The code says which of the three it is:
 ``database_unavailable``, nothing was applied (come back in a moment); ``database_answer_lost``, it was applied and only
 its answer was lost (reload to see it); ``database_outcome_unknown``, nobody can know (check whether it was saved).
@@ -54,6 +58,7 @@ from django.db import Error, OperationalError, connections
 from django.http import HttpRequest
 from django.http.response import HttpResponseBase
 from django.utils.cache import add_never_cache_headers
+from django.utils.log import log_response
 from django.utils.translation import gettext
 
 from live.api_errors import is_api_path
@@ -222,14 +227,20 @@ def release_connections() -> None:
 
 def cut_of(exc: BaseException | None, request: HttpRequest) -> DatabaseCut | None:
     """``exc`` as the cut a request answers with, or ``None`` if it is no cut. Raised outside a route, or outside any
-    operation, it only promises what the whole request can: a view may have written before it."""
+    operation, it only promises what the whole request can: a view may have written before it. The cut names ``exc`` as
+    its cause, the error its 503 is logged with."""
     if isinstance(exc, DatabaseCut):
-        return exc if not exc.repeatable or may_repeat(request) else DatabaseCut(repeatable=False)
-    if is_cut(exc):
-        if applied(request):
-            return DatabaseCut(repeatable=False, applied=True)
-        return DatabaseCut(repeatable=may_repeat(request))
-    return None
+        if not exc.repeatable or may_repeat(request):
+            return exc
+        cut = DatabaseCut(repeatable=False)
+    elif not is_cut(exc):
+        return None
+    elif applied(request):
+        cut = DatabaseCut(repeatable=False, applied=True)
+    else:
+        cut = DatabaseCut(repeatable=may_repeat(request))
+    cut.__cause__ = exc
+    return cut
 
 
 def current_cut(request: HttpRequest) -> DatabaseCut | None:
@@ -238,12 +249,26 @@ def current_cut(request: HttpRequest) -> DatabaseCut | None:
 
 
 def marked(response: HttpResponseBase, error: BaseException) -> HttpResponseBase:
-    """``response``, when ``error`` is a cut: 503 for a moment, never cached, and marked for the middleware to look at."""
+    """``response``, when ``error`` is a cut: 503 for a moment, never cached, and marked for the middleware to look at.
+    Under the middleware it may be a try that runs again: the middleware logs it if it answers with it."""
     if isinstance(error, DatabaseCut):
         response["Retry-After"] = str(RETRY_AFTER_SECONDS)
         add_never_cache_headers(response)
         response.database_cut = error
+        if _running.get() is not None:
+            # Django's own flag: ``log_response`` skips a response that carries it.
+            response._has_been_logged = True
     return response
+
+
+def _log_answer(request: HttpRequest, response: HttpResponseBase) -> None:
+    """Logs the cut ``response`` answers ``request`` with as Django logs a 5xx, with the error that cut it."""
+    cut = getattr(response, "database_cut", None)
+    if cut is not None:
+        response._has_been_logged = False
+        log_response(
+            "%s: %s", response.reason_phrase, request.path, response=response, request=request, exception=cut.__cause__
+        )
 
 
 # --- Who waits --------------------------------------------------------------------------------------------------------
@@ -300,6 +325,7 @@ class DatabaseCutMiddleware(SyncAndAsyncMiddleware):
                 response = self.get_response(request)
                 wait = self._wait(request, response)
                 if wait is None:
+                    _log_answer(request, response)
                     return response
                 release_connections()
                 time.sleep(wait)
@@ -313,6 +339,8 @@ class DatabaseCutMiddleware(SyncAndAsyncMiddleware):
                 response = await self.get_response(request)
                 wait = self._wait(request, response)
                 if wait is None:
+                    if getattr(response, "database_cut", None) is not None:
+                        await sync_to_async(_log_answer, thread_sensitive=False)(request, response)
                     return response
                 await sync_to_async(release_connections)()
                 await asyncio.sleep(wait)
