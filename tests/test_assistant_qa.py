@@ -16,8 +16,8 @@ from ninja import Schema
 from live import assistant, assistant_qa
 from live.assistant_qa import Miss, export_catalog, misses, uncovered
 from live.operations import Operation
+from tests.assistant_catalogue import NOISE, ProductIn, tool
 from tests.test_assistant import Done, NoIn
-from tests.test_assistant_relevance import NOISE, ProductIn, tool
 
 PRODUCT_CREATE = tool(
     "inventory.product.create",
