@@ -4,6 +4,7 @@ A line of the list is ``<ceiling> <path> #<issue>``: the ceiling is the file's e
 never grows past it, and the change that shrinks the file lowers the ceiling to the new size. The list only shrinks:
 against origin/main it never gains a path nor raises a ceiling, and a listed file that fits again leaves it. The caps
 only come down; the change that lowers one regenerates the list, with each file at most at its size on origin/main.
+A shell script past 100 lines is rewritten in Python; a shell test, under tests/ or named *.test.sh, may reach 1500.
 """
 
 import os
@@ -18,10 +19,12 @@ ALLOW = ".file-size-allow"
 BASELINE = "origin/main"
 PRODUCTION_CAP = 500
 TEST_CAP = 1000
+SHELL_CAP = 100
+SHELL_TEST_CAP = 1500
 EXTENSIONS = (".py", ".sh")
 GENERATED_DIRS = frozenset({"migrations"})
 ISSUE_RE = re.compile(r"#[0-9]+")
-CAPS_RE = re.compile(r"^(PRODUCTION_CAP|TEST_CAP) = ([0-9]+)$", re.MULTILINE)
+CAPS_RE = re.compile(r"^([A-Z_]+_CAP) = ([0-9]+)$", re.MULTILINE)
 SELF = Path(__file__).resolve().relative_to(ROOT).as_posix()
 
 
@@ -34,10 +37,21 @@ def git(*args: str) -> str:
 def is_test(path: str) -> bool:
     parts = PurePosixPath(path).parts
     name = parts[-1]
-    return parts[0] == "tests" or (name.startswith("test_") and name.endswith(".py")) or name == "conftest.py"
+    return (
+        parts[0] == "tests"
+        or (name.startswith("test_") and name.endswith(".py"))
+        or name == "conftest.py"
+        or name.endswith(".test.sh")
+    )
+
+
+def is_shell(path: str) -> bool:
+    return path.endswith(".sh")
 
 
 def cap(path: str) -> int:
+    if is_shell(path):
+        return SHELL_TEST_CAP if is_test(path) else SHELL_CAP
     return TEST_CAP if is_test(path) else PRODUCTION_CAP
 
 
@@ -61,13 +75,17 @@ def parse_allow(text: str) -> tuple[dict[str, int], list[str]]:
 def size_problems(sizes: dict[str, int], ceilings: dict[str, int]) -> list[str]:
     """What breaks the caps: ``sizes`` are the lines of each code file, ``ceilings`` the list."""
     problems = [
-        f"{path} has {lines} lines, over its cap of {cap(path)}: split it by responsibility"
+        f"{path} has {lines} lines, over its cap of {cap(path)}: {advice(path)}"
         for path, lines in sizes.items()
         if path not in ceilings and lines > cap(path)
     ]
     for path, ceiling in ceilings.items():
         problems += listed_problems(path, sizes.get(path), ceiling)
     return problems
+
+
+def advice(path: str) -> str:
+    return "rewrite it in Python" if is_shell(path) and not is_test(path) else "split it by responsibility"
 
 
 def listed_problems(path: str, lines: int | None, ceiling: int) -> list[str]:
@@ -93,28 +111,30 @@ def ratchet_problems(ceilings: dict[str, int], baseline: dict[str, int]) -> list
     ]
 
 
-def cap_problems(caps: tuple[int, int], baseline: tuple[int, int]) -> list[str]:
-    """``caps`` and ``baseline`` are ``(production, test)``: neither may be higher than the baseline's."""
-    return [
-        f"the {kind} cap {now} is over {before}, the one on {BASELINE}: a cap only comes down"
-        for kind, now, before in zip(("production", "test"), caps, baseline, strict=True)
-        if now > before
-    ]
+def cap_problems(caps: dict[str, int], baseline: dict[str, int]) -> list[str]:
+    """No cap of the baseline may rise or go; a cap the baseline does not have yet has nothing to compare with."""
+    problems = []
+    for name, before in baseline.items():
+        if name not in caps:
+            problems.append(f"{name} is gone, it was {before} on {BASELINE}: a cap only comes down")
+        elif caps[name] > before:
+            problems.append(f"{name} {caps[name]} is over {before}, the one on {BASELINE}: a cap only comes down")
+    return problems
 
 
-def parse_caps(text: str) -> tuple[int, int]:
-    """``(production, test)`` as this file's source sets them."""
-    caps = dict(CAPS_RE.findall(text))
-    assert len(caps) == 2, f"cannot read PRODUCTION_CAP and TEST_CAP from {SELF}"
-    return int(caps["PRODUCTION_CAP"]), int(caps["TEST_CAP"])
+def parse_caps(text: str) -> dict[str, int]:
+    """Every ``<NAME>_CAP = <lines>`` this file's source sets, by name."""
+    caps = {name: int(lines) for name, lines in CAPS_RE.findall(text)}
+    assert {"PRODUCTION_CAP", "TEST_CAP"} <= caps.keys(), f"cannot read PRODUCTION_CAP and TEST_CAP from {SELF}"
+    return caps
 
 
 def allowed_ceilings(
-    baseline_list: dict[str, int], baseline_sizes: dict[str, int], caps: tuple[int, int], baseline_caps: tuple[int, int]
+    baseline_list: dict[str, int], baseline_sizes: dict[str, int], caps: dict[str, int], baseline_caps: dict[str, int]
 ) -> dict[str, int]:
     """The most the list may hold: the baseline's list, unless this change lowers a cap and so regenerates the list,
     which may then hold any file up to its size on the baseline (``baseline_sizes``)."""
-    lowered = any(now < before for now, before in zip(caps, baseline_caps, strict=True))
+    lowered = any(caps.get(name, before) < before for name, before in baseline_caps.items())
     return baseline_sizes if lowered else baseline_list
 
 
@@ -133,7 +153,11 @@ def tracked_sizes() -> dict[str, int]:
     }
 
 
-def baseline_caps() -> tuple[int, int]:
+def own_caps() -> dict[str, int]:
+    return parse_caps(Path(__file__).read_text())
+
+
+def baseline_caps() -> dict[str, int]:
     return parse_caps(git("show", f"{BASELINE}:{SELF}"))
 
 
@@ -150,6 +174,22 @@ def baseline_text() -> str | None:
 
 # The rules, on made-up files
 
+MADE_UP_CAPS = {"PRODUCTION_CAP": 500, "TEST_CAP": 1000, "SHELL_CAP": 100, "SHELL_TEST_CAP": 1500}
+
+
+@pytest.fixture
+def scratch_git(tmp_path, monkeypatch):
+    """Runs git in a new repo at ``tmp_path``, made the ROOT of this test, without the user's git configuration."""
+    identity = {f"GIT_{role}_{field}": "size-test" for role in ("AUTHOR", "COMMITTER") for field in ("NAME", "EMAIL")}
+    env = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1", **identity}
+
+    def run(*args: str) -> None:
+        subprocess.run(["git", *args], cwd=tmp_path, env=env, check=True)
+
+    run("init", "-q")
+    monkeypatch.setitem(globals(), "ROOT", tmp_path)
+    return run
+
 
 def test_a_production_file_over_500_lines_outside_the_list_fails():
     assert size_problems({"live/big.py": 501, "live/fits.py": 500}, {}) == [
@@ -157,16 +197,23 @@ def test_a_production_file_over_500_lines_outside_the_list_fails():
     ]
 
 
-@pytest.mark.parametrize("path", ["tests/helpers.py", "live/test_thing.py", "live/conftest.py", "tests/run.sh"])
+@pytest.mark.parametrize("path", ["tests/helpers.py", "live/test_thing.py", "live/conftest.py"])
 def test_a_test_file_has_a_cap_of_1000_lines(path):
     assert size_problems({path: 1000}, {}) == []
     assert size_problems({path: 1001}, {}) == [f"{path} has 1001 lines, over its cap of 1000: split it by responsibility"]
 
 
-def test_a_shell_script_outside_tests_has_the_production_cap():
-    assert size_problems({"live/test_run.sh": 501}, {}) == [
-        "live/test_run.sh has 501 lines, over its cap of 500: split it by responsibility"
-    ]
+@pytest.mark.parametrize("path", ["live/run.sh", "live/test_run.sh", ".githooks/pre-push.sh"])
+def test_a_shell_script_over_100_lines_fails_with_the_advice_to_rewrite_it_in_python(path):
+    assert size_problems({path: 100}, {}) == []
+    assert size_problems({path: 101}, {}) == [f"{path} has 101 lines, over its cap of 100: rewrite it in Python"]
+
+
+@pytest.mark.parametrize("path", ["tests/run.sh", ".githooks/pre-push.test.sh"])
+def test_a_shell_test_has_a_cap_of_1500_lines(path):
+    assert size_problems({path: 101}, {}) == []
+    assert size_problems({path: 1500}, {}) == []
+    assert size_problems({path: 1501}, {}) == [f"{path} has 1501 lines, over its cap of 1500: split it by responsibility"]
 
 
 def test_a_listed_file_over_its_ceiling_fails():
@@ -210,33 +257,60 @@ def test_the_list_may_not_gain_a_path_nor_raise_a_ceiling_against_the_baseline()
 
 
 def test_a_cap_may_not_rise_against_the_baseline():
-    assert cap_problems((500, 1000), (500, 1000)) == []
-    assert cap_problems((500, 1000), (1000, 1500)) == []
-    assert cap_problems((501, 1001), (500, 1000)) == [
-        f"the production cap 501 is over 500, the one on {BASELINE}: a cap only comes down",
-        f"the test cap 1001 is over 1000, the one on {BASELINE}: a cap only comes down",
+    looser = {"PRODUCTION_CAP": 1000, "TEST_CAP": 1500, "SHELL_CAP": 500, "SHELL_TEST_CAP": 2000}
+    higher = {"PRODUCTION_CAP": 501, "TEST_CAP": 1001, "SHELL_CAP": 101, "SHELL_TEST_CAP": 1501}
+
+    assert cap_problems(MADE_UP_CAPS, MADE_UP_CAPS) == []
+    assert cap_problems(MADE_UP_CAPS, looser) == []
+    assert cap_problems(higher, MADE_UP_CAPS) == [
+        f"PRODUCTION_CAP 501 is over 500, the one on {BASELINE}: a cap only comes down",
+        f"TEST_CAP 1001 is over 1000, the one on {BASELINE}: a cap only comes down",
+        f"SHELL_CAP 101 is over 100, the one on {BASELINE}: a cap only comes down",
+        f"SHELL_TEST_CAP 1501 is over 1500, the one on {BASELINE}: a cap only comes down",
     ]
 
 
-def test_the_caps_are_read_from_the_size_test():
-    text = "PRODUCTION_CAP = 400\nTEST_CAP = 900\nOTHER = 1\n"
+def test_a_cap_of_the_baseline_may_not_go():
+    assert cap_problems({"PRODUCTION_CAP": 500, "TEST_CAP": 1000, "SHELL_TEST_CAP": 1500}, MADE_UP_CAPS) == [
+        f"SHELL_CAP is gone, it was 100 on {BASELINE}: a cap only comes down"
+    ]
 
-    assert parse_caps(text) == (400, 900)
+
+def test_a_cap_the_baseline_does_not_have_yet_has_nothing_to_compare_with():
+    assert cap_problems(MADE_UP_CAPS, {"PRODUCTION_CAP": 500, "TEST_CAP": 1000}) == []
+
+
+def test_the_caps_are_read_from_the_size_test():
+    text = "PRODUCTION_CAP = 400\nTEST_CAP = 900\nSHELL_CAP = 80\nSHELL_TEST_CAP = 1200\nOTHER = 1\n"
+
+    assert parse_caps(text) == {"PRODUCTION_CAP": 400, "TEST_CAP": 900, "SHELL_CAP": 80, "SHELL_TEST_CAP": 1200}
     with pytest.raises(AssertionError, match="cannot read PRODUCTION_CAP and TEST_CAP"):
-        parse_caps("PRODUCTION_CAP = 400\n")
+        parse_caps("PRODUCTION_CAP = 400\nSHELL_CAP = 80\n")
+
+
+def test_the_caps_this_change_compares_are_all_the_caps_of_this_test():
+    assert own_caps() == {
+        "PRODUCTION_CAP": PRODUCTION_CAP,
+        "TEST_CAP": TEST_CAP,
+        "SHELL_CAP": SHELL_CAP,
+        "SHELL_TEST_CAP": SHELL_TEST_CAP,
+    }
 
 
 def test_the_caps_of_the_baseline_are_read_from_this_test_there(monkeypatch):
     shown = []
     monkeypatch.setitem(globals(), "git", lambda *args: shown.append(args) or "PRODUCTION_CAP = 400\nTEST_CAP = 900\n")
 
-    assert baseline_caps() == (400, 900)
+    assert baseline_caps() == {"PRODUCTION_CAP": 400, "TEST_CAP": 900}
     assert shown == [("show", f"{BASELINE}:tests/test_file_size.py")]
 
 
-@pytest.mark.parametrize("caps", [(400, 1000), (500, 900)])
-def test_the_change_that_lowers_a_cap_may_list_any_file_up_to_its_size_on_the_baseline(caps):
-    allowed = allowed_ceilings({}, {"live/big.py": 720, "tests/test_big.py": 1349}, caps, (500, 1000))
+@pytest.mark.parametrize(
+    "lowered", [{"PRODUCTION_CAP": 400}, {"TEST_CAP": 900}, {"SHELL_CAP": 90}, {"SHELL_TEST_CAP": 1400}]
+)
+def test_the_change_that_lowers_a_cap_may_list_any_file_up_to_its_size_on_the_baseline(lowered):
+    sizes = {"live/big.py": 720, "tests/test_big.py": 1349}
+    allowed = allowed_ceilings({}, sizes, {**MADE_UP_CAPS, **lowered}, MADE_UP_CAPS)
 
     assert ratchet_problems({"live/big.py": 720, "tests/test_big.py": 1349}, allowed) == []
     assert ratchet_problems({"live/big.py": 721, "live/new.py": 600}, allowed) == [
@@ -245,33 +319,43 @@ def test_the_change_that_lowers_a_cap_may_list_any_file_up_to_its_size_on_the_ba
     ]
 
 
-@pytest.mark.parametrize("caps", [(500, 1000), (600, 1000)])
+@pytest.mark.parametrize("caps", [{}, {"PRODUCTION_CAP": 600}, {"SHELL_CAP": 200}])
 def test_any_other_change_may_only_keep_or_shrink_the_list_of_the_baseline(caps):
-    allowed = allowed_ceilings({"live/big.py": 720}, {"live/big.py": 720, "live/other.py": 650}, caps, (500, 1000))
+    sizes = {"live/big.py": 720, "live/other.py": 650}
+    allowed = allowed_ceilings({"live/big.py": 720}, sizes, {**MADE_UP_CAPS, **caps}, MADE_UP_CAPS)
 
     assert allowed == {"live/big.py": 720}
 
 
-def test_the_size_on_the_baseline_is_read_there_and_counted_as_in_the_working_tree(tmp_path, monkeypatch):
+def test_the_size_on_the_baseline_is_read_there_and_counted_as_in_the_working_tree(tmp_path, scratch_git, monkeypatch):
     # A file that grew in the branch, committed or not, must not pass for its size on the baseline.
-    identity = {f"GIT_{role}_{field}": "size-test" for role in ("AUTHOR", "COMMITTER") for field in ("NAME", "EMAIL")}
-    env = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1", **identity}
-
     def commit(content: bytes) -> None:
         (tmp_path / "big.py").write_bytes(content)
-        for args in (["add", "big.py"], ["commit", "-qm", "big.py"]):
-            subprocess.run(["git", *args], cwd=tmp_path, env=env, check=True)
+        scratch_git("add", "big.py")
+        scratch_git("commit", "-qm", "big.py")
 
-    subprocess.run(["git", "init", "-q"], cwd=tmp_path, env=env, check=True)
     commit(b"a\nb\r\nc")
-    subprocess.run(["git", "branch", "base"], cwd=tmp_path, env=env, check=True)
+    scratch_git("branch", "base")
     commit(b"a\nb\nc\nd\n")
     (tmp_path / "big.py").write_bytes(b"a\nb\nc\nd\ne\n")
-    monkeypatch.setitem(globals(), "ROOT", tmp_path)
     monkeypatch.setitem(globals(), "BASELINE", "base")
 
     assert size_on_baseline("big.py") == 3
     assert size_on_baseline("gone.py") is None
+
+
+def test_the_shell_scripts_of_the_repo_are_measured_with_their_caps(tmp_path, scratch_git):
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "ci").mkdir()
+    sizes = {"run.sh": 101, "fits.sh": 100, "ci/deploy.test.sh": 101, "tests/run.sh": 1501}
+    for path, lines in sizes.items():
+        (tmp_path / path).write_text("echo\n" * lines)
+    scratch_git("add", "-N", *sizes)
+
+    assert size_problems(tracked_sizes(), {}) == [
+        "run.sh has 101 lines, over its cap of 100: rewrite it in Python",
+        "tests/run.sh has 1501 lines, over its cap of 1500: split it by responsibility",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -313,7 +397,7 @@ def test_every_code_file_of_the_repo_keeps_to_its_cap_or_its_ceiling():
 
 
 def test_the_caps_never_rise_against_origin_main():
-    problems = cap_problems((PRODUCTION_CAP, TEST_CAP), baseline_caps())
+    problems = cap_problems(own_caps(), baseline_caps())
 
     assert not problems, "\n".join(problems)
 
@@ -324,7 +408,7 @@ def test_the_list_only_shrinks_against_origin_main():
         pytest.skip(f"{BASELINE} has no {ALLOW} yet: this branch brings the first one")
     ceilings, _ = parse_allow((ROOT / ALLOW).read_text())
     sizes = {path: lines for path in ceilings if (lines := size_on_baseline(path)) is not None}
-    allowed = allowed_ceilings(parse_allow(baseline)[0], sizes, (PRODUCTION_CAP, TEST_CAP), baseline_caps())
+    allowed = allowed_ceilings(parse_allow(baseline)[0], sizes, own_caps(), baseline_caps())
     problems = ratchet_problems(ceilings, allowed)
 
     assert not problems, "\n".join(problems)
