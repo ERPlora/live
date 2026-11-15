@@ -522,15 +522,16 @@ apoyo en `tests/testapp/`.
 
 La suite comprueba también la regla de tamaño y responsabilidad única:
 
-- `tests/test_file_size.py`: ningún fichero versionado `.py` o `.sh` pasa de 500 líneas físicas (los de tests,
-  bajo `tests/` o llamados `test_*.py` o `conftest.py`, de 1.000), sin contar las migraciones. Los que se pasan
+- `tests/test_file_size.py`: ningún fichero versionado `.py` pasa de 500 líneas físicas (los de tests, bajo
+  `tests/` o llamados `test_*.py` o `conftest.py`, de 1.000), sin contar las migraciones, y ningún script `.sh`, esté
+  o no bajo `tests/`, pasa de 100: el que necesita más se reescribe en Python. Los que se pasan
   están en `.file-size-allow`, una línea por fichero (`<líneas> <ruta> #<issue>`, con su número exacto de líneas).
   Un fichero de la lista se puede modificar sin partirlo, pero no pasa de su número: lo que el cambio añada va a un
   módulo nuevo, y el cambio que lo encoge baja su número al nuevo. La lista solo encoge: frente a la de
   `origin/main` no gana rutas ni sube números, y un fichero que vuelve a caber o que ya no existe sale de ella. Los
-  topes tampoco suben frente a `origin/main`; el cambio que baja uno regenera la lista, con cada fichero como mucho
-  en su tamaño de `origin/main`. Sin `origin/main` (un clon sin ese ref) el test falla: `git fetch origin main`
-  antes de la suite.
+  topes tampoco suben ni desaparecen frente a `origin/main`; el cambio que baja uno regenera la lista, con cada
+  fichero como mucho en su tamaño de `origin/main`. Sin `origin/main` (un clon sin ese ref) el test falla:
+  `git fetch origin main` antes de la suite.
 - `tests/test_function_limits.py` corre `ruff check` con solo `C901` (complejidad ≤ 10), `PLR0911` (≤ 6 retornos),
   `PLR0912` (≤ 12 ramas), `PLR0913` y `PLR0917` (≤ 5 argumentos, salvo en tests), `PLR0915` (≤ 50 sentencias) y
   `RUF100`. Las funciones que hoy se pasan llevan `# noqa: <regla>`, y `RUF100` hace fallar el que sobra. `ruff
