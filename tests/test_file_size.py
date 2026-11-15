@@ -6,6 +6,7 @@ against origin/main it never gains a path nor raises a ceiling, and a listed fil
 only come down; the change that lowers one regenerates the list, with each file at most at its size on origin/main.
 """
 
+import os
 import re
 import subprocess
 from pathlib import Path, PurePosixPath
@@ -251,11 +252,26 @@ def test_any_other_change_may_only_keep_or_shrink_the_list_of_the_baseline(caps)
     assert allowed == {"live/big.py": 720}
 
 
-def test_the_size_on_the_baseline_is_counted_as_in_the_working_tree(monkeypatch):
-    monkeypatch.setitem(globals(), "BASELINE", "HEAD")
+def test_the_size_on_the_baseline_is_read_there_and_counted_as_in_the_working_tree(tmp_path, monkeypatch):
+    # A file that grew in the branch, committed or not, must not pass for its size on the baseline.
+    identity = {f"GIT_{role}_{field}": "size-test" for role in ("AUTHOR", "COMMITTER") for field in ("NAME", "EMAIL")}
+    env = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1", **identity}
 
-    assert size_on_baseline(".python-version") == len((ROOT / ".python-version").read_bytes().splitlines())
-    assert size_on_baseline("live/no_such_file.py") is None
+    def commit(content: bytes) -> None:
+        (tmp_path / "big.py").write_bytes(content)
+        for args in (["add", "big.py"], ["commit", "-qm", "big.py"]):
+            subprocess.run(["git", *args], cwd=tmp_path, env=env, check=True)
+
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, env=env, check=True)
+    commit(b"a\nb\r\nc")
+    subprocess.run(["git", "branch", "base"], cwd=tmp_path, env=env, check=True)
+    commit(b"a\nb\nc\nd\n")
+    (tmp_path / "big.py").write_bytes(b"a\nb\nc\nd\ne\n")
+    monkeypatch.setitem(globals(), "ROOT", tmp_path)
+    monkeypatch.setitem(globals(), "BASELINE", "base")
+
+    assert size_on_baseline("big.py") == 3
+    assert size_on_baseline("gone.py") is None
 
 
 @pytest.mark.parametrize(
