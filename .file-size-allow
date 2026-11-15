@@ -1,3 +1,8 @@
-# Code files over their cap today (production 1000 lines, tests 1500): <ceiling> <path> #<issue>.
-# The ceiling is the file's size the day it was listed, rounded up to a hundred. The list only shrinks
-# (tests/test_file_size.py): no new path, no higher ceiling, and a file back under its cap leaves it.
+# Code files over their cap (production 500 lines, tests 1000): <lines> <path> #<issue>.
+# The number is the file's exact size: a listed file never grows past it, and the change that shrinks the file lowers
+# it. The list only shrinks (tests/test_file_size.py): no new path, no higher number, and a file back under its cap
+# leaves it.
+647 live/assistant/reading.py #147
+720 live/checks.py #147
+1111 tests/test_database_cut.py #147
+1349 tests/test_executor.py #147
