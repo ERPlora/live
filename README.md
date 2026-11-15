@@ -523,8 +523,9 @@ apoyo en `tests/testapp/`.
 La suite comprueba también la regla de tamaño y responsabilidad única:
 
 - `tests/test_file_size.py`: ningún fichero versionado `.py` pasa de 500 líneas físicas (los de tests, bajo
-  `tests/` o llamados `test_*.py` o `conftest.py`, de 1.000), sin contar las migraciones, y ningún script `.sh`, esté
-  o no bajo `tests/`, pasa de 100: el que necesita más se reescribe en Python. Los que se pasan
+  `tests/` o llamados `test_*.py` o `conftest.py`, de 1.000), sin contar las migraciones, y ningún script `.sh` pasa
+  de 100: el que necesita más se reescribe en Python. Un `.sh` de pruebas, bajo `tests/` o llamado `*.test.sh`,
+  llega a 1.500. Los que se pasan
   están en `.file-size-allow`, una línea por fichero (`<líneas> <ruta> #<issue>`, con su número exacto de líneas).
   Un fichero de la lista se puede modificar sin partirlo, pero no pasa de su número: lo que el cambio añada va a un
   módulo nuevo, y el cambio que lo encoge baja su número al nuevo. La lista solo encoge: frente a la de

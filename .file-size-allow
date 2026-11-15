@@ -1,4 +1,5 @@
-# Code files over their cap (production 500 lines, tests 1000, shell scripts 100): <lines> <path> #<issue>.
+# Code files over their cap (production 500 lines, tests 1000; shell scripts 100, shell tests 1500):
+# <lines> <path> #<issue>.
 # The number is the file's exact size: a listed file never grows past it, and the change that shrinks the file lowers
 # it. The list only shrinks (tests/test_file_size.py): no new path, no higher number, and a file back under its cap
 # leaves it.
