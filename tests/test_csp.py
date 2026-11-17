@@ -224,3 +224,48 @@ class TestReportEndpoint:
 
     def test_only_post_is_allowed(self, client):
         assert client.get("/csp-report/").status_code == 405
+
+
+class TestWithFrames:
+    def test_youtube_nocookie_is_the_privacy_enhanced_player(self):
+        assert csp.YOUTUBE_NOCOOKIE == "https://www.youtube-nocookie.com"
+
+    def test_the_base_policy_admits_its_own_frames_and_the_given_origins(self):
+        policy = csp.with_frames(csp.base_policy(), csp.YOUTUBE_NOCOOKIE)
+
+        assert policy["frame-src"] == [CSP.SELF, csp.YOUTUBE_NOCOOKIE]
+        assert {**policy, "frame-src": None} == {**csp.base_policy(), "frame-src": None}
+
+    def test_the_header_says_the_frames(self):
+        header = csp.policy_header(csp.with_frames(csp.base_policy(), csp.YOUTUBE_NOCOOKIE), "n0nce")
+
+        assert f"frame-src 'self' {csp.YOUTUBE_NOCOOKIE}" in header
+
+    def test_it_returns_a_fresh_copy_and_leaves_its_input_alone(self):
+        policy = csp.base_policy()
+
+        framed = csp.with_frames(policy, csp.YOUTUBE_NOCOOKIE)
+        framed["default-src"].append("https://elsewhere.example")
+
+        assert policy == csp.base_policy()
+
+    def test_an_existing_frame_src_stays_and_gains_its_own_origin(self):
+        policy = {"default-src": [CSP.SELF], "frame-src": ["https://www.google.com/recaptcha/"]}
+
+        framed = csp.with_frames(policy, csp.YOUTUBE_NOCOOKIE, "https://player.example")
+
+        assert framed["frame-src"] == [
+            "https://www.google.com/recaptcha/",
+            CSP.SELF,
+            csp.YOUTUBE_NOCOOKIE,
+            "https://player.example",
+        ]
+        assert policy["frame-src"] == ["https://www.google.com/recaptcha/"]
+
+    def test_nothing_is_added_twice(self):
+        framed = csp.with_frames(csp.base_policy(), csp.YOUTUBE_NOCOOKIE, csp.YOUTUBE_NOCOOKIE)
+
+        assert csp.with_frames(framed, csp.YOUTUBE_NOCOOKIE)["frame-src"] == [CSP.SELF, csp.YOUTUBE_NOCOOKIE]
+
+    def test_without_origins_only_its_own_frames_are_admitted(self):
+        assert csp.with_frames({})["frame-src"] == [CSP.SELF]

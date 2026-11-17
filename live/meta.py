@@ -175,6 +175,13 @@ class DeviceNotice:
     refresh_on: Sequence[str] = ()
 
 
+@dataclass(frozen=True)
+class Help:
+    """Declared on a module, its help window is ready; ``videos`` holds its optional YouTube video id by language."""
+
+    videos: Mapping[str, str] = field(default_factory=dict)
+
+
 class LiveAppConfig(AppConfig):
     kind: ClassVar[Literal["platform", "app"]] = "platform"
     # Module metadata: the Hub's apps page (icon and name) and the right from the SaaS.
@@ -197,6 +204,8 @@ class LiveAppConfig(AppConfig):
     bell: ClassVar[list[BellCounter]] = []
     # Module metadata: the device's notices, which base fills in.
     notices: ClassVar[list[DeviceNotice]] = []
+    # Module metadata: its help window, shown only once declared (live.checks_help validates it).
+    help: ClassVar[Help | None] = None
     # The closed lists the app keeps where no field of its models holds them (inside a JSON: a website's palette), by
     # the datum's name, each value with the label its screens show (lazy): the assistant's card says a value by it as
     # by a field's ``choices`` (``live.assistant.choice_label``). A field of its models with that name names it first.

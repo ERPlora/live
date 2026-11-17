@@ -15,8 +15,8 @@ class LiveConfig(AppConfig):
     verbose_name = _("Live")
 
     def ready(self) -> None:
-        # Importing live.checks registers the app metadata checks (tag "live").
-        from live import checks, operations, outbox  # noqa: F401
+        # Importing live.checks and live.checks_help registers the app metadata checks (tag "live").
+        from live import checks, checks_help, operations, outbox  # noqa: F401
 
         operations.notify_hook = outbox.notify
         # Importing registers the operations; a second ready() hits Python's import cache and

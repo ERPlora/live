@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 _DEV_SERVER_DIRECTIVES = ("connect-src", "style-src", "font-src", "img-src")
 #: Most of a violation report that goes to the log.
 _MAX_LOGGED_REPORT = 8 * 1024
+#: The origin of YouTube's privacy-enhanced embedded player.
+YOUTUBE_NOCOOKIE = "https://www.youtube-nocookie.com"
 
 
 def base_policy(*, report_uri: str | None = "/csp-report/") -> dict[str, list[str]]:
@@ -62,6 +64,18 @@ def debug_policy(dev_server: str = "http://localhost:5173") -> dict[str, list[st
     policy["connect-src"].append(socket)
     del policy["require-trusted-types-for"]
     return policy
+
+
+def with_frames(policy: dict[str, list[str]], *origins: str) -> dict[str, list[str]]:
+    """``policy`` (a fresh copy) admitting frames of its own origin and of ``origins``.
+
+    What an existing ``frame-src`` admits it still admits, and nothing is added twice.
+    """
+    result = {name: list(sources) for name, sources in policy.items()}
+    current = result.get("frame-src", [])
+    wanted = dict.fromkeys((CSP.SELF, *origins))
+    result["frame-src"] = [*current, *(source for source in wanted if source not in current)]
+    return result
 
 
 def policy_header(policy: dict, nonce: str | None = None) -> str:
