@@ -4,7 +4,7 @@ It declares one step, one panel and one counter of the Home so that the ``live``
 declarations (its query ``testapp.thing.list``, its permission, its event).
 """
 
-from live.meta import BellCounter, Category, LiveAppConfig, Nav, SetupCheck, SetupStep, Widget
+from live.meta import BellCounter, Category, Help, LiveAppConfig, Nav, SetupCheck, SetupStep, Widget
 
 
 class TestAppConfig(LiveAppConfig):
@@ -16,6 +16,7 @@ class TestAppConfig(LiveAppConfig):
     summary = "Things to test the live package with."
     description = "A module of the test suite: its models, operations and live queries."
     verticals = ["restaurant"]
+    help = Help(videos={"es": "dQw4w9WgXcQ"})
     navigation = [Nav(id="testapp", label="Things", icon="ion:cube-outline", path="/testapp")]
     permissions = ["testapp.view", "testapp.manage"]
     role_permissions = {"admin": ["testapp.*"]}

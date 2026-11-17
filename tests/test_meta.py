@@ -13,6 +13,7 @@ from live.meta import (
     BellCounter,
     Category,
     DeviceNotice,
+    Help,
     LiveAppConfig,
     Nav,
     SetupCheck,
@@ -318,3 +319,31 @@ def test_declared_events_skips_apps_without_events_module_and_events_modules_wit
     monkeypatch.setattr("live.meta.all_live_app_configs", lambda: [without_module, without_all, testapp])
 
     assert declared_events() == frozenset({"testapp.thing.created"})
+
+
+# --- The help window of a module ----------------------------------------------------------------------------------
+
+
+def test_an_app_has_no_help_by_default():
+    assert LiveAppConfig.help is None
+
+
+def test_help_without_videos_is_ready_with_no_video():
+    assert Help().videos == {}
+
+
+def test_help_says_its_video_by_language_code():
+    assert Help(videos={"es": "dQw4w9WgXcQ", "en": "aqz-KE-bpKQ"}).videos == {"es": "dQw4w9WgXcQ", "en": "aqz-KE-bpKQ"}
+
+
+def test_help_is_immutable_and_two_never_share_their_videos():
+    first, second = Help(), Help()
+
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        first.videos = {"es": "dQw4w9WgXcQ"}
+    assert first.videos is not second.videos
+
+
+def test_testapp_declares_its_help():
+    """So that the help check runs over a real declaration too (test_checks_help.py)."""
+    assert apps.get_app_config("testapp").help == Help(videos={"es": "dQw4w9WgXcQ"})

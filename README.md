@@ -81,7 +81,9 @@ desde la tenencia, `use_hub`) y el SaaS el suyo (el usuario); el resto (`live.sp
   navegador pide `/favicon.ico`). `live.csp`: nonce + `strict-dynamic` +
   Trusted Types + `connect-src 'self' ipc: http://ipc.localhost`; DEBUG añade el origen de Vite solo a
   connect/style/font/img. `manage.py runserver` (hereda del de daphne) lanza Vite con HMR (`--novite`
-  lo omite); `export_spa_catalog` exporta los `.po` (`djangojs`) a JSON.
+  lo omite); `export_spa_catalog` exporta los `.po` (`djangojs`) a JSON. `with_frames(policy, *origins)`
+  devuelve una copia cuyo `frame-src` admite el propio origen y los dados, sin quitar lo que ya admitía
+  (`YOUTUBE_NOCOOKIE` es el del reproductor de YouTube sin cookies); `base_policy()` no lleva `frame-src`.
 - **ASGI**: `live.asgi.ignore_root_path(app)` envuelve el `application` de los dos `config/asgi.py`. Daphne
   copia en `scope["root_path"]` la cabecera `Daphne-Root-Path` del cliente y Django la toma como prefijo de
   script; el envoltorio la vacía en `http` y `websocket` (`lifespan` pasa tal cual). ERPlora/hub#2, saas#2.
@@ -133,6 +135,9 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
   obligatorios; `body` (partes que se juntan con « · », las que tengan todos sus campos rellenos),
   `when` (lista de `SetupCheck` sobre la fila: solo las filas que las cumplen son de este aviso),
   `params`, `permission` y `refresh_on`.
+- **Solo un módulo, para su ventana de ayuda**: `help: Help | None`, `None` por defecto. Declararla
+  (`help = Help()`) dice que la ayuda del módulo está lista; el vídeo es opcional: `Help(videos={"es":
+  "<id>"})` guarda el id de un vídeo de YouTube por código de idioma.
 - **Lectura**: `all_live_app_configs()` devuelve todas las apps nuestras instaladas (permisos,
   routers); `module_configs()`, solo las de `kind = "app"` (menú, página de apps, foto del SaaS, y
   sus `setup`, `widgets`, `bell` y `notices`); `declared_events()`, los eventos que declara la lista `ALL` del
@@ -192,6 +197,9 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
   - `live.E022`: un submódulo o subpaquete del paquete `services/` o `queries/` que se llama `services` o `queries`.
     `@operation` solo ve el nombre del módulo, y `<app>.queries.services` no se distingue de una app `<app>.queries`
     con su `services.py`: un comando ahí pasaría por bueno.
+  - `live.E023` (`live.checks_help`): un `help` que no es un `Help`, declarado en una app que no es un módulo
+    (`kind = "app"`), con un vídeo bajo un idioma que no está en `settings.LANGUAGES` o con un id que no es el de un
+    vídeo de YouTube (11 caracteres: letras, cifras, `-` y `_`).
 
   Los checks de los hooks necesitan las operaciones y los eventos registrados, cosa que
   `LiveConfig.ready` hace antes de cualquier check. La app de pruebas (`tests/testapp`) es un módulo
