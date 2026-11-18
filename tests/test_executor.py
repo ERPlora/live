@@ -1,4 +1,4 @@
-"""Executor of live queries: hash dedup, rev, debounce, one run per scope, errors (plan §4.1)."""
+"""Executor of live queries: hash dedup, rev, debounce, one run per scope, errors."""
 
 import asyncio
 import contextlib
@@ -974,7 +974,7 @@ async def test_a_session_event_joining_a_pending_burst_still_rereads_the_context
 
 
 async def test_a_session_event_that_reruns_a_query_rereads_the_context_through_that_run(make_executor, settings):
-    # accounts.session.list of saas-next is live on the session event itself: its run already re-reads the context.
+    # The SaaS's accounts.session.list is live on the session event itself: its run already re-reads the context.
     settings.LIVE = {**settings.LIVE, "session_events": ["testapp.thing.created"]}
     executor = make_executor()
     stream = make_stream(actor="ana")
@@ -990,7 +990,7 @@ async def test_a_session_event_that_reruns_a_query_rereads_the_context_through_t
 
 @pytest.mark.usefixtures("session_events")
 async def test_an_event_is_never_taken_for_a_session_end_by_its_name(make_executor):
-    # hub-next's cash_register.session.closed and table.session.closed are a till's and a table's, not a sign-in's.
+    # The Hub's cash_register.session.closed and table.session.closed are a till's and a table's, not a sign-in's.
     executor = make_executor()
     stream = make_stream(actor="ana")
     subscribe(stream, FakeOp())
@@ -1253,7 +1253,7 @@ async def test_threads_do_not_leak_database_connections(make_executor, db_dsn):
     assert after <= before
 
 
-# A builder that enters a context around each run (hub-next phase 2: use_hub of the stream's hub)
+# A builder that enters a context around each run (the Hub: use_hub of the stream's hub)
 
 ENTERING_BUILDER = "tests.test_executor.EnteringBuilder"
 _entered_scope: "contextvars.ContextVar[Scope | None]" = contextvars.ContextVar("entered_scope", default=None)

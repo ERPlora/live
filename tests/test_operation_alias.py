@@ -1,7 +1,7 @@
-"""Where an operation's transaction runs: ``LIVE["operation_database"]`` (hub-next phase 2, S1).
+"""Where an operation's transaction runs: ``LIVE["operation_database"]``.
 
 A project may name a hook ``(operation, context) -> context manager`` that yields the alias the operation's
-transaction opens on (hub-next: the hub of ``use_hub``). Without it the alias is ``default``, as the SaaS keeps it.
+transaction opens on (the Hub: the hub of ``use_hub``). Without it the alias is ``default``, as the SaaS keeps it.
 The query's ``READ ONLY`` and ``statement_timeout``, and the notification after the COMMIT, follow that alias's
 transaction; the notification itself still goes to the control database (``LIVE["control_alias"]``).
 """

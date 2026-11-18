@@ -1,4 +1,4 @@
-"""Runs live queries for the streams of ``/api/live`` and queues their frames (plan §4.1).
+"""Runs live queries for the streams of ``/api/live`` and queues their frames.
 
 When a stream opens, every subscription runs once. After an event, the subscriptions it affects
 (``live.py``) run again, bursts grouped by a debounce, **as the stream's user**: the context is
@@ -15,7 +15,7 @@ A cut of the database (``live.database_cut``) is one more passing error, whether
 context met it. A worker thread inherits no active language, so each run activates the stream's
 (``ctx.language``): the operation's texts and the messages of its error frames reach the client
 in it. Nor does it inherit the request's context vars: a builder with ``enter(ctx)`` gets each run
-(its refresh included) inside the context manager it returns (hub-next: ``use_hub`` of the stream's
+(its refresh included) inside the context manager it returns (the Hub: ``use_hub`` of the stream's
 hub); one that cannot be entered (``Unauthorized``) ends the stream with ``bye``.
 
 An event of ``settings.LIVE["session_events"]`` (``live.live_registry.session_events``) may have ended the session
@@ -145,7 +145,7 @@ class _Gate:
 
 
 class Executor:
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         *,
         max_workers: int = 3,
@@ -224,7 +224,7 @@ class Executor:
             # one re-read alone.
             await self._reread(stream)
 
-    async def _run_subs(self, stream: Stream, subs: list[Subscription]) -> bool:
+    async def _run_subs(self, stream: Stream, subs: list[Subscription]) -> bool:  # noqa: C901
         """Run ``subs`` in order and queue their frames; whether any of them ran (and so re-read the stream's context).
 
         A passing error is its scope's (its hub busy for a moment): the pass stops at that subscription, waits once,
@@ -337,7 +337,7 @@ class Executor:
             close_old_connections()
         return None
 
-    def _run_in_language(self, stream: Stream, sub: Subscription) -> bytes | None:
+    def _run_in_language(self, stream: Stream, sub: Subscription) -> bytes | None:  # noqa: PLR0911
         try:
             builder = get_builder()
             with _entered(builder, stream.ctx):
@@ -415,8 +415,8 @@ class Executor:
 def _entered(builder, ctx: OperationContext) -> AbstractContextManager:
     """The context the project's builder enters for a run of ``ctx`` (``ContextBuilder.enter``), if it has one.
 
-    The worker thread starts without the request's context vars, so a project whose operations need one (hub-next:
-    ``use_hub`` of the stream's hub, phase 2) enters it here, before the refresh and the run."""
+    The worker thread starts without the request's context vars, so a project whose operations need one (the Hub:
+    ``use_hub`` of the stream's hub) enters it here, before the refresh and the run."""
     enter = getattr(builder, "enter", None)
     return nullcontext() if enter is None else enter(ctx)
 

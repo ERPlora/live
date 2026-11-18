@@ -1,4 +1,4 @@
-"""The HTML of the SPA: Vite manifest, CSP nonce, dev server, palette and the SDK's config (plan §4.2).
+"""The HTML of the SPA: Vite manifest, CSP nonce, dev server, palette and the SDK's config.
 
 A project serves :func:`render_spa` for every path without a URL of its own in Django
 (``re_path(spa_path_pattern(prefixes), view)``, last in the URLconf). The page links the Vite build
@@ -36,7 +36,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_safe
 
 #: First path segments that always belong to Django, never to the SPA. Each project adds its own
-#: (hub-next: ``ws``, ``p``; saas-next: ``_allauth``, ``webhooks``…).
+#: (the Hub: ``ws``, ``p``; the SaaS: ``_allauth``, ``webhooks``…).
 BASE_NON_SPA_PREFIXES = ("api", "internal", "admin", "static", "healthz", "readyz", "csp-report")
 
 #: Cookie with the palette the shell painted last (``@erplora/ui`` theme writes it).
@@ -140,8 +140,8 @@ def _base_url() -> str:
 def spa_assets(request: HttpRequest, *, entry: str | None = None) -> dict[str, list[str]]:
     """URLs of the scripts, stylesheets and modulepreloads of an entry of the Vite build.
 
-    ``entry`` is a manifest key (e.g. ``frontend/public.ts``, the public web of saas-next, round
-    16); by default, the SPA's, ``LIVE["spa"]["entry"]``. With DEBUG, the dev server serves it.
+    ``entry`` is a manifest key (e.g. ``frontend/public.ts``, the SaaS's public web); by default, the
+    SPA's, ``LIVE["spa"]["entry"]``. With DEBUG, the dev server serves it.
     """
     config = _spa_settings()
     entry = entry or config["entry"]

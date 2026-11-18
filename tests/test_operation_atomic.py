@@ -1,11 +1,11 @@
 """``live.operations.atomic``: a savepoint (or a transaction) on the alias the code running now works on.
 
 What a ``services.py`` writes instead of ``transaction.atomic()``, whose alias is ``default``: with
-``LIVE["operation_database"]`` the operation's transaction is not on ``default`` (hub-next phase 2: the hub's own
+``LIVE["operation_database"]`` the operation's transaction is not on ``default`` (in the Hub: the hub's own
 database), and a bare ``transaction.atomic()`` around a write that may fail (``try: with atomic(): create… except
 IntegrityError:``) opens another transaction on ``default`` instead of a savepoint of the operation's: the error aborts
 the operation's transaction and every write after it fails. The alias is the project's ``LIVE["current_database"]``
-(hub-next: the active ``use_hub``'s, ``HubContextMissing`` without one; inside an operation, the one its transaction is
+(the Hub: the active ``use_hub``'s, ``HubContextMissing`` without one; inside an operation, the one its transaction is
 open on), else the running operation's, else ``default``, as the SaaS keeps it. Never ``default`` by omission.
 """
 

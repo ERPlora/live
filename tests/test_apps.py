@@ -36,11 +36,28 @@ print(json.dumps({
 """
 
 
-def fresh_setup() -> dict:
+# The same, with an app whose services and queries are packages (tests/packagedoors).
+PACKAGE_DOORS_SETUP = """
+import json
+import django
+django.setup()
+from django.core import checks
+from live import operations
+print(json.dumps({
+    "operations": sorted(name for name in operations.registry if name.startswith("packagedoors.")),
+    **{
+        code: sorted([message.msg, message.hint] for message in checks.run_checks(tags=["live"]) if message.id == f"live.{code.upper()}")
+        for code in ("e021", "e022")
+    },
+}))
+"""
+
+
+def fresh_setup(script: str = FRESH_SETUP, settings: str = "tests.settings") -> dict:
     result = subprocess.run(
-        [sys.executable, "-c", FRESH_SETUP],
+        [sys.executable, "-c", script],
         cwd=PACKAGE_ROOT,
-        env={**os.environ, "DJANGO_SETTINGS_MODULE": "tests.settings"},
+        env={**os.environ, "DJANGO_SETTINGS_MODULE": settings},
         capture_output=True,
         text=True,
         check=False,
@@ -63,6 +80,44 @@ def test_django_setup_discovers_the_queries_and_services_of_installed_apps():
 
     assert TESTAPP_OPERATIONS <= set(state["operations"])
     assert {"tests.testapp.queries", "tests.testapp.services"} <= set(state["modules"])
+
+
+def test_django_setup_registers_the_operations_of_the_modules_a_door_package_imports():
+    state = fresh_setup(PACKAGE_DOORS_SETUP, settings="tests.settings_packagedoors")
+
+    # queries/services.py declares a command that the name alone cannot tell from an app's services.py: E022 says so.
+    assert state["operations"] == [
+        "packagedoors.misplaced.adjust",
+        "packagedoors.stock.adjust",
+        "packagedoors.stock.level",
+    ]
+
+
+def test_a_module_of_a_services_or_queries_package_that_nothing_imports_is_e021():
+    """Test modules and sub-packages are not operation modules; a private module (_helpers) is."""
+    state = fresh_setup(PACKAGE_DOORS_SETUP, settings="tests.settings_packagedoors")
+    modules = [msg.split(" ", 1)[0] for msg, _ in state["e021"]]
+
+    assert modules == [
+        "tests.packagedoors.queries.forgotten",
+        "tests.packagedoors.services._helpers",
+        "tests.packagedoors.services.forgotten",
+    ]
+    assert [hint.rsplit(" ", 1)[1] for _, hint in state["e021"]] == ["forgotten", "_helpers", "forgotten"]
+
+
+def test_a_module_named_like_a_door_inside_a_door_package_is_e022():
+    state = fresh_setup(PACKAGE_DOORS_SETUP, settings="tests.settings_packagedoors")
+
+    assert [msg.split(" ", 1)[0] for msg, _ in state["e022"]] == [
+        "tests.packagedoors.queries.services",
+        "tests.packagedoors.services.queries",
+    ]
+
+
+def test_the_suite_never_imports_the_package_doors_app():
+    """Its test-named modules must not be collected: importing the app would register its operations here."""
+    assert not [name for name in sys.modules if name.startswith("tests.packagedoors")]
 
 
 def test_django_setup_wires_the_outbox_as_notify_hook():

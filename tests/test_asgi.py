@@ -1,4 +1,4 @@
-"""``live.asgi.ignore_root_path``: the client never decides the script prefix (ERPlora/hub#2, ERPlora/saas#2).
+"""``live.asgi.ignore_root_path``: the client never decides the script prefix.
 
 Daphne copies its client's own ``Daphne-Root-Path`` header into ``scope["root_path"]``, and Django
 strips that prefix from the path and puts it in front of every URL it builds. The wrapper hands the

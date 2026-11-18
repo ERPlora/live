@@ -16,8 +16,8 @@ from ninja import Schema
 from live import assistant, assistant_qa
 from live.assistant_qa import Miss, export_catalog, misses, uncovered
 from live.operations import Operation
+from tests.assistant_catalogue import NOISE, ProductIn, tool
 from tests.test_assistant import Done, NoIn
-from tests.test_assistant_relevance import NOISE, ProductIn, tool
 
 PRODUCT_CREATE = tool(
     "inventory.product.create",
@@ -114,7 +114,7 @@ def test_a_catalogue_of_the_hubs_size_is_ranked_reading_each_tool_once(monkeypat
     """~750 tools: every ask goes through ``relevant``, but what each tool says is read once for all of them."""
     read = Counter()
     real = assistant.asks_of
-    monkeypatch.setattr(assistant, "asks_of", lambda op: read.update([op.name]) or real(op))
+    monkeypatch.setattr(assistant.ranking, "asks_of", lambda op: read.update([op.name]) or real(op))
     tools = {op.name: op for op in (tool(f"app{i % 28}.thing{i}.create", f"Creates thing {i} of the business.")
                                     for i in range(730))}
     asked = [tool(f"zz.item{i}.create", "Creates an item.", asks={"es": (f"créame el item {i}", f"otro item {i}")})

@@ -1,4 +1,4 @@
-"""``/api/live``: one SSE stream per tab, its frames, its errors and its scope isolation (plan §4.1)."""
+"""``/api/live``: one SSE stream per tab, its frames, its errors and its scope isolation."""
 
 import asyncio
 import json
@@ -210,7 +210,7 @@ async def test_a_pass_still_running_when_the_client_leaves_is_cancelled(readers,
 
 
 async def test_a_pass_that_fails_ends_the_stream_with_its_error(monkeypatch):
-    """As before passes ran beside the stream: what ``run_all`` raises is not left unheard in its task."""
+    """What ``run_all`` raises is not left unheard in its task: the stream ends with that error."""
     monkeypatch.setattr(live_view, "HEARTBEAT_EVERY", 0.05)
 
     async def broken(stream):
@@ -337,7 +337,7 @@ async def test_a_stream_refused_at_the_door_has_reached_its_client(client, monke
 
 
 async def test_a_host_that_is_no_scope_is_a_404_envelope(client, monkeypatch):
-    # A builder that rejects the Host (hub-next: a reserved or invalid hub slug) raises Http404.
+    # A builder that rejects the Host (in the Hub: a reserved or invalid hub slug) raises Http404.
     def no_such_scope(self, request):
         raise Http404("www is not a hub")
 

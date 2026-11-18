@@ -1,4 +1,4 @@
-"""``manage.py export_spa_catalog``: the SPA's gettext catalogs as flat JSON for vue-i18n (plan §4.3).
+"""``manage.py export_spa_catalog``: the SPA's gettext catalogs as flat JSON for vue-i18n.
 
 For every language of ``settings.LANGUAGES`` it merges the ``djangojs`` catalogs of all installed
 apps and ``LOCALE_PATHS`` (Django's own precedence: LOCALE_PATHS first, then apps in order) and
@@ -21,7 +21,6 @@ from django.core.management.base import BaseCommand
 from django.utils.translation import to_locale
 from django.utils.translation.trans_real import DjangoTranslation
 
-#: Language of the msgids (code in English, PLAN §5).
 SOURCE_LANGUAGE = "en"
 #: Separator of plural forms in a vue-i18n message.
 PLURAL_SEPARATOR = " | "

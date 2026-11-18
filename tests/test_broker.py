@@ -1,4 +1,4 @@
-"""Broker and Listener: one LISTEN connection per process, refcounted channels, resync (plan §4.1).
+"""Broker and Listener: one LISTEN connection per process, refcounted channels, resync.
 
 Real Postgres: ``pg_listening_channels()`` is per session, so the LISTEN state is checked through
 ``Listener.listened`` plus what the server delivers, and the single connection through

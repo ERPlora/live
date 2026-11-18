@@ -1,4 +1,4 @@
-"""ASGI wrapper shared by hub-next and saas-next (ERPlora/hub#2, ERPlora/saas#2).
+"""ASGI wrapper shared by the Hub and the SaaS.
 
 Daphne copies its client's own ``Daphne-Root-Path`` header into ``scope["root_path"]``, over the
 server's ``--root-path``. Django takes that value as the script prefix: it strips it from the path it

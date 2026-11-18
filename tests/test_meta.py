@@ -8,11 +8,13 @@ import pytest
 from django.apps import apps
 from django.utils import translation
 from live.meta import (
+    BELL_SEVERITIES,
     WIDGET_KINDS,
     WIDGET_SIZES,
     BellCounter,
     Category,
     DeviceNotice,
+    Help,
     LiveAppConfig,
     Nav,
     SetupCheck,
@@ -119,11 +121,7 @@ def test_testapp_is_a_module_with_its_metadata():
 
 
 def test_live_app_config_has_empty_store_metadata_by_default():
-    """Round 16 (PLAN §21): the public store's fields, empty for a platform app.
-
-    It replaces the round 15 test that the class had no ``description``: round 16 brings the
-    description back for the public store; the Hub's apps page still shows icon and name only.
-    """
+    """The public store's fields, empty for a platform app; the Hub's apps page shows icon and name only."""
     assert LiveAppConfig.summary == ""
     assert LiveAppConfig.description == ""
     assert LiveAppConfig.verticals == []
@@ -175,7 +173,7 @@ def test_nav_is_an_immutable_menu_entry():
         nav.path = "/other"
 
 
-# --- The Home's hooks (PLAN-HUB round 2026-10-21): setup, widgets and bell --------------------------
+# --- The Home's hooks: setup, widgets and bell ----------------------------------------------------
 
 
 def test_live_app_config_declares_no_home_hooks_by_default():
@@ -205,7 +203,7 @@ def test_a_setup_step_needs_key_operation_title_and_route():
 
 
 def test_a_setup_step_is_required_by_default():
-    """As in the old manifest: required = functional; required=False = recommended."""
+    """required = functional; required=False = recommended."""
     assert SetupStep(key="catalog", operation="stock.catalog.status", title="Your catalog", route="/stock").required
 
 
@@ -253,6 +251,39 @@ def test_a_bell_counter_needs_key_operation_route_and_label():
     assert (counter.icon, counter.permission, tuple(counter.refresh_on), dict(counter.params)) == ("", None, (), {})
 
 
+def test_a_bell_counter_says_nothing_of_itself_unless_it_declares_it():
+    """A counter that declares none of its words leaves them to whoever shows it."""
+    counter = BellCounter(key="to_confirm", operation="stock.item.count", route="/stock", label="To confirm")
+
+    assert (counter.severity, counter.title, counter.body, counter.action_label, counter.due) == (None,) * 5
+
+
+def test_a_bell_counter_declares_its_severity_words_and_the_field_of_its_deadline():
+    counter = BellCounter(
+        key="to_confirm",
+        operation="stock.item.count",
+        route="/stock",
+        label="To confirm",
+        severity="danger",
+        title="%(count)d to confirm",
+        body="They start soon.",
+        action_label="Confirm them",
+        due="earliest",
+    )
+
+    assert (counter.severity, counter.title, counter.body, counter.action_label, counter.due) == (
+        "danger",
+        "%(count)d to confirm",
+        "They start soon.",
+        "Confirm them",
+        "earliest",
+    )
+
+
+def test_the_severities_of_a_bell_counter_go_from_the_gravest():
+    assert BELL_SEVERITIES == ("danger", "warning", "info")
+
+
 @pytest.mark.parametrize(
     "hook",
     [
@@ -268,7 +299,7 @@ def test_the_hooks_are_immutable_like_nav(hook):
         hook.key = "other"
 
 
-# --- The device's notices (PLAN-HUB round 2026-10-23): notices -----------------------------------------
+# --- The device's notices -------------------------------------------------------------------------
 
 
 def test_live_app_config_declares_no_device_notices_by_default():
@@ -322,3 +353,31 @@ def test_declared_events_skips_apps_without_events_module_and_events_modules_wit
     monkeypatch.setattr("live.meta.all_live_app_configs", lambda: [without_module, without_all, testapp])
 
     assert declared_events() == frozenset({"testapp.thing.created"})
+
+
+# --- The help window of a module ----------------------------------------------------------------------------------
+
+
+def test_an_app_has_no_help_by_default():
+    assert LiveAppConfig.help is None
+
+
+def test_help_without_videos_is_ready_with_no_video():
+    assert Help().videos == {}
+
+
+def test_help_says_its_video_by_language_code():
+    assert Help(videos={"es": "dQw4w9WgXcQ", "en": "aqz-KE-bpKQ"}).videos == {"es": "dQw4w9WgXcQ", "en": "aqz-KE-bpKQ"}
+
+
+def test_help_is_immutable_and_two_never_share_their_videos():
+    first, second = Help(), Help()
+
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        first.videos = {"es": "dQw4w9WgXcQ"}
+    assert first.videos is not second.videos
+
+
+def test_testapp_declares_its_help():
+    """So that the help check runs over a real declaration too (test_checks_help.py)."""
+    assert apps.get_app_config("testapp").help == Help(videos={"es": "dQw4w9WgXcQ"})

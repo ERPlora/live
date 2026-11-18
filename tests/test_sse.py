@@ -1,4 +1,4 @@
-"""SSE frames and the `s=` subscription list of `/api/live` (plan §4.1)."""
+"""SSE frames and the `s=` subscription list of `/api/live`."""
 
 import base64
 import json

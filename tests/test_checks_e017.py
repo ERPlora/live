@@ -1,4 +1,4 @@
-"""``live.E017`` and the typed declaration it checks (PLAN §30, docs/plans/2026-10-30-asistente-saas.md §2).
+"""``live.E017`` and the typed declaration it checks.
 
 Every operation tells the assistant what it is: a tool (``ai=AI(description=…, risk=…)``) or not one
 (``ai=INTERNAL``), never by omission. The dictionaries the apps declared before ``AI`` existed are still accepted and

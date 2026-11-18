@@ -1,4 +1,4 @@
-"""`manage.py export_spa_catalog`: the `djangojs` gettext catalogs as flat JSON for vue-i18n (plan §4.3).
+"""`manage.py export_spa_catalog`: the `djangojs` gettext catalogs as flat JSON for vue-i18n.
 
 One `<lang>.json` per language of `settings.LANGUAGES`, merging every installed app's and
 `LOCALE_PATHS`' catalogs (LOCALE_PATHS win). English is the source language: its file maps every

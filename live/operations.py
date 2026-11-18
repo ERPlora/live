@@ -1,17 +1,18 @@
 """Operations: every read and write declared once with ``@operation``.
 
-A ``query`` lives in an app's ``queries.py`` and runs in a ``READ ONLY`` transaction with a local
-``statement_timeout``; a ``command`` lives in ``services.py`` and runs in its own transaction. The
+A ``query`` lives in an app's ``queries.py`` (or a module of its ``queries/`` package) and runs in a ``READ ONLY``
+transaction with a local ``statement_timeout``; a ``command`` lives in ``services.py`` (or ``services/``) and runs in
+its own transaction. The
 ninja route, the live subscription, the assistant and the API keys all call the same
 ``Operation``, which checks the permission, opens the transaction, validates the output and, for a
 command, hands the names of the events it recorded to ``notify_hook`` after the COMMIT.
 
 The transaction opens on ``default`` unless the project names a hook in ``LIVE["operation_database"]``: a dotted
-path to ``(operation, context) -> context manager`` that yields the alias to use (hub-next phase 2: the hub of
+path to ``(operation, context) -> context manager`` that yields the alias to use (the Hub: the hub of
 ``use_hub``, ``base.tenancy.context.operation_database``). ``READ ONLY``, ``statement_timeout`` and the
 notification after the COMMIT follow that alias's transaction; the notification still goes to the control database.
 What a ``services.py`` wraps in a savepoint goes through :func:`atomic`, never a bare ``transaction.atomic()`` (whose
-alias is ``default``): it opens on :func:`current_alias`, the project's ``LIVE["current_database"]`` (hub-next: the
+alias is ``default``): it opens on :func:`current_alias`, the project's ``LIVE["current_database"]`` (the Hub: the
 active ``use_hub``'s alias, ``base.tenancy.context.current_alias``), else the running operation's, else ``default``.
 
 An operation declared ``database=False`` touches no database: what waits on the network (another service's answer)
@@ -22,7 +23,7 @@ A project that asks for it (``LIVE["database_cut"]``, ``live.database_cut``) get
 ``DatabaseCut``, 503, instead of the driver's error: the outermost operation says whether it may run again, by how far its
 transaction got. ``repeatable=True`` is a command's own word that a try the database rolled back left nothing behind.
 
-Every operation tells the assistant what it is (PLAN §30: every operation is a tool by default): ``ai=AI(description=…,
+Every operation tells the assistant what it is: ``ai=AI(description=…,
 risk="normal"|"high")`` for a tool, ``ai=INTERNAL`` for what is not one, never by omission (``live.E017``). A ``dict``
 declared before ``AI`` existed is still accepted: ``Operation.ai_spec()`` reads it as one of the two. A tool also says
 what a person would type to ask for it (``asks``, by language): the selection of tools weighs it and the assistant's QA
@@ -51,7 +52,9 @@ from live.errors import LiveMisuse, PermissionDenied
 Kind = Literal["query", "command"]
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
 QUERY_STATEMENT_TIMEOUT = "5s"
-_MODULE_SUFFIX: dict[str, str] = {"query": ".queries", "command": ".services"}
+# Where an operation of each kind is declared: the app's services or queries, a file (``<app>.services``) or a module
+# of that package (``<app>.services.<module>``). One level only: live.E021 checks the package's own modules.
+DOORS: dict[str, str] = {"query": "queries", "command": "services"}
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -160,7 +163,7 @@ class Operation:
         risk = "high" if declared.get("risk") == "high" else "normal"
         return AI(description, risk, declared.get("preview"), declared.get("asks") or {})
 
-    def __call__(self, ctx: OperationContext, data: Schema) -> Schema:
+    def __call__(self, ctx: OperationContext, data: Schema) -> Schema:  # noqa: PLR0912
         if not ctx.has(self.permission):
             # Translated now, in the caller's language (the request's, or the live stream's).
             raise PermissionDenied(
@@ -251,11 +254,17 @@ class Operation:
 registry: dict[str, Operation] = {}
 
 
+def _in_door(module: str, door: str) -> bool:
+    """Whether ``module`` is ``<app>.<door>`` or ``<app>.<door>.<module>``."""
+    parts = module.split(".")
+    return (len(parts) >= 2 and parts[-1] == door) or (len(parts) >= 3 and parts[-2] == door)
+
+
 def _declaration(op: Operation) -> tuple:
     return (op.fn, op.kind, op.permission, op.input, op.output, op.expose_api, op.ai, op.database, op.repeatable)
 
 
-def operation(
+def operation(  # noqa: PLR0913
     name: str,
     *,
     kind: Kind,
@@ -276,7 +285,7 @@ def operation(
     """
     if not NAME_RE.match(name):
         raise LiveMisuse(f"Operation name {name!r} must be <app>.<entity>.<action> (lowercase snake_case).")
-    if kind not in _MODULE_SUFFIX:
+    if kind not in DOORS:
         raise LiveMisuse(f"Operation {name!r}: kind must be 'query' or 'command', not {kind!r}.")
     for role, schema in (("input", input), ("output", output)):
         if not (isinstance(schema, type) and issubclass(schema, Schema)):
@@ -285,9 +294,12 @@ def operation(
         raise LiveMisuse(f"Operation {name!r}: repeatable is the word of a command that uses its database.")
 
     def register(fn: F) -> Operation:
-        suffix = _MODULE_SUFFIX[kind]
-        if not fn.__module__.endswith(suffix):
-            raise LiveMisuse(f"Operation {name!r}: a {kind} must be declared in a {suffix[1:]}.py module, not in {fn.__module__}.")
+        door = DOORS[kind]
+        if not _in_door(fn.__module__, door):
+            raise LiveMisuse(
+                f"Operation {name!r}: a {kind} must be declared in {door}.py or in a module of a {door}/ package,"
+                f" not in {fn.__module__}."
+            )
         declared = Operation(
             name=name,
             kind=kind,
@@ -333,7 +345,7 @@ def on_commit(fn: Callable[[], Any], *, robust: bool = True) -> None:
     """Run ``fn`` after the COMMIT of the running operation's transaction, on that transaction's alias.
 
     What a ``services.py`` calls instead of ``transaction.on_commit``: with ``LIVE["operation_database"]`` the
-    operation's transaction is not on ``default`` (hub-next phase 2: the hub's database), and a callback registered
+    operation's transaction is not on ``default`` (in the Hub: the hub's database), and a callback registered
     there would run at once, before the COMMIT, and also after a rollback. ``robust``: a callback that raises is
     logged and the others still run. Outside an operation it is a misuse.
     """
@@ -350,7 +362,7 @@ def current_alias() -> str:
     """The alias the code running now works on: where :func:`atomic` opens.
 
     The project's ``LIVE["current_database"]`` (a dotted path to a callable with no arguments) says it when it names one
-    (hub-next: the active ``use_hub``'s alias, ``HubContextMissing`` without a context, never a guess): inside an
+    (the Hub: the active ``use_hub``'s alias, ``HubContextMissing`` without a context, never a guess): inside an
     operation that is the alias its transaction is open on, or the one of a context entered inside it. Without it, the
     running operation's alias, else ``default`` (the SaaS, with no tenancy). An operation declared ``database=False``
     has none: a misuse.
@@ -392,7 +404,7 @@ def atomic(func: Callable[..., Any] | None = None, /, *, savepoint: bool = True,
 
     Inside an operation it is a savepoint of the operation's own transaction, so ``try: with atomic(): create…
     except IntegrityError:`` rolls back to it and the operation goes on writing; a bare ``transaction.atomic()``
-    opens another transaction on ``default`` when the operation's is elsewhere (hub-next phase 2: the hub's database),
+    opens another transaction on ``default`` when the operation's is elsewhere (in the Hub: the hub's database),
     and the error aborts the operation's. As Django's, a context manager or a decorator (``@atomic``, ``@atomic(...)``);
     ``savepoint`` and ``durable`` are Django's. It takes no alias.
     """

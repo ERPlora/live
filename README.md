@@ -1,23 +1,26 @@
 # erplora-live
 
-Paquete Python compartido por `hub-next` y `saas-next` (fase 1, ronda 11). Reúne lo que las dos
+Paquete Python compartido por el Hub (`ERPlora/hub`) y el SaaS (`ERPlora/saas`) (nació en la fase 1, ronda 11). Reúne lo que las dos
 plataformas hacen igual: operaciones declaradas con `@operation` (lecturas en `queries.py`,
 escrituras en `services.py`), rutas django-ninja ligadas a esas operaciones, outbox y aviso tras el
 COMMIT (`LISTEN/NOTIFY`), consultas vivas por SSE (`/api/live`), servido de la SPA con el
 manifiesto de Vite y CSP con nonce. El diseño está en
-`../../docs/plans/vamos-a-centrarnos-en-cryptic-abelson.md` (§4.1 y §4.2).
+`plans/vamos-a-centrarnos-en-cryptic-abelson.md` del repo `ERPlora/docs` (§4.1 y §4.2).
 
 Es un repo propio (`ERPlora/live`, distribución `erplora-live`) con su `uv.lock`; el paquete importable
 se llama `live`.
-Lo usan los dos proyectos por igual: `hub-next` enchufa su ámbito (fase 1: el primer rótulo del Host;
-fase 2: `use_hub`) y `saas-next` el suyo (el usuario); el resto (`live.spa`, `live.csp`, los checks y el
+Lo usan los dos proyectos por igual: el Hub enchufa su ámbito (en la fase 1 era el primer rótulo del Host;
+desde la tenencia, `use_hub`) y el SaaS el suyo (el usuario); el resto (`live.spa`, `live.csp`, los checks y el
 `runserver`) es común. Nace como repo git propio (PLAN §16.4); el monorepo va a una issue.
 
 ## Contrato (resumen; detalle en el plan §4.1 y en PLAN §16.2)
 
 - **Operaciones**: `@operation("<app>.<entidad>.<acción>", kind="query"|"command", permission, input,
   output, expose_api=False, ai=…, database=True)`; `query` solo en `queries.py` (transacción `READ ONLY`,
-  `statement_timeout` 5 s), `command` solo en `services.py`. Con `database=False` la operación no toca
+  `statement_timeout` 5 s), `command` solo en `services.py`. Cada uno puede ser un fichero o un paquete de un nivel
+  (`services/<módulo>.py`, `queries/<módulo>.py`) cuyo `__init__.py` importa cada submódulo: importarlo es lo que
+  registra sus operaciones, y `live.E021` avisa del submódulo que nadie importa. Ningún submódulo se llama
+  `services` ni `queries` (`live.E022`). Con `database=False` la operación no toca
   ninguna BD y corre **sin** transacción (lo que espera a la red, p. ej. la respuesta de otro servicio: la
   espera no retiene una conexión); conserva el permiso, el gancho `LIVE["operation_database"]` y la salida
   validada, y una consulta a cualquier BD, un evento o un `on_commit` dentro es `LiveMisuse`. Cada ruta ninja llama a `run_operation`
@@ -40,9 +43,9 @@ fase 2: `use_hub`) y `saas-next` el suyo (el usuario); el resto (`live.spa`, `li
 - **Transacciones anidadas** (`live.operations.atomic`, `current_alias`): lo que un `services.py` envuelve en un
   savepoint va con `atomic()` (gestor de contexto o decorador, `savepoint` y `durable` como en Django), nunca con un
   `transaction.atomic()` desnudo, cuyo alias es `default`: con `LIVE["operation_database"]` la transacción de la
-  operación no está en `default` (hub-next, fase 2: la BD del hub) y un `try: with transaction.atomic(): create…
+  operación no está en `default` (en el Hub, la BD del hub) y un `try: with transaction.atomic(): create…
   except IntegrityError:` abriría otra transacción en `default` y el error abortaría la de la operación. `atomic()`
-  abre en `current_alias()`: lo que dice `LIVE["current_database"]` (ruta a una función sin argumentos; hub-next:
+  abre en `current_alias()`: lo que dice `LIVE["current_database"]` (ruta a una función sin argumentos; en el Hub:
   `base.tenancy.context.current_alias`, el alias del `use_hub` activo y `HubContextMissing` sin contexto, nunca
   `default` por omisión), si no el alias de la operación en curso y, fuera de una, `default` (el SaaS, sin tenencia).
   Dentro de una operación `database=False` es `LiveMisuse`. Lo lee al entrar en el bloque (un decorador, en cada
@@ -61,36 +64,38 @@ fase 2: `use_hub`) y `saas-next` el suyo (el usuario); el resto (`live.spa`, `li
   releídos y envío solo si cambia el hash; red de seguridad cada 300 s y `resync` al reconectar el
   `LISTEN` (uno por proceso, fuera de PgBouncer). Sin Redis ni Channels.
 - **Eventos de fin de sesión** (`LIVE["session_events"]`, opcional; FIX-LIVE-SESSION-CLOSED-WAKES-ONLY-SESSION-LIST):
-  los eventos que pueden haber terminado la sesión con la que se abrió un stream (en `saas-next`,
+  los eventos que pueden haber terminado la sesión con la que se abrió un stream (en el SaaS,
   `accounts.session.closed`: salir, una contraseña nueva, «Cerrar las demás sesiones»). Ninguna consulta viva tiene
   que declararlos: al llegar uno al canal, cada stream relee su contexto una vez (el `refresh` del builder, en el
   mismo hilo, idioma y `enter` que una re-ejecución) y se cierra con `bye` si lanza `Unauthorized`; sus consultas no
   se re-ejecutan por él. Una ráfaga sigue siendo una pasada, y si en esa pasada se re-ejecuta alguna consulta (la que
-  sí lo declara), su `refresh` es la relectura. Se nombran uno a uno, nunca por su forma: en `hub-next`,
+  sí lo declara), su `refresh` es la relectura. Se nombran uno a uno, nunca por su forma: en el Hub,
   `cash_register.session.closed` y `table.session.closed` son de caja y de mesa. El Hub no lo usa: al revocar
   sesiones despierta con `"*"` (`ALL_EVENTS`), que re-ejecuta todo.
 - **SPA y CSP**: `live.spa` lee el manifiesto de Vite (sin django-vite) y emite `<script type=module>` y
   `modulepreload` con nonce; en DEBUG apunta al servidor de Vite. `spa_assets(request, entry=…)` da
-  otra entrada del mismo build (p. ej. `frontend/public.ts`, la web pública de `saas-next`, ronda 16);
+  otra entrada del mismo build (p. ej. `frontend/public.ts`, la web pública del SaaS, ronda 16);
   sin `entry`, la de `LIVE["spa"]["entry"]`. `LIVE["spa"]["icons"]` (opcional) declara los iconos de la
   pestaña y de la pantalla de inicio (`{"rel": "icon" | "apple-touch-icon", "path": <estático>, "sizes"?}`),
   enlazados por el almacén de estáticos del proyecto y nunca por URL; sin él, ningún `<link>` (sin icono, el
   navegador pide `/favicon.ico`). `live.csp`: nonce + `strict-dynamic` +
   Trusted Types + `connect-src 'self' ipc: http://ipc.localhost`; DEBUG añade el origen de Vite solo a
   connect/style/font/img. `manage.py runserver` (hereda del de daphne) lanza Vite con HMR (`--novite`
-  lo omite); `export_spa_catalog` exporta los `.po` (`djangojs`) a JSON.
+  lo omite); `export_spa_catalog` exporta los `.po` (`djangojs`) a JSON. `with_frames(policy, *origins)`
+  devuelve una copia cuyo `frame-src` admite el propio origen y los dados, sin quitar lo que ya admitía
+  (`YOUTUBE_NOCOOKIE` es el del reproductor de YouTube sin cookies); `base_policy()` no lleva `frame-src`.
 - **ASGI**: `live.asgi.ignore_root_path(app)` envuelve el `application` de los dos `config/asgi.py`. Daphne
   copia en `scope["root_path"]` la cabecera `Daphne-Root-Path` del cliente y Django la toma como prefijo de
   script; el envoltorio la vacía en `http` y `websocket` (`lifespan` pasa tal cual). ERPlora/hub#2, saas#2.
 
 ## Apps y metadatos (rondas 15 y 16, PLAN §20 y §21)
 
-Toda app nuestra, de `hub-next` y de `saas-next`, hereda `live.meta.LiveAppConfig` y declara ahí sus
+Toda app nuestra, del Hub y del SaaS, hereda `live.meta.LiveAppConfig` y declara ahí sus
 metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
-`../../docs/superpowers/specs/2026-10-13-app-catalog-and-metadata-design.md`.
+`superpowers/specs/2026-10-13-app-catalog-and-metadata-design.md` del repo `ERPlora/docs`.
 
 - **`kind`**: `"platform"` (por defecto; siempre activa: `base`, `control`, `accounts`…) o `"app"`
-  (un módulo de `hub-next/apps/<id>/`, que un hub enciende y apaga). La carpeta = `label` = prefijo
+  (un módulo de `apps/<id>/` del Hub, que un hub enciende y apaga). La carpeta = `label` = prefijo
   de las operaciones = id en `modules[]` de la foto del SaaS = `slug` de su `Module`; el código nunca
   mira la ruta del paquete.
 - **Toda app**: `permissions` (`<app>.<acción>`) y `role_permissions` (`{"hub_manager":
@@ -120,7 +125,11 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
     `bar-list`, `timeline`, `chart`) con `operation`, `params`, `map` (prop → campo) y `options`, o
     bien `component` (un componente Vue de `frontend/components/` del módulo, sin `.vue`).
   - `bell: list[BellCounter]`, los contadores de la campana: `key`, `operation` (su primera fila
-    trae `count`), `route` y `label`; `icon`, `params`, `permission` y `refresh_on`.
+    trae `count`), `route` y `label`; `icon`, `params`, `permission` y `refresh_on`. Cada uno puede
+    decir además su gravedad (`severity`: `danger`, `warning` o `info`), su titular (`title`), una
+    frase con la consecuencia (`body`) y el texto de su botón (`action_label`), textos traducibles que
+    se rellenan con `%(count)d` (un plural, con `ngettext_lazy(…, "count")`), y `due`, el campo de esa
+    primera fila con su plazo (una fecha y hora ISO). Lo que no declara lo pone quien lo enseña.
 - **Solo un módulo, para los avisos del dispositivo** (ronda PLAN-HUB 2026-10-23; los rellena `base`
   con `base.notice.list` y la shell los da una vez por dispositivo con el aviso del sistema de la app
   nativa): `notices: list[DeviceNotice]`, vacía por defecto. `key`, `operation` (una consulta de su
@@ -130,6 +139,9 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
   obligatorios; `body` (partes que se juntan con « · », las que tengan todos sus campos rellenos),
   `when` (lista de `SetupCheck` sobre la fila: solo las filas que las cumplen son de este aviso),
   `params`, `permission` y `refresh_on`.
+- **Solo un módulo, para su ventana de ayuda**: `help: Help | None`, `None` por defecto. Declararla
+  (`help = Help()`) dice que la ayuda del módulo está lista; el vídeo es opcional: `Help(videos={"es":
+  "<id>"})` guarda el id de un vídeo de YouTube por código de idioma.
 - **Lectura**: `all_live_app_configs()` devuelve todas las apps nuestras instaladas (permisos,
   routers); `module_configs()`, solo las de `kind = "app"` (menú, página de apps, foto del SaaS, y
   sus `setup`, `widgets`, `bell` y `notices`); `declared_events()`, los eventos que declara la lista `ALL` del
@@ -182,6 +194,19 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
     caracteres; o el propio ajuste que no es una tupla de etiquetas o que nombra una app sin operaciones (una errata
     dejaría pasar todo). Una app se lista cuando todas sus herramientas las dicen: los cientos del Hub no se migran de
     una vez. `live.E017` no cambia.
+  - `live.E021`: un submódulo del paquete `services/` o `queries/` de una app instalada que nadie importó al
+    arrancar (lo importa el `__init__.py` del paquete): sus operaciones no estarían registradas. No cuentan los de
+    tests (`test_*`, `*_test`, `conftest`) ni los subpaquetes (`@operation` rechaza una operación en ellos); uno
+    privado (`_comun.py`) sí: si nadie lo importa, sobra o esconde una operación.
+  - `live.E022`: un submódulo o subpaquete del paquete `services/` o `queries/` que se llama `services` o `queries`.
+    `@operation` solo ve el nombre del módulo, y `<app>.queries.services` no se distingue de una app `<app>.queries`
+    con su `services.py`: un comando ahí pasaría por bueno.
+  - `live.E023` (`live.checks_help`): un `help` que no es un `Help`, declarado en una app que no es un módulo
+    (`kind = "app"`), con un vídeo bajo un idioma que no está en `settings.LANGUAGES` o con un id que no es el de un
+    vídeo de YouTube (11 caracteres: letras, cifras, `-` y `_`).
+  - `live.E024` (`live.checks_bell`): un contador de la campana con una gravedad que no es `danger`, `warning` ni
+    `info`, un `title`, `body` o `action_label` que no es un texto, o un `due` que no nombra un campo de la respuesta
+    de su consulta (de sus filas, si las lista).
 
   Los checks de los hooks necesitan las operaciones y los eventos registrados, cosa que
   `LiveConfig.ready` hace antes de cualquier check. La app de pruebas (`tests/testapp`) es un módulo
@@ -191,15 +216,15 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
 - **Routers**: `live.ninja.mount_app_routers(api)` monta en la raíz de la API el `router` del `api.py`
   de toda app nuestra (de plataforma o módulo), en el orden de `INSTALLED_APPS`, y devuelve sus
   etiquetas; la que no tiene `api.py` se salta y un `api.py` sin un `Router` de ninja en `router` lanza
-  `LiveMisuse`. Lo usa `hub-next/config/api.py`; `saas-next` lo adopta en su carril (PLAN §20.7).
+  `LiveMisuse`. Lo usan `config/api.py` del Hub y el del SaaS (PLAN §20.7).
 
 ## Catálogo compartido y markdown (ronda 16, PLAN §21)
 
 - **`live.shared_catalog`**: el contrato del esquema `shared` de la BD `saas`. Modelos abstractos
   `AbstractApp` (`shared.app`) y `AbstractAppDoc` (`shared.app_doc`, clave UUIDv7, FK relativa a
   `App`) y las tablas citadas `APP_TABLE` y `APP_DOC_TABLE`. El SaaS los concreta como dueño
-  (`saas-next/apps`, con la restricción `shared_app_doc_app_lang_unique` y sus migraciones) y el Hub
-  como espejo `managed = False` (`hub-next/shared`). Cambiar una columna es expand/contract entre los
+  (`apps/` del SaaS, con la restricción `shared_app_doc_app_lang_unique` y sus migraciones) y el Hub
+  como espejo `managed = False` (`shared/` del Hub). Cambiar una columna es expand/contract entre los
   dos repos; `tests/test_shared_catalog.py` fija las columnas.
 - **`live.markdown.render_markdown(text, *, image_base="")`**: markdown a HTML limpio (`markdown` +
   `nh3`, la lista blanca del SaaS viejo), ```` ```mermaid ```` como `<pre class="mermaid">`, `id` en
@@ -222,6 +247,13 @@ registro, importe, nombre de la app); `PlainWords` no lee nada (euros con 2 deci
 Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda del negocio, `refers`) viven en su
 `base/assistant.py`.
 
+`live.assistant` es un paquete, un módulo por responsabilidad (live#141): `tools` (qué operación es herramienta, su
+nombre, su descripción y su esquema), `vocabulary` (los verbos y las palabras con que se lee una frase), `stemming`
+(raíces y frases), `reading` (`asked`), `ranking` (`relevant`), `fields` (qué es cada dato de una escritura), `cards` (la
+tarjeta, `Words`) y `running` (`run_tool`, `preview`, `rounds`). Todo se importa de `live.assistant`, que reexporta lo
+que leen el Hub, el SaaS y el resto de live (`tests/test_assistant_exports.py`); un test que sustituye una función
+la parchea en el módulo que la llama (`assistant.ranking.asks_of`, `assistant.cards.choice_label`), no en el paquete.
+
 `relevant` pesa lo que la gente dice para pedir una herramienta (sus `asks`, en cualquier idioma) como su descripción:
 1 por cosa nombrada.
 
@@ -232,18 +264,104 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   pierde la consonante doblada con su final («tagged» → «tag»). Las palabras de dos cosas no comparten raíz: «tablet» no
   es «table», «compartido» no es «company», «peluquería» no es «peluquero», «carta» no es «cart», «contrato» y
   «contraseña» no son «control», «recibo» no es «recibir», «registro» no es «register», «settings» no es «set», «comensal»
-  no es «comentario» ni «comenzar», y «ficha»
-  (la del cliente) no es «fichar» salvo al empezar una orden («ficha la entrada de Ana»; igual «reserva una mesa»).
+  no es «comentario» ni «comenzar», «listo» no es «lista» (live#54), «disponible» no es «dispositivo» (live#47),
+  «sella» no es «sell», «existir» («existing») no es «existencias», «producción» («production») no es «producto»,
+  «comprueba» no es «compra» (live#71), «recordatorio» no es «record» ni «recordar» (y es «reminder»: live#89), y
+  «ficha» (la del cliente) no es «fichar» salvo al empezar una orden («ficha la entrada de Ana»; igual «reserva una mesa»).
 - **Verbos** (`VERBS`): una frase de varias palabras cuenta seguida y sus palabras no piden otra cosa («get rid of» es
   borrar, nunca `get`; «set up» configura, nunca `set`; «add up» y «¿cuadran?» comprueban, no añaden; «cambia el
-  nombre» y «ponle de nombre» renombran). «Ponle», «añade», «apunta» y «mete» añaden (`add`); «exporta», «descarga»,
-  «download» exportan; «importa», «súbeme», «upload» importan; «borremos todos sus datos» y «erase» borran del todo
+  nombre» y «ponle de nombre» renombran; también con lo que se nombra en medio, «pon al dispositivo que uso ahora el
+  nombre «Barra»» o «cámbiale a la tablet el nombre», siempre que el nombre lleve su artículo y no diga por dónde se
+  busca la cosa: «con el nombre», «de nombre» no renombran; live#47), de que el verbo no lleve detrás su propio objeto
+  («cambia el precio del café muestra el nombre del cliente»: lo nombrado va tras «a», «al», «for», «on»; live#59) y
+  de que en medio no empiece otra orden: en «cámbiale al café el precio y dime el nombre del cliente» el nombre es de
+  «dime» y «cambia» sigue cambiando; otra orden empieza tras «y», «e», «luego», «después», «también», «and», «then»,
+  «also» o con sus pronombres («dime», «búscame», «dame», «show me», «tell me»), y en cualquier otro sitio un verbo es
+  de la cosa: «ponle a la primera lista el nombre «Verano»», «change for the price list the name» y «change for
+  register 2 the name» renombran; live#57, live#59). «Ponle», «añade», «apunta» y «mete» añaden
+  (`add`); «registra» y «registrar» apuntan algo nuevo o lo añaden a lo que hay (`create`, `add`: decide lo nombrado,
+  «registra un cliente nuevo», «registra una salida de 15 € en el turno»; live#95), y el inglés «register» crea sin
+  añadir, porque también es la caja («close the cash register»); los dos dan de alta (`register`) solo lo que la orden
+  registra («registra esta tablet como Barra»; una tablet nombrada como sitio, «registra en esta tablet una salida…»,
+  no), nunca justo antes de «que» (un hecho) ni de «desde», «con», «on» o «from» (con qué se hace: «registra desde esta
+  tablet una salida…») y, en inglés, solo donde empieza la orden y no ante su número («register this tablet», no
+  «open the register on this tablet» ni «register 2: close it»; live#117); «exporta», «descarga», «download» exportan; «saca»
+  (y «sácame», «sacar») exporta o imprime (`export`, `print`: decide la cosa), salvo de dinero dicho con su moneda
+  justo detrás o tras de dónde sale («saca 15 € de la caja», «saca de la caja 15 €», «saca 50 euros del cajón», y en
+  inglés «take 15 € out of the till», «take out 15 €»): entonces apunta el dinero que sale (`add`; en español nombra
+  además la «salida», que el inglés ya dice con su «out») y no actúa sobre lo que va detrás («para comprar hielo» no
+  es una compra que buscar); un número sin moneda dice cuántos («saca 2 copias del tique», «take 5 out of stock»;
+  live#118); «importa», «súbeme», «upload» importan; «borremos todos sus
+  datos» y «erase» borran del todo
   (`erase`); «empieza» y «start» abren; «sienta», «sentar» y «seat» abren una mesa o vuelven a sentar una cuenta aparcada
   (`open`, `restore`: decide la cosa nombrada), y sus formas se nombran juntas aunque la raíz las separe («sienta»,
   «sentar»); «traslada», «transfiere» y «transfer» transfieren (`transfer`), y los «comensales» son los `guests`
-  (live#48); «ponme la app», «instala» encienden; «how many» y «cuántos» cuentan (`count`, `list`, `stats`). «How», «which»,
+  (live#48); «anota» y «anotar» (y «apunta», «apuntar»: live#80) apuntan algo nuevo, le añaden a lo que hay o
+  escriben en ello (`create`, `add`,
+  `update`: decide lo nombrado, «anota una cita para Ana», «anótame dos cafés en la cuenta», «anota en la cita de Ana
+  que use mascarilla»); su `update` escribe en una cosa nombrada o en lo que se apunta (todo lo que se nombra tras el
+  verbo salvo el sitio, lo que va tras «en», «de», «a» con su artículo: «de la caja», «en su ficha», «del», «al»;
+  «apúntale a Ana el nuevo teléfono», «apunta el número de teléfono de Ana»), nunca en un ajuste que solo toma lo que
+  se nombra de paso («anota una salida de 15 € de la caja» apunta un movimiento, no cambia los ajustes de la caja;
+  live#88). Dichos justo antes de «que» («registra que…», «apunta que…», «anota que…», «añade que…»), apuntan lo que
+  ha pasado: siguen pidiendo `create` y `add` (la nota de «apunta que Carmen prefiere las mañanas»), y cuando el hecho
+  es lo que hace otra herramienta —trata de lo que nombra la acción de una herramienta y ninguna escritura pedida actúa
+  sobre ello— lo que nombra no es un dato que tomen («registra que entran 20 cafés a 0,55 € la unidad» recibe la
+  mercancía; la cantidad no es la de una línea de la cuenta ni la de un producto nuevo). Si trata de otra cosa, sus
+  datos siguen diciendo qué escritura lo apunta («apunta que el viernes vienen 6 a cenar a nombre de Luis» es una
+  reserva; live#116). El pasado compuesto en plural de un verbo en «-ar» («han entrado», «habían entrado») se lee
+  también como su presente, dicho delante y sin quitar lo dicho («entran han entrado»): nombra lo que nombra el
+  presente y es sobre lo que actúa el verbo que lo apunta («apunta que han entrado 12 unidades de tarta» recibe la
+  mercancía, como «apunta que entran…»); no si lo que entra, dicho justo detrás o tras dónde entra, es dinero («han
+  entrado 100 €», «han entrado en caja 100 €»), ni si ese presente pide una acción («han cuadrado» no es «cuadran»), ni
+  en una pregunta («¿quiénes han entrado alguna vez?»), y el singular («ha entrado» es «entra») y los participios en
+  «-ido» se leen como se dicen (live#122). «Entran», «entra» y «entrado» con dinero justo detrás o tras dónde entra
+  («apunta que entran 100 € en el turno», «anota que ha entrado 100 € en caja», «han entrado en el turno 100 €»)
+  nombran la caja, nunca lo que el proyecto nombra con ellas (la mercancía que recibe el Hub), y no son la cosa sobre la
+  que actúa la orden: apuntan el dinero que entra en la caja; lo que entra sin moneda sigue siendo lo que era («entran
+  12 unidades de tarta», live#123), y
+  «retira» y «retirar» lo quitan, lo retiran o lo retiran
+  como permiso (`delete`, `remove`, `retire`, `withdraw`: decide la cosa nombrada, «retira la mesa 90», «retira el
+  dispositivo», «retira su consentimiento»; en inglés, «retire» y «withdraw»), también con sus pronombres
+  («anótalo», «retírala»; live#64); «aprueba», «rechaza», «solicita» (y «solicito», «pido»; nunca «pide» ni «pedir»,
+  que en una mesa son lo que pide el cliente), «confirma» y «da de baja» piden su acción (`approve`, `reject`,
+  `request`, `confirm`, y `terminate` o `withdraw`: dar de baja a alguien del negocio o de la publicidad; su «baja»
+  sigue nombrando la baja), en infinitivo, como orden, en primera persona y con sus pronombres («apruébasela», «dale de
+  baja»); «desactiva», «deshabilita», «apaga», «activa», «reactiva», «habilita» y «enciende» («apaga» y «enciende»:
+  live#79; en inglés «turn off», «switch off», «turn on» y «switch on»: live#82) apagan o encienden y también
+  desactivan o activan (`disable` y `deactivate`, `enable` y `activate`: decide la cosa nombrada; «activo» no, que es
+  lo que algo está), y una app se enciende o se apaga cuando la orden la nombra («activa las ventas», «activa otra vez
+  las ventas»), no cuando se nombra para qué es otra cosa, tras «para» o «for» («vuelve a activar Mayorista para las
+  próximas ventas»: la tarifa; live#50). Lo que un interruptor apaga o enciende es lo que se nombra tras el verbo hasta
+  lo que dice de qué o para qué es («los recordatorios» de «desactiva los recordatorios de las citas», «the
+  appointment reminders», `Asked.switched`); si el catálogo no lo nombra como cosa más que por una app, es la cosa
+  del interruptor de esa acción cuyas `asks` lo dicen junto con la app nombrada a su lado: «desactiva los
+  recordatorios de citas» apaga la receta («apaga la receta del recordatorio de citas») antes que la app de Citas, y
+  «desactiva al cliente Ana» no sube el interruptor de un empleado cuyas `asks` solo dicen «Ana», y una palabra
+  que dicen las `asks` de los interruptores de varias cosas («de momento», «por ahora») no es la cosa de ninguno
+  (live#89); «ponme la
+  app»,
+  «instala» encienden; «how many» y «cuántos» cuentan (`count`, `list`, `stats`). «How», «which»,
   «cómo» y «cuál» ya no son el verbo «listar». Un verbo no nombra cosas salvo por sus sinónimos («cobra» nombra la
-  venta; «show me», «dame», «dime», «give me», «tell me» no nombran nada).
+  venta; «show me», «dame», «dime», «give me», «tell me» no nombran nada). Un infinitivo tras «sin», también con sus
+  pronombres, dice lo que no se hace y no se pide («borra el grupo sin cambiar los pedidos», «sin quitarle el PIN»; como
+  «without changing» en inglés; live#60): ni verbo, ni objeto de la orden, ni frase de renombrar, y nombra solo por sus
+  sinónimos («sin cobrar» sigue nombrando la venta); el mismo verbo dicho en otro sitio de la frase sí se pide. Igual
+  el infinitivo tras «ni» cuando un «sin» va antes en la frase («sin tocar caja ni cambiar importes», «ni borrarla»;
+  live#74); sin «sin» delante, o con un «no» entre el «sin» y el «ni», «ni» es «ni siquiera» y el verbo se pide
+  («no sé ni cambiar el precio», «tengo una mesa sin cobrar y no puedo ni cerrar la caja»). También es «ni siquiera»
+  sin ese «no» cuando tras su infinitivo va «poder» o «conseguir» conjugados, o «dejar» tras a quién deja («me deja»,
+  «nos dejó»; «lo dejo» no), sin un infinitivo propio detrás y antes de un «si», «que», «porque», «pero» o «cuando» («tengo una
+  mesa sin cobrar, ni cerrar la caja me deja», «ni cancelar la reserva pudo»; live#86); «…ni cambiar importes si
+  puede», «…cuando puedes» y «…y así puedo cuadrar la caja» siguen sin pedir «cambiar». Eso solo en una queja: si
+  antes del «sin» ya se pidió una acción (un verbo o una frase de verbo que no sea lo que no se hace), el «ni» sigue
+  con lo que no se hace aunque detrás vaya «me deja» o «puedo» («quiero cerrar la caja sin contar ni cambiar el fondo
+  y no me deja», «anula el pedido sin cobrar ni imprimir el ticket me deja el camarero»; live#93). Una coma antes de un «ni»
+  que sigue a un «sin» no corta la frase («sin tocar caja, ni cambiar importes» se lee igual que sin ella; live#81); un
+  punto, sí, y sin «sin» delante la coma corta como siempre («cámbiale el precio, ni el nombre»). Tampoco se pide lo que alguien dice que hará, tras «'ll» o «will» («knock 60% off the wine, I'll approve it», «we
+  will open»): nombra como cualquier palabra. Y un «sí» que solo confirma («sí, confírmalo», «vale, confirmo», «yes,
+  confirm it») contesta a lo pedido antes y no pide ni nombra nada: tras «cancela la reserva de Ana», la cancelación
+  sigue primera (live#50).
 - **Preguntas**: una pregunta (palabra interrogativa con tilde, que empieza por una o por un auxiliar inglés, o con sus
   signos) pide saber aunque nombre un verbo («do I need a customer to charge?»): sus lecturas van primero y lo que nombra
   ese verbo es de lo que pregunta (`Asked.about`: «what can customers pay with?» → las formas de pago). Nunca es pregunta
@@ -261,16 +379,29 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
   cosa de ninguna herramienta, la app nombrada por su nombre es la cosa de sus herramientas («¿qué hay en la cocina?»,
   «abre la caja con 100 €»); al lado de una cosa nombrada («el registro de eventos») solo desempata. La acción pedida sobre la
   cosa nombrada suma 9, y 3 más si esa cosa es lo primero que nombra la orden desde su verbo (`Asked.objects`: «crea la
-  carpeta Facturas» crea una carpeta, no una factura); una escritura de otra cosa no suma si alguna herramienta hace
-  eso a lo que la orden toca («reserva una mesa» no trae las altas de la plantilla; «create a 10% discount» sí trae las
-  altas, porque ninguna herramienta crea un descuento); una lectura sin cosa nombrada suma 1 solo si se nombra su app
+  carpeta Facturas» crea una carpeta, no una factura). En un verbo que mete o apunta algo («anota», «apunta», «añade»,
+  «mete», «registra»), el sitio dicho antes con su artículo o determinante («en el turno», «a la cuenta de la mesa 4», «del turno»)
+  no es lo que toca: lo es lo primero que se nombra después en una frase propia, tras un artículo, un determinante o un
+  número («anota en el turno una salida de 50 €» apunta el movimiento, igual que «anota una salida de 50 € en el
+  turno»; si no se nombra nada así, el sitio sigue siendo lo que toca: «anota en la cita de Ana que…»; live#94). En los
+  demás verbos el sitio dicho antes sigue siendo lo que tocan («borra del historial la cuenta»). Una escritura de otra
+  cosa no suma si alguna herramienta hace eso a lo que la orden toca («reserva una mesa» no trae las altas de la
+  plantilla; «create a 10% discount» sí trae las altas, porque ninguna herramienta crea un descuento); una lectura sin
+  cosa nombrada suma 1 solo si se nombra su app
   (los «cuántos» no levantan todas las listas), y un dato por el que filtra no es lo que lee. Encender o apagar algo
   que una escritura toma la cambia («turn off the alerts» → `accounts.preferences.update`); una escritura de una cosa
   nombrada tras el verbo trae la lectura que la encuentra («borra el cliente Ana»).
 - **Sinónimos del proyecto** (`synonyms=`): `SYNONYMS` guarda solo lo que una palabra significa en cualquier negocio.
   Lo que significa solo en un proyecto lo pasa ese proyecto en cada turno y en su QA, nunca se fija en `live`: «cuenta»
   es la cuenta de una mesa en el Hub (`(("cuenta", "check", "tab", "order"),)`) y la cuenta de la persona en el SaaS
-  (`(("cuenta", "account"),)`). Un grupo admite frases («foto de perfil»).
+  (`(("cuenta", "account"),)`). Un grupo admite frases («foto de perfil»). Una palabra que nombra una cosa en cualquier
+  negocio va en `SYNONYMS` con su inglés aunque un menú la diga: «regla» es `rule` (live#73), y sin eso solo nombraba la
+  app cuyo menú dice «Reglas», que al lado de otra cosa nombrada («la regla de los productos») ya no era la cosa; igual
+  «método» es `method` (live#79): solo nombraba la app cuyo menú dice «Métodos», y al pedir «vuelve a activar el método
+  de pago de Bizum» encender Pagos iba antes que reactivar el método. «Modo oscuro», «modo claro», «tema oscuro» y
+  «tema claro» son el tema (`theme`) que toman las preferencias de la persona, como «dark mode» y «theme» en inglés:
+  «desactiva el modo oscuro» cambia las preferencias antes que cualquier interruptor (live#91); «tema» y «modo» a
+  secas no, que también son el asunto y una manera («de modo que»).
 
 **QA del asistente, derivada de las operaciones** (`live.assistant_qa`; plan 2026-10-31 del conocimiento y la QA del
 asistente), en dos capas:
@@ -300,7 +431,7 @@ está en su catálogo.
 ## Slugs reservados
 
 `live.slugs` es la **única** regla del slug de un hub (el primer rótulo de `<slug>.erplora.com`) y la
-**única** lista de nombres reservados, para `hub-next` y `saas-next` (Ioan, 2026-10-13; PLAN §16.14).
+**única** lista de nombres reservados, para el Hub y el SaaS (Ioan, 2026-10-13; PLAN §16.14).
 
 - **Regla**: `HUB_SLUG_RE` (`^[a-z0-9]([a-z0-9-]{1,61}[a-z0-9])?$`): minúsculas, cifras y guiones, sin
   guion al principio ni al final; 3–63 caracteres; nunca empieza por `xn--` (punycode).
@@ -402,6 +533,26 @@ postgres` (jamás `down -v`). Si no, cualquier Postgres 17 apuntado con las vari
 las del `compose.yaml`). Los ajustes de prueba están en `tests/settings.py` y la app mínima de
 apoyo en `tests/testapp/`. Dos suites a la vez contra el mismo Postgres (otra sesión, el hook de abajo) se separan
 con `TEST_DB_NAME`, que da nombre a la BD de test (`TEST_DB_NAME=test_live_yo uv run pytest -q`); sin ella, `test_hub`.
+
+### Tamaño de los ficheros y límites de las funciones
+
+La suite comprueba también la regla de tamaño y responsabilidad única:
+
+- `tests/test_file_size.py`: ningún fichero versionado `.py` pasa de 500 líneas físicas (los de tests, bajo
+  `tests/` o llamados `test_*.py` o `conftest.py`, de 1.000), sin contar las migraciones, y ningún script `.sh` pasa
+  de 100: el que necesita más se reescribe en Python. Un `.sh` de pruebas, bajo `tests/` o llamado `*.test.sh`,
+  llega a 1.500. Los que se pasan
+  están en `.file-size-allow`, una línea por fichero (`<líneas> <ruta> #<issue>`, con su número exacto de líneas).
+  Un fichero de la lista se puede modificar sin partirlo, pero no pasa de su número: lo que el cambio añada va a un
+  módulo nuevo, y el cambio que lo encoge baja su número al nuevo. La lista solo encoge: frente a la de
+  `origin/main` no gana rutas ni sube números, y un fichero que vuelve a caber o que ya no existe sale de ella. Los
+  topes tampoco suben ni desaparecen frente a `origin/main`; el cambio que baja uno regenera la lista, con cada
+  fichero como mucho en su tamaño de `origin/main`. Sin `origin/main` (un clon sin ese ref) el test falla:
+  `git fetch origin main` antes de la suite.
+- `tests/test_function_limits.py` corre `ruff check` con solo `C901` (complejidad ≤ 10), `PLR0911` (≤ 6 retornos),
+  `PLR0912` (≤ 12 ramas), `PLR0913` y `PLR0917` (≤ 5 argumentos, salvo en tests), `PLR0915` (≤ 50 sentencias) y
+  `RUF100`. Las funciones que hoy se pasan llevan `# noqa: <regla>`, y `RUF100` hace fallar el que sobra. `ruff
+  format` no cambia nada (`[tool.ruff.format] exclude = ["*"]`). A mano: `uv run ruff check`.
 
 ## Comprobaciones antes del push (sin CI)
 

@@ -24,7 +24,7 @@ class OutboxEvent(UUIDModel):
     """A fact recorded by a command in its own transaction (``<app>.<entity>.<fact>``).
 
     The row commits or rolls back with the command; the live notification goes out after the
-    COMMIT. ``delivered_at`` is for the relay of phase 2.
+    COMMIT. ``delivered_at`` is set by the project's relay once it has delivered the event.
     """
 
     scope_kind = models.CharField(max_length=32)

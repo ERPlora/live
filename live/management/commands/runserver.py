@@ -1,4 +1,4 @@
-"""``manage.py runserver``: daphne's ASGI server plus the Vite dev server with HMR (plan §4.6).
+"""``manage.py runserver``: daphne's ASGI server plus the Vite dev server with HMR.
 
 ``live`` goes before ``daphne`` in ``INSTALLED_APPS`` so this command wins. With DEBUG and
 ``LIVE["vite"] = {"command": [...], "cwd": ...}``, the autoreloader's parent process (the one that

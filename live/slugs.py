@@ -1,15 +1,15 @@
-"""Hub slugs: the first label of a hub's host (``<slug>.erplora.com``), shared by hub-next and saas-next.
+"""Hub slugs: the first label of a hub's host (``<slug>.erplora.com``), shared by the Hub and the SaaS.
 
 A slug is one DNS label (``HUB_SLUG_RE``): lowercase letters, digits and hyphens, never a hyphen at
 the start or the end, 3–63 characters, never punycode (``xn--``) and never one of the reserved
 system names (``RESERVED_HUB_SLUGS``). Of those, ``hubs`` is ERPlora's own platform host (the Hub's
-admin for the staff; round 13, PLAN §18), ``pre`` is the team's pre-production environment
+admin for the staff), ``pre`` is the team's pre-production environment
 (``pre.erplora.com``, whose hubs live under ``*.pre.erplora.com``), ``hub`` stays reserved and the rest
 are blocked so no customer takes them.
 Hubs are served under the wildcard certificate ``*.erplora.com``: there is no limit to their number.
 
-``demo-`` (``DEMO_SLUG_PREFIX``) is the Hub's own namespace for its demo hubs (``demo-<8 hex>``,
-docs/plans/2026-10-17-demo-hubs-fase-1.md): ``validate_hub_slug`` rejects it as ``reserved`` unless the
+``demo-`` (``DEMO_SLUG_PREFIX``) is the Hub's own namespace for its demo hubs (``demo-<8 hex>``):
+``validate_hub_slug`` rejects it as ``reserved`` unless the
 caller is the Hub's registry (``allow_demo=True``), so no customer takes one; ``hub_slug_validator`` (the
 customers' forms) never allows it. ``is_reserved_hub_slug`` stays the exact-name check.
 
@@ -35,7 +35,7 @@ DEMO_SLUG_PREFIX = "demo-"
 
 RESERVED_HUB_SLUGS: frozenset[str] = frozenset(
     {
-        # ERPlora's own platform host (`hubs`, the Hub's admin for the staff; round 13) and `hub`.
+        # ERPlora's own platform host (`hubs`, the Hub's admin for the staff) and `hub`.
         "hub", "hubs",
         # The platform and its parts.
         "erplora", "saas", "platform", "system", "sys", "internal",

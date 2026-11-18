@@ -1,1 +1,1 @@
-"""Operations, live queries and SPA serving shared by hub-next and saas-next."""
+"""Operations, live queries and SPA serving shared by the Hub and the SaaS."""

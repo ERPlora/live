@@ -1,4 +1,4 @@
-"""System checks of the app metadata (tag ``live``; round 15, PLAN §20).
+"""System checks of the app metadata (tag ``live``).
 
 A module (``kind = "app"``) carries what the Hub's apps page shows next to its name (``icon``,
 ``category``) and only requires other modules, without cycles. A platform app (``kind =
@@ -6,11 +6,11 @@ A module (``kind = "app"``) carries what the Hub's apps page shows next to its n
 the checks always look at every app of ours, whatever ``app_configs`` ``manage.py check`` passes.
 Registered when ``live`` is ready (``LiveConfig.ready`` imports this module).
 
-Round 16 (PLAN §21): a module also carries what the public store shows (``summary``,
+A module also carries what the public store shows (``summary``,
 ``description``, E007) and the verticals it belongs to (``verticals``, E008). What needs to read
 files (WORKBOOK, translations, baked icons, images) is not a check: ``register_apps`` validates it.
 
-PLAN-HUB round 2026-10-21: only a module declares the Home's hooks (``setup``, ``widgets``, ``bell``;
+Only a module declares the Home's hooks (``setup``, ``widgets``, ``bell``;
 E006), each a list of its dataclass (E009) whose ``operation`` is a query of the module itself
 (E010), whose ``permission`` is one of the module's (E011), whose ``refresh_on`` names events that
 some ``events.py`` declares (E012) and whose ``key`` is a snake_case name unique in its list (E013);
@@ -18,29 +18,37 @@ a widget renders by ``kind`` with its ``operation`` or by ``component`` (E014) a
 (E015), and a step's ``configured_when`` is a list of ``SetupCheck`` with one condition each (E016).
 They need the operations and the events registered, which ``LiveConfig.ready`` does before any check.
 
-PLAN-HUB round 2026-10-23: the device's notices of a module (``notices``) follow the same rules
+The device's notices of a module (``notices``) follow the same rules
 (E006, E009–E013), and their texts are templates on the fields of the rows of their query, which
 says what happened (``id``) and when (``at``) (E018).
 
-FIX-LIVE-SESSION-CLOSED-WAKES-ONLY-SESSION-LIST: ``settings.LIVE["session_events"]``, the events after which every
+``settings.LIVE["session_events"]``, the events after which every
 live stream of the channel re-reads its context, is a list of events that some ``events.py`` declares (E019).
 
-PLAN §30 (round 2026-10-22b): every operation tells the assistant what it is — a tool, ``ai=AI(description=…,
+Every operation tells the assistant what it is — a tool, ``ai=AI(description=…,
 risk=…)``, or not one, ``ai=INTERNAL`` — never by omission, with a risk of ``RISKS``; a ``dict`` with its
 ``description`` is still accepted (E017). Like the metadata checks, it looks at every registered operation.
 
-Docs plan 2026-10-31 (the assistant's knowledge and QA): every tool of the apps a project lists in
+Every tool of the apps a project lists in
 ``LIVE_ASSISTANT_ASKS_REQUIRED`` says what a person would type to ask for it (``AI.asks``) in English and Spanish, at
 least two distinct phrases each, none its own name nor longer than ``MAX_ASK_CHARS`` (E020). An app is listed once all
-of its tools say them: the Hub's hundreds of tools are not migrated at once.
+of its tools say them, so the apps take it on one at a time.
+
+An app's ``services`` or ``queries`` may be a package; importing a module of it is what registers its operations, so
+every module of the package is imported at startup, by the package's ``__init__.py`` (E021; test modules and
+sub-packages are not operation modules). No module of the package is named ``services`` or ``queries``: an operation
+in it would pass for one of an app's ``services.py`` or ``queries.py`` (E022).
 """
 
+import pkgutil
 import re
 import string
+import sys
 import typing
 from collections.abc import Mapping
 from typing import Any
 
+from django.apps import apps
 from django.conf import settings
 from django.core import checks
 from django.utils import translation
@@ -83,10 +91,10 @@ MODULE_ONLY_FIELDS = (
 #: The hooks of a module (the Home's and the device's notices) and the dataclass of each item.
 HOOKS = {"setup": SetupStep, "widgets": Widget, "bell": BellCounter, "notices": DeviceNotice}
 HOOK_KEY_RE = re.compile(r"^[a-z][a-z0-9_]*$")
-# The columns of shared.app they are written to (round 16, spec §3.1).
+# The columns of shared.app they are written to.
 SUMMARY_MAX_LENGTH = 120
 NAME_MAX_LENGTH = 80
-# A vertical id names a template database, hub_template_<vertical>, so it has the shape of PLAN §15.2
+# A vertical id names a template database, hub_template_<vertical>, so it is a snake_case name
 # (no "__") and fits in Postgres' 63 characters with that prefix; "test" is the tests' template.
 VERTICAL_RE = re.compile(r"^[a-z][a-z0-9]*(_[a-z0-9]+)*$")
 VERTICAL_MAX_LENGTH = 63 - len("hub_template_")
@@ -138,8 +146,7 @@ def check_ai_declared(app_configs: Any = None, **kwargs: Any) -> list[checks.Che
     ``description``, and a risk, when it says one, of ``RISKS``."""
     hint = (
         "Declare ai=AI(description=…, risk='normal'|'high') for an assistant tool (its description tells the model, in "
-        "English, what it does; 'high' asks to type a word before it runs), or ai=INTERNAL for what is not one "
-        "(PLAN §30: every operation is a tool unless it says otherwise)."
+        "English, what it does; 'high' asks to type a word before it runs), or ai=INTERNAL for what is not one."
     )
     return [
         checks.Error(f"Operation {name!r} {problem}.", hint=hint, obj=name, id="live.E017")
@@ -199,7 +206,7 @@ def check_assistant_asks(app_configs: Any = None, **kwargs: Any) -> list[checks.
     return errors
 
 
-def _asks_problems(op: operations.Operation) -> list[str]:
+def _asks_problems(op: operations.Operation) -> list[str]:  # noqa: C901
     """Why ``op``'s asks (its ``ai=``'s, as declared) do not tell what a person would type to ask for it."""
     declared = op.ai
     asks = declared.asks if isinstance(declared, operations.AI) else declared.get("asks")
@@ -238,6 +245,53 @@ def _asks_problems(op: operations.Operation) -> list[str]:
             counted = f"{len(distinct)} distinct {'ask' if len(distinct) == 1 else 'asks'}"
             problems.append(f"has {counted} in {language!r}; it needs at least {operations.MIN_ASKS}")
     return problems
+
+
+@checks.register("live")
+def check_door_packages(app_configs: Any = None, **kwargs: Any) -> list[checks.CheckMessage]:
+    """E021 and E022: the modules of an app's services or queries package."""
+    errors: list[checks.CheckMessage] = []
+    for config in apps.get_app_configs():
+        for package in _door_packages(config):
+            errors += _door_package_errors(config, package)
+    return errors
+
+
+def _door_packages(config: Any) -> list[Any]:
+    found = (sys.modules.get(f"{config.name}.{door}") for door in operations.DOORS.values())
+    return [module for module in found if module is not None and hasattr(module, "__path__")]
+
+
+def _door_package_errors(config: Any, package: Any) -> list[checks.CheckMessage]:
+    errors = []
+    for info in pkgutil.iter_modules(package.__path__):
+        module = f"{package.__name__}.{info.name}"
+        if info.name in operations.DOORS.values():
+            errors.append(
+                checks.Error(
+                    f"{module} is named like an app's {info.name}: an operation in it passes for one of {info.name}.py.",
+                    hint="Name the module after the entity or use case it covers.",
+                    obj=config,
+                    id="live.E022",
+                )
+            )
+        elif _declares_operations(info) and module not in sys.modules:
+            errors.append(
+                checks.Error(
+                    f"{module} is never imported, so the operations it declares are not registered.",
+                    hint=f"Import it in the __init__.py of {package.__name__}: from . import {info.name}",
+                    obj=config,
+                    id="live.E021",
+                )
+            )
+    return errors
+
+
+def _declares_operations(info: pkgutil.ModuleInfo) -> bool:
+    """Whether a module of a package may declare operations: not a test module, nor a sub-package (@operation rejects
+    an operation one level deeper)."""
+    name = info.name
+    return not (info.ispkg or name.startswith("test_") or name.endswith("_test") or name == "conftest")
 
 
 @checks.register("live")
@@ -363,7 +417,7 @@ def _vertical_errors(config: Any) -> list[checks.CheckMessage]:
 
 
 def _hook_errors(config: Any, events: frozenset[str]) -> list[checks.CheckMessage]:
-    """E009–E016: the Home's hooks of a module (PLAN-HUB round 2026-10-21)."""
+    """E009–E016: the Home's hooks of a module."""
     errors = []
     for hook, item_class in HOOKS.items():
         items = getattr(config, hook)
@@ -424,7 +478,8 @@ def _item_problems(config: Any, item: Any, events: frozenset[str]) -> list[tuple
             (
                 "live.E010",
                 operation_problem,
-                f"Name a query (kind='query') of {config.label}'s queries.py, e.g. '{config.label}.<entity>.status'.",
+                f"Name a query (kind='query') of {config.label}'s queries.py or queries/ package,"
+                f" e.g. '{config.label}.<entity>.status'.",
             )
         )
     if item.permission is not None and item.permission not in config.permissions:

@@ -1,8 +1,7 @@
-"""Markdown to safe HTML: the store's app documentation and the Hub's help (round 16, spec §6).
+"""Markdown to safe HTML: the store's app documentation and the Hub's help.
 
-Ported from the old SaaS (``apps/public/modules/services/rendering.py``): ``fenced_code``,
-``tables`` and ``sane_lists``, the same allowlist sanitised with ``nh3``, and ```` ```mermaid ````
-blocks as ``<pre class="mermaid">`` for mermaid.js. Round 16 adds:
+``fenced_code``, ``tables`` and ``sane_lists``, an allowlist sanitised with ``nh3``, and
+```` ```mermaid ```` blocks as ``<pre class="mermaid">`` for mermaid.js. Besides:
 
 - **images** only from the app's own ``docs/img/``: a relative ``docs/img/<path>`` becomes
   ``image_base + <path>``; any other source (another host, ``data:``, an absolute path, a ``.``,
@@ -76,7 +75,7 @@ _MERMAID_RE = re.compile(
 
 #: The only image sources that survive: the app's own docs/img/ folder, relative.
 IMAGE_PREFIX = "docs/img/"
-#: The image formats an app's docs may use (spec §4.4): ``svg`` can carry script.
+#: The image formats an app's docs may use; not ``svg``, which can carry script.
 IMAGE_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".webp", ".gif"})
 _IMAGE_PATH_RE = re.compile(r"[A-Za-z0-9._/-]+")
 # nh3 serialises every attribute as name="value", with '"' escaped, so a quoted value never ends
