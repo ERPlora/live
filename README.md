@@ -125,7 +125,11 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
     `bar-list`, `timeline`, `chart`) con `operation`, `params`, `map` (prop → campo) y `options`, o
     bien `component` (un componente Vue de `frontend/components/` del módulo, sin `.vue`).
   - `bell: list[BellCounter]`, los contadores de la campana: `key`, `operation` (su primera fila
-    trae `count`), `route` y `label`; `icon`, `params`, `permission` y `refresh_on`.
+    trae `count`), `route` y `label`; `icon`, `params`, `permission` y `refresh_on`. Cada uno puede
+    decir además su gravedad (`severity`: `danger`, `warning` o `info`), su titular (`title`), una
+    frase con la consecuencia (`body`) y el texto de su botón (`action_label`), textos traducibles que
+    se rellenan con `%(count)d` (un plural, con `ngettext_lazy(…, "count")`), y `due`, el campo de esa
+    primera fila con su plazo (una fecha y hora ISO). Lo que no declara lo pone quien lo enseña.
 - **Solo un módulo, para los avisos del dispositivo** (ronda PLAN-HUB 2026-10-23; los rellena `base`
   con `base.notice.list` y la shell los da una vez por dispositivo con el aviso del sistema de la app
   nativa): `notices: list[DeviceNotice]`, vacía por defecto. `key`, `operation` (una consulta de su
@@ -200,6 +204,9 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
   - `live.E023` (`live.checks_help`): un `help` que no es un `Help`, declarado en una app que no es un módulo
     (`kind = "app"`), con un vídeo bajo un idioma que no está en `settings.LANGUAGES` o con un id que no es el de un
     vídeo de YouTube (11 caracteres: letras, cifras, `-` y `_`).
+  - `live.E024` (`live.checks_bell`): un contador de la campana con una gravedad que no es `danger`, `warning` ni
+    `info`, un `title`, `body` o `action_label` que no es un texto, o un `due` que no nombra un campo de la respuesta
+    de su consulta (de sus filas, si las lista).
 
   Los checks de los hooks necesitan las operaciones y los eventos registrados, cosa que
   `LiveConfig.ready` hace antes de cualquier check. La app de pruebas (`tests/testapp`) es un módulo

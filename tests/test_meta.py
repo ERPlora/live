@@ -8,6 +8,7 @@ import pytest
 from django.apps import apps
 from django.utils import translation
 from live.meta import (
+    BELL_SEVERITIES,
     WIDGET_KINDS,
     WIDGET_SIZES,
     BellCounter,
@@ -248,6 +249,39 @@ def test_a_bell_counter_needs_key_operation_route_and_label():
         "To confirm",
     )
     assert (counter.icon, counter.permission, tuple(counter.refresh_on), dict(counter.params)) == ("", None, (), {})
+
+
+def test_a_bell_counter_says_nothing_of_itself_unless_it_declares_it():
+    """A counter that declares none of its words leaves them to whoever shows it."""
+    counter = BellCounter(key="to_confirm", operation="stock.item.count", route="/stock", label="To confirm")
+
+    assert (counter.severity, counter.title, counter.body, counter.action_label, counter.due) == (None,) * 5
+
+
+def test_a_bell_counter_declares_its_severity_words_and_the_field_of_its_deadline():
+    counter = BellCounter(
+        key="to_confirm",
+        operation="stock.item.count",
+        route="/stock",
+        label="To confirm",
+        severity="danger",
+        title="%(count)d to confirm",
+        body="They start soon.",
+        action_label="Confirm them",
+        due="earliest",
+    )
+
+    assert (counter.severity, counter.title, counter.body, counter.action_label, counter.due) == (
+        "danger",
+        "%(count)d to confirm",
+        "They start soon.",
+        "Confirm them",
+        "earliest",
+    )
+
+
+def test_the_severities_of_a_bell_counter_go_from_the_gravest():
+    assert BELL_SEVERITIES == ("danger", "warning", "info")
 
 
 @pytest.mark.parametrize(
