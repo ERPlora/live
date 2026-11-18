@@ -4,10 +4,6 @@ A module's help is ready once it declares ``help``; its video is optional. Each 
 language code, and only a module (``kind = "app"``) has a help window.
 """
 
-import os
-import subprocess
-import sys
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -15,6 +11,8 @@ from django.core import checks
 from django.core.checks.registry import registry
 from live.checks_help import check_app_help
 from live.meta import Help
+
+from tests.startup_checks import checks_registered_at_startup
 
 VIDEO = "dQw4w9WgXcQ"
 
@@ -41,22 +39,7 @@ def test_the_check_is_registered_with_the_live_tag():
 
 def test_django_setup_registers_the_check_without_anyone_importing_it():
     """A fresh process, where no test imported ``live.checks_help`` first: the live app's startup does."""
-    script = (
-        "import django; django.setup()\n"
-        "from django.core.checks.registry import registry\n"
-        "print(sorted(f'{check.__module__}.{check.__name__}' for check in registry.get_checks()))"
-    )
-    result = subprocess.run(
-        [sys.executable, "-c", script],
-        cwd=Path(__file__).resolve().parent.parent,
-        env={**os.environ, "DJANGO_SETTINGS_MODULE": "tests.settings"},
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-    assert result.returncode == 0, result.stderr
-    assert "live.checks_help.check_app_help" in result.stdout
+    assert "live.checks_help.check_app_help" in checks_registered_at_startup()
 
 
 @pytest.mark.parametrize(

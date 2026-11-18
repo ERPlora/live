@@ -63,6 +63,9 @@ WidgetSize = Literal["sm", "md", "lg"]
 WidgetKind = Literal["kpi", "stat", "sparkline", "bar-list", "timeline", "chart"]
 WIDGET_SIZES: tuple[str, ...] = get_args(WidgetSize)
 WIDGET_KINDS: tuple[str, ...] = get_args(WidgetKind)
+#: How grave a counter of the bell is, the gravest first.
+BellSeverity = Literal["danger", "warning", "info"]
+BELL_SEVERITIES: tuple[str, ...] = get_args(BellSeverity)
 
 
 @dataclass(frozen=True)
@@ -140,6 +143,12 @@ class BellCounter:
 
     Shown with ``label`` and ``icon`` while above zero, to whoever has ``permission``; ``route`` is
     where it leads and ``refresh_on`` names the events that may change it.
+
+    It may also say how grave it is (``severity``, one of ``BELL_SEVERITIES``), its heading
+    (``title``), one sentence with the consequence (``body``) and the label of its button
+    (``action_label``): texts, usually lazy translations, filled in with ``%(count)d`` (a plural by
+    ``ngettext_lazy(…, "count")``). ``due`` names the field of that row with its deadline. Whoever
+    shows the counter gives a default to what it leaves out.
     """
 
     key: str
@@ -150,6 +159,11 @@ class BellCounter:
     params: Mapping[str, Any] = field(default_factory=dict)
     permission: str | None = None
     refresh_on: Sequence[str] = ()
+    severity: BellSeverity | None = None
+    title: str | None = None
+    body: str | None = None
+    action_label: str | None = None
+    due: str | None = None
 
 
 @dataclass(frozen=True)
