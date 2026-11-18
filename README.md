@@ -556,7 +556,7 @@ La suite comprueba también la regla de tamaño y responsabilidad única:
 
 ## Comprobaciones antes del push (sin CI)
 
-El repositorio no usa GitHub Actions (Ioan, 2026-11-10: en la organización, solo `ERPlora/aws`). Lo que corría el
+El repositorio no usa GitHub Actions (en la organización, solo las usa `ERPlora/aws`). Lo que corría el
 workflow `test` en cada push a `main` y en cada PR lo corre el hook versionado `.githooks/pre-push` en la máquina que
 empuja, y un rojo para el push con el paso que falló. No hay variable para saltárselo.
 
@@ -578,8 +578,10 @@ Solo cuando el commit que tiene fuera el submódulo, y cada worktree suyo, ya tr
 existe, git no ejecuta ningún hook, tampoco los globales, y no avisa.
 
 - **Qué comprueba**, sobre una copia limpia del commit que se empuja (un worktree temporal, nunca el árbol de
-  trabajo) y en el orden del workflow: `uv sync --locked`, que el Postgres esté en alcance (lo que hacía el
-  healthcheck del servicio del job, con la misma conexión que abrirá la suite) y `uv run --locked pytest -q`. Sin
+  trabajo) y en el orden del workflow: trae `main` del remoto a `origin/main` (`tests/test_file_size.py` compara el
+  commit con él, y uno viejo daría por buena una lista de excepciones que ya encogió; si no se puede traer, para),
+  `uv sync --locked`, que el Postgres esté en alcance (lo que hacía el healthcheck del servicio del job, con la misma
+  conexión que abrirá la suite) y `uv run --locked pytest -q`. Sin
   Postgres para antes de pytest y dice cómo levantarlo: `docker compose up -d` desde la raíz de erplora-next (jamás
   `down -v`), o las variables `DB_*` hacia otro. Si la sonda se rompe por otra cosa (un `tests/settings.py` roto en el
   commit), para igual pero no manda a levantar ningún Postgres.

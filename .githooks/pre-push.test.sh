@@ -36,7 +36,8 @@ EOF
   chmod +x "$1"
 }
 
-# new_world [--no-global-path | --global-path <dir>]: a fresh world in $W, its clone in $W/work.
+# new_world [--no-global-path | --global-path <dir>]: a fresh world in $W, its clone in $W/work, whose
+# main is one commit ahead of the remote's ($SEED).
 # The caller's environment carries what must not reach the suite: another session's TEST_DB_NAME,
 # a settings module, pytest options, a PYTHONPATH and another project's virtualenv.
 new_world() {
@@ -57,7 +58,7 @@ new_world() {
   export TEST_DB_NAME=test_hub_next DJANGO_SETTINGS_MODULE=config.settings PYTEST_ADDOPTS="-k nothing" \
     PYTHONPATH="$W/elsewhere" VIRTUAL_ENV="$W/other-venv"
   for h in pre-push commit-msg pre-commit applypatch-msg; do write_global_stub "$W/global-hooks/$h"; done
-  # uv stub: logs `uv <args> @ <commit> <clean|dirty> <dir> | <environment>` and exits with the code
+  # uv stub: logs `uv <args> @ <commit> <clean|dirty> <dir> | <environment> main=<origin/main>` and exits with the code
   # in tests/uv-<args, _ for spaces and slashes>.rc of its checkout. What it gets on stdin is the
   # probe's script (kept in <world>/probe.py) or nothing: never the refs of the push.
   cat > "$W/bin/uv" <<'EOF'
@@ -67,7 +68,7 @@ input=$(cat)
 case "$input" in *refs/heads/*) echo "STDIN-REFS uv $*" >> "$CALLS" ;; esac
 [ "$*" = "run --locked python -" ] && printf '%s\n' "$input" > "$world/probe.py"
 state=clean; [ -n "$(git status --porcelain 2>/dev/null)" ] && state=dirty
-echo "uv $* @ $(git rev-parse HEAD 2>/dev/null) $state $(pwd -P) | db=${TEST_DB_NAME-unset} dsm=${DJANGO_SETTINGS_MODULE-unset} addopts=${PYTEST_ADDOPTS-unset} pythonpath=${PYTHONPATH-unset} venv=${VIRTUAL_ENV-unset}" >> "$CALLS"
+echo "uv $* @ $(git rev-parse HEAD 2>/dev/null) $state $(pwd -P) | db=${TEST_DB_NAME-unset} dsm=${DJANGO_SETTINGS_MODULE-unset} addopts=${PYTEST_ADDOPTS-unset} pythonpath=${PYTHONPATH-unset} venv=${VIRTUAL_ENV-unset} main=$(git rev-parse -q --verify refs/remotes/origin/main || echo none)" >> "$CALLS"
 key=$(printf '%s' "$*" | tr ' /' '__')
 exit "$(cat "tests/uv-$key.rc" 2>/dev/null || echo 0)"
 EOF
@@ -84,6 +85,9 @@ EOF
   git -C "$W/work" remote add origin "$W/remote.git"
   git -C "$W/work" add -A
   git -C "$W/work" commit -q -m "initial"
+  git -C "$W/work" push -q --no-verify origin main
+  SEED=$(git -C "$W/work" rev-parse HEAD)
+  commit_file README.md "# live, ahead of the remote"
   : > "$W/calls"
 }
 
@@ -111,7 +115,7 @@ echo "== pre-push: the checks of the removed test workflow"
 new_world
 push origin main
 sha=$(head_sha)
-check "first push of main (new branch) is accepted when the checks pass" test "$(remote_tip main)" = "$sha"
+check "a push of main is accepted when the checks pass" test "$(remote_tip main)" = "$sha"
 check "uv sync --locked runs on the pushed commit" called "$SYNC @ $sha clean"
 check "the Postgres probe runs on the pushed commit" called "$PROBE @ $sha clean"
 check "pytest runs on the pushed commit" called "$PYTEST @ $sha clean"
@@ -130,7 +134,8 @@ check "the probe loads tests.settings and opens a connection" \
 check "the global pre-push gets the same arguments" \
   test "$(cat "$W/pre-push.args" 2>/dev/null)" = "$(printf 'origin\n%s' "$W/remote.git")"
 check "the global pre-push gets the same stdin" \
-  test "$(cat "$W/pre-push.stdin" 2>/dev/null)" = "refs/heads/main $sha refs/heads/main $ZERO"
+  test "$(cat "$W/pre-push.stdin" 2>/dev/null)" = "refs/heads/main $sha refs/heads/main $SEED"
+check "a green push leaves no temporary worktree behind" test "$(git -C "$W/work" worktree list | wc -l)" -eq 1
 first_db=$(db_of "$PYTEST")
 
 commit_file README.md "docs only"
@@ -196,6 +201,7 @@ commit_file "tests/uv-run_--locked_pytest_-q.rc" 1
 echo 0 > "$W/work/tests/uv-run_--locked_pytest_-q.rc"
 push origin main; rc=$?
 check "a red commit is refused even if the working tree is green" test "$rc" -ne 0 -a "$(remote_tip main)" = "$before"
+check "a red push leaves no temporary worktree behind" test "$(git -C "$W/work" worktree list | wc -l)" -eq 1
 git -C "$W/work" checkout -q -- tests
 commit_file "tests/uv-run_--locked_pytest_-q.rc" 0
 echo 1 > "$W/work/tests/uv-run_--locked_pytest_-q.rc"
@@ -235,10 +241,33 @@ check "a commit pushed under two names is checked once" test "$(grep -cF "$PYTES
 check "with several refs, no check reads the refs left for the next one from stdin" \
   bash -c "grep -qF '$PYTEST @ ' '$W/calls' && ! grep -q STDIN-REFS '$W/calls'"
 
+# tests/test_file_size.py compares the pushed commit with origin/main: the workflow fetched main
+# first, and the hook does too, so a stale local origin/main is never the baseline.
+new_world
+git clone -q "$W/remote.git" "$W/elsewhere-clone"
+git -C "$W/elsewhere-clone" commit -q --allow-empty -m "main moved on elsewhere"
+git -C "$W/elsewhere-clone" push -q --no-verify origin main
+moved=$(remote_tip main)
+git -C "$W/work" checkout -q -b feature
+commit_file README.md feature
+push origin feature; rc=$?
+check "the clone's origin/main was stale before the push" test "$moved" != "$SEED"
+check "the checks see origin/main as it is on the remote, fetched before uv sync" \
+  bash -c "test '$rc' -eq 0 && grep -qF 'main=$moved' <<< '$(env_of "$SYNC")'"
+check "pytest sees the fetched origin/main" bash -c "grep -qF 'main=$moved' <<< '$(env_of "$PYTEST")'"
+
+new_world
+git -C "$W/work" config remote.origin.pushurl "$W/remote.git"
+git -C "$W/work" config remote.origin.url "$W/missing.git"
+push origin main; rc=$?
+check "a failed fetch of main aborts the push" test "$rc" -ne 0 -a "$(remote_tip main)" = "$SEED"
+check "a failed fetch of main stops before the checks" not_called
+check "the abort names the fetch of main" grep -qF "pre-push: git fetch" "$W/out"
+
 new_world
 echo 1 > "$W/pre-push.rc"
 push origin main; rc=$?
-check "a failing global pre-push aborts the push" test "$rc" -ne 0 -a "$(remote_tip main)" = none
+check "a failing global pre-push aborts the push" test "$rc" -ne 0 -a "$(remote_tip main)" = "$SEED"
 check "a failing global pre-push stops before the checks" not_called
 
 new_world --no-global-path
@@ -264,7 +293,7 @@ if PATH="$W/minbin:/usr/bin:/bin" command -v uv > /dev/null; then
   echo "skip - uv is in /usr/bin or /bin: the missing-uv case cannot hide it"
 else
   PATH="$W/minbin:/usr/bin:/bin" push origin main; rc=$?
-  check "without uv the push is aborted" test "$rc" -ne 0 -a "$(remote_tip main)" = none
+  check "without uv the push is aborted" test "$rc" -ne 0 -a "$(remote_tip main)" = "$SEED"
   check "the abort says uv is missing" grep -q "pre-push: uv is missing" "$W/out"
 fi
 
