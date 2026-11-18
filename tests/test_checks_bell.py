@@ -5,10 +5,6 @@ sentence with the consequence (``body``) and the label of its button (``action_l
 translation, and which field of its query's answer holds its deadline (``due``). Each one is optional.
 """
 
-import os
-import subprocess
-import sys
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -20,6 +16,8 @@ from live.meta import BellCounter
 from live.operations import Operation
 from ninja import Schema
 from pydantic import Field
+
+from tests.startup_checks import checks_registered_at_startup
 
 
 class CountOut(Schema):
@@ -78,22 +76,7 @@ def test_the_check_is_registered_with_the_live_tag():
 
 def test_django_setup_registers_the_check_without_anyone_importing_it():
     """A fresh process, where no test imported ``live.checks_bell`` first: the live app's startup does."""
-    script = (
-        "import django; django.setup()\n"
-        "from django.core.checks.registry import registry\n"
-        "print(sorted(f'{check.__module__}.{check.__name__}' for check in registry.get_checks()))"
-    )
-    result = subprocess.run(
-        [sys.executable, "-c", script],
-        cwd=Path(__file__).resolve().parent.parent,
-        env={**os.environ, "DJANGO_SETTINGS_MODULE": "tests.settings"},
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-    assert result.returncode == 0, result.stderr
-    assert "live.checks_bell.check_bell_counters" in result.stdout
+    assert "live.checks_bell.check_bell_counters" in checks_registered_at_startup()
 
 
 def test_a_counter_that_declares_none_of_its_words_passes(run):
