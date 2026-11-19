@@ -162,6 +162,9 @@ SWITCHES = frozenset({"enable", "disable"})
 _TURNS = frozenset({"enable", "disable", "activate", "deactivate"})
 #: The actions that change what a write takes.
 _CHANGES = frozenset({"update", "set"})
+#: The actions whose words also ask ``update``, for what has none of its own («ordena el menú»): where a tool does the
+#: action itself, it comes before the change of the same thing.
+_BEFORE_UPDATE = frozenset({"reorder"})
 #: What a word that notes something down asks for («anota», «apunta»: ``VERBS``): writing it down, adding it to what
 #: there is, or writing on what is named (``_WRITTEN_ON``: «anota en la cita de Ana…»), never on a setting a word names
 #: in passing («anota una salida de 15 € de la caja»: no setting of the till; ERPlora/live#88).

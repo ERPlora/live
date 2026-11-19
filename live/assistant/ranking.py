@@ -21,6 +21,7 @@ from live.assistant.tools import (
     description,
 )
 from live.assistant.vocabulary import (
+    _BEFORE_UPDATE,
     _CHANGES,
     _REGISTERS,
     _TURNS,
@@ -113,7 +114,8 @@ def relevant(  # noqa: PLR0913
     its description, what people say to ask for it (``asks_of``, in any language) and the data its input takes.
 
     The action asked (``VERBS``) of a thing the question names adds 9, 1 more when the tool's action is that verb
-    itself (``create``, before ``bulk_create``) and 3 more when that thing is what the command acts on
+    itself (``create``, before ``bulk_create``), 1 more again when its words ask ``update`` only for what has none of
+    its own (``_BEFORE_UPDATE``: ``reorder``, before ``update``) and 3 more when that thing is what the command acts on
     (``Asked.objects``: «crea la carpeta Facturas» creates a folder, not an invoice); setting a device up
     (``_REGISTERS``) counts only when that thing is what the command acts on («registra esta tablet», never «registra en
     esta tablet una salida…»); «activa la app» is
@@ -273,7 +275,7 @@ def _relevant(  # noqa: C901, PLR0913, PLR0915
             matched -= _REGISTERS
         if matched:
             if thing:
-                points += 9 + (action in verbs) + 3 * aimed
+                points += 9 + (action in verbs) + (action in verbs & _BEFORE_UPDATE) + 3 * aimed
             else:
                 writes = matched - READ_VERBS
                 # What «anota» writes on is a thing named, or what it notes down («apúntale el teléfono nuevo a Ana»): a

@@ -314,14 +314,37 @@ def test_a_device_named_but_not_registered_is_not_set_up_to_print(asked, languag
     assert names.index(first) < names.index("printing.device.register"), names[:5]
 
 
-#: The choices and the courses of a menu as the Hub's Menus describe them, beside the tools of devices.
+class OptionReorderIn(Schema):
+    combo_id: str
+    group_id: str
+    option_ids: list[str]
+
+
+class OptionUpdateIn(Schema):
+    combo_id: str
+    id: str
+    product: str | None = None
+    price_delta: int | None = None
+    is_available: bool | None = None
+
+
+#: The choices and the courses of a menu as the Hub's Menus describe them and ask for them, beside the tools of
+#: devices: changing a choice shares a word with the request (its flan), reordering them does not.
 MENU_CHOICES = [
-    tool("combo.option.reorder", "Put the choices of a course in a new order: give every choice id, in order."),
-    tool("combo.option.bulk_create", "Add several choices to a course at once, in the order given."),
-    tool("combo.option.create", "Add a choice to a course of a menu."),
-    tool("combo.option.update", "Change a choice of a course: its supplement."),
-    tool("combo.option.delete", "Remove a choice from a course."),
-    tool("combo.group.reorder", "Put the courses of a menu in a new order."),
+    tool("combo.option.reorder", "Put the choices of a course in a new order (the order the till shows them in): give "
+         "every choice id, in order.", input=OptionReorderIn,
+         asks={"es": ("ordena los postres del menú infantil: helado, natillas y fruta",),
+               "en": ("sort the desserts of the kids' menu: ice cream, custard, fruit",)}),
+    tool("combo.option.update", "Change a choice: its supplement, mark it sold out («no flan today in the menu of the "
+         "day»: is_available false) or back on offer, or replace its product. It keeps its place.",
+         input=OptionUpdateIn, asks={"es": ("se han acabado las natillas del menú infantil",),
+                                     "en": ("the custard is sold out in the kids' menu",)}),
+    tool("combo.option.bulk_create", "Offer several products at once in a course, without supplement, in the order "
+         "given; all or nothing."),
+    tool("combo.option.create", "Offer a product as a choice of a course: it goes last."),
+    tool("combo.option.delete", "Remove a choice from its course."),
+    tool("combo.group.reorder", "Put the courses of a menu in a new order (the order the till asks them in): give "
+         "every course id, in order."),
     tool("combo.combo.update", "Change a menu: its name, its price."),
     *REGISTERED_DEVICES,
 ]
@@ -339,7 +362,8 @@ CHOICE = (("opcion", "opciones", "eleccion", "elecciones", "option", "options", 
 )
 def test_putting_things_in_order_offers_reordering_them_first(asked, language):
     """«Ordena» puts things in order and names no computer (ERPlora/live#61: reordering the choices of a menu came 9th
-    in the Hub, after changing a printing device)."""
+    in the Hub, after changing a printing device). It also asks ``update``, for what nothing reorders: where a tool
+    reorders, that one comes first, even when the change of the same thing shares a word with the request."""
     names = ranked(MENU_CHOICES, asked, language, synonyms=CHOICE)
     assert names[0] == "combo.option.reorder", names[:5]
 
