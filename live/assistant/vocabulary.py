@@ -438,6 +438,21 @@ _DOUBLING = frozenset({"ed", "ing"})
 #: The verbs said in two words or more, and what only asks («give me», «tell me»): their words name nothing.
 _FILLERS = ("give me", "give us", "tell me", "tell us", "let me know")
 _PHRASES = tuple(sorted({form for forms in VERBS.values() for form in forms if " " in form} | set(_FILLERS)))
+#: The switches English says in two words whose particle may also go after what they switch («turn the bookings off»,
+#: «switch the kitchen app on»): their first word → its particles. Said apart, the particle counts at the end of its
+#: sentence or before a word that cannot be what it is said of (``_AFTER_PARTICLE``); before any other it says where or
+#: when («switch the order on table 4 to table 6»), and the verb has no particle of its own (ERPlora/live#69).
+_PARTICLES = frozenset({"on", "off"})
+_SPLIT: dict[str, frozenset[str]] = {}
+for _form in (form for verb in SWITCHES for form in VERBS[verb]):
+    _head, _, _particle = _form.partition(" ")
+    if _particle in _PARTICLES:
+        _SPLIT[_head] = _SPLIT.get(_head, frozenset()) | {_particle}
+_AFTER_PARTICLE = frozenset(
+    {"and", "then", "also", "but", "or", "so", "if", "when", "while", "because", "until", "till", "since"}
+    | {"for", "at", "from", "in", "on", "during", "before", "after", "by"}
+    | {"now", "again", "please", "today", "tonight", "tomorrow", "too", "already", "first", "later", "right"}
+)
 #: Each verb said in one word → the actions it asks for.
 _VERB_OF: dict[str, frozenset[str]] = {}
 for _verb, _forms in VERBS.items():

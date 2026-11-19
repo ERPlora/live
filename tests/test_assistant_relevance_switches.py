@@ -142,12 +142,102 @@ def test_what_someone_will_do_is_not_asked(said, named):
         ("approve it if you will", {"approve"}),
         ("will you approve Ana's time off?", {"approve"}),
         ("the lights will turn on at nine", set()),
+        ("the lights will turn the bookings on at nine", set()),
     ],
 )
 def test_a_command_or_a_request_with_will_still_asks(said, verbs):
     """What «will» leaves out is the verb right after it, one said in words too («will turn on»): a command asks, and
     «will you…?» is a request."""
     assert assistant.asked([said]).verbs == verbs
+
+
+@pytest.mark.parametrize(
+    ("apart", "in_a_row"),
+    [
+        ("turn the bookings off", "turn off the bookings"),
+        ("switch the kitchen app on", "switch on the kitchen app"),
+        ("Turn the appointment reminders off", "turn off the appointment reminders"),
+        ("can you switch the bookings module off? Nobody uses it.",
+         "can you switch off the bookings module? Nobody uses it."),
+        ("turn the online bookings off for the weekend", "turn off the online bookings for the weekend"),
+        ("turn the sale on table 4 off", "turn off the sale on table 4"),
+        ("turn the bookings off and switch the kitchen app on", "turn off the bookings and switch on the kitchen app"),
+    ],
+)
+def test_a_switch_said_around_what_it_switches_reads_as_said_in_a_row(apart, in_a_row):
+    """English puts what «turn off» and «switch on» switch between the verb and its particle as often as after them:
+    «turn the bookings off» asks and names what «turn off the bookings» does, and «turn» names no shift (ERPlora/live#69;
+    before, it asked for nothing and its «turn» was the «turno»)."""
+    heard = assistant.asked([apart])
+    assert heard == assistant.asked([in_a_row])
+    assert not any("turn" in concept or "off" in concept for concept in heard.concepts), heard.concepts
+
+
+@pytest.mark.parametrize(
+    ("said", "actions"),
+    [
+        ("turn them back on", SWITCHING_ON),
+        ("turn it off", SWITCHING_OFF),
+        # What may come after the particle and is no thing it is said of: another clause, when, how or a request.
+        ("turn the bookings off and close the till", SWITCHING_OFF),
+        ("switch the kitchen app on then print the menu", SWITCHING_ON),
+        ("switch the alerts on also on Sundays", SWITCHING_ON),
+        ("turn the bookings off but keep the waiting list", SWITCHING_OFF),
+        ("turn the reminders off or send them later", SWITCHING_OFF),
+        ("turn the bookings off so nobody books on Monday", SWITCHING_OFF),
+        ("switch the kitchen app on if it is off", SWITCHING_ON),
+        ("turn the reminders off when the shop is closed", SWITCHING_OFF),
+        ("switch the bookings off while we are on holiday", SWITCHING_OFF),
+        ("turn the kitchen app off because we close the kitchen", SWITCHING_OFF),
+        ("turn the bookings off until Monday", SWITCHING_OFF),
+        ("switch the reminders off till next week", SWITCHING_OFF),
+        ("switch the kitchen app on at nine", SWITCHING_ON),
+        ("turn the bookings off from tomorrow", SWITCHING_OFF),
+        ("switch the reminders on in the evening", SWITCHING_ON),
+        ("turn the bookings off on Sundays", SWITCHING_OFF),
+        ("turn the reminders off during August", SWITCHING_OFF),
+        ("switch the bookings off since nobody uses them", SWITCHING_OFF),
+        ("turn the bookings off before the holidays", SWITCHING_OFF),
+        ("switch the kitchen app on after lunch", SWITCHING_ON),
+        ("switch the reminders on by default", SWITCHING_ON),
+        ("turn the kitchen app on now", SWITCHING_ON),
+        ("switch the reminders on again", SWITCHING_ON),
+        ("turn the bookings off please", SWITCHING_OFF),
+        ("switch the online bookings off today", SWITCHING_OFF),
+        ("turn the kitchen app off tonight", SWITCHING_OFF),
+        ("switch the bookings on tomorrow", SWITCHING_ON),
+        ("turn the reminders off too", SWITCHING_OFF),
+        ("switch the kitchen app on already", SWITCHING_ON),
+        ("turn the bookings off first", SWITCHING_OFF),
+        ("switch the reminders back on later", SWITCHING_ON),
+        ("turn the kitchen app on right now", SWITCHING_ON),
+    ],
+)
+def test_a_switch_said_apart_from_its_particle_asks_for_its_action(said, actions):
+    """«Turn … off», «switch … on»: the particle after what is switched asks what it asks said in a row, at the end of
+    the sentence or before a word that cannot be what it is said of (ERPlora/live#69)."""
+    assert actions <= assistant.asked([said]).verbs
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        "turn the page",
+        "switch tables",
+        "switch me to English",
+        "switch the kitchen printer to 58 mm paper",
+        # An «on» or an «off» before what it is said of says where or when, not what is switched.
+        "switch the order on table 4 to table 6",
+        "switch Ana's shift on Monday with Marta",
+        "switch the wine on the bill for a beer",
+        # Nor is a particle of another command.
+        "switch the order to table 6 and leave the lights on",
+    ],
+)
+def test_a_turn_or_a_switch_with_no_particle_of_its_own_switches_nothing(said):
+    """«Turn the page», «switch tables» or «switch the order on table 4 to table 6» turn nothing on or off: only the
+    verb's own particle makes it a switch (ERPlora/live#69)."""
+    assert assistant.asked([said]).verbs.isdisjoint(SWITCHING_ON | SWITCHING_OFF)
 
 
 def test_a_name_someone_will_put_is_not_put_by_the_verb():
@@ -176,6 +266,9 @@ def test_a_name_someone_will_put_is_not_put_by_the_verb():
         ("switch off the summer price list", "en", "pricing.price_list.deactivate"),
         ("turn on the summer price list again", "en", "pricing.price_list.activate"),
         ("switch on the summer price list again", "en", "pricing.price_list.activate"),
+        # With what is switched between the verb and its particle (ERPlora/live#69).
+        ("turn the summer price list off", "en", "pricing.price_list.deactivate"),
+        ("switch the summer price list on again", "en", "pricing.price_list.activate"),
         # «Apaga» and «enciende» as «desactiva» and «activa» (ERPlora/live#79).
         ("apaga la tarifa de verano", "es", "pricing.price_list.deactivate"),
         ("enciende otra vez la tarifa de verano", "es", "pricing.price_list.activate"),
@@ -208,6 +301,8 @@ SWITCHED_BY_NAME = [*APPROVED_OR_SWITCHED, tool("sale.sale.list", "Lists the sal
         ("switch off the sales", "en", "base.app.disable"),
         ("turn on the sales", "en", "base.app.enable"),
         ("switch on the sales", "en", "base.app.enable"),
+        ("turn the sales off", "en", "base.app.disable"),
+        ("switch the sales on again", "en", "base.app.enable"),
         ("apaga las ventas", "es", "base.app.disable"),
         ("enciende las ventas", "es", "base.app.enable"),
         # With words between the verb and the app, or the app named in the sentence before: still the app's switch.
@@ -752,6 +847,9 @@ def concepts_of(*said: str) -> frozenset[frozenset[str]]:
         ("desactiva los recordatorios y lista las citas", {concepts_of("recordatorios")}),
         ("apaga la cocina y enciende la barra", {concepts_of("cocina"), concepts_of("barra")}),
         ("turn on the reminders and turn off the bookings", {concepts_of("reminders"), concepts_of("bookings")}),
+        # With what is switched between the verb and its particle (ERPlora/live#69).
+        ("turn the appointment reminders off", {concepts_of("appointment", "reminders")}),
+        ("switch the reminders of the bookings on", {concepts_of("reminders")}),
         # The pronouns of a command switch too; what a switch is not asked to do turns nothing off.
         ("desactívalos ya, los recordatorios", set()),
         ("cambia la cita sin desactivar los recordatorios", set()),
