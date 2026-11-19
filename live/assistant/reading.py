@@ -4,6 +4,9 @@ import unicodedata
 from collections.abc import Collection, Iterable, Mapping
 from typing import NamedTuple
 
+from live.assistant.naming import (
+    puts_name,
+)
 from live.assistant.stemming import (
     _concept,
     _goes_on,
@@ -23,7 +26,6 @@ from live.assistant.vocabulary import (
     _DETERMINERS,
     _FILLERS,
     _FOR_WHAT,
-    _FOUND_BY,
     _FUTURE,
     _GREETINGS,
     _HAVE,
@@ -40,7 +42,6 @@ from live.assistant.vocabulary import (
     _OTHER_CLAUSE,
     _OUT,
     _OUTFLOW,
-    _OWN_OBJECT,
     _PARTICIPLE,
     _PHRASE_NAMES,
     _PHRASES,
@@ -481,9 +482,9 @@ def _without_yes(sentences: list[list[str]]) -> list[list[str]]:
 
 def _split_naming(sentences: list[list[str]]) -> set[tuple[str, str]]:
     """The naming phrases (``_NAMING``) of ``sentences`` said with words between their verb and the name («pon al
-    dispositivo el nombre»; its pronouns too: «cámbiale a la tablet el nombre»), each with its verb as said; never of a
-    verb with its own object (``_OWN_OBJECT``: «cambia el precio del café muestra el nombre del cliente»,
-    ERPlora/live#59), a name that finds the thing (``_FOUND_BY``: «con el nombre») nor one after another command starts
+    dispositivo el nombre»; its pronouns too: «cámbiale a la tablet el nombre»), each with its verb as said; never a
+    name the verb does not put (``puts_name``: «con el nombre», «cambia el precio del café muestra el nombre del
+    cliente», «cámbiale al café el precio ni el nombre»), nor one after another command starts
     (``_starts_command``: «cambia el precio y dime el nombre del cliente», ERPlora/live#57) or after a verb that says
     what is not to be done (``_unasked``: «ponle otro precio sin cambiarle el nombre», ERPlora/live#60), which puts no
     name either («sin ponerle al menú el nombre»)."""
@@ -491,8 +492,7 @@ def _split_naming(sentences: list[list[str]]) -> set[tuple[str, str]]:
     for words in sentences:
         for at, word in enumerate(words):
             head = word if word in _NAMING else _unclitic(word)
-            own_object = at + 1 < len(words) and words[at + 1] in _OWN_OBJECT
-            if head not in _NAMING or _unasked(words, at) or _foretold(words, at) or own_object:
+            if head not in _NAMING or _unasked(words, at) or _foretold(words, at):
                 continue
             end = next(
                 (later for later in range(at + 1, len(words)) if _starts_command(words, later) or _unasked(words, later)),
@@ -501,7 +501,7 @@ def _split_naming(sentences: list[list[str]]) -> set[tuple[str, str]]:
             for rest in _NAMING[head]:
                 size = len(rest)
                 if any(
-                    tuple(words[later : later + size]) == rest and words[later - 1] not in _FOUND_BY
+                    tuple(words[later : later + size]) == rest and puts_name(words, at, later)
                     for later in range(at + 2, end - size + 1)
                 ):
                     found.add((word, " ".join((head, *rest))))

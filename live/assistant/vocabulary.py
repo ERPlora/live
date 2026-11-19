@@ -118,9 +118,9 @@ for _phrase in VERBS["rename"]:
         _NAMING[_head] = (*_NAMING.get(_head, ()), tuple(_rest))
 #: The words before a name that make it what a thing is found by, not the name put on it («con el nombre»).
 _FOUND_BY = frozenset({"con", "por", "de", "del", "bajo", "with", "by", "of", "under"})
-#: The articles that open a verb's own object right after it («cambia el precio…», «change the price…»): such a verb
-#: puts no name said later. What a name said apart is put on goes after «a», «al», «for», «on» («ponle a la lista el
-#: nombre»).
+#: The articles that open a verb's own object, right after it or after what it is done to («cambia el precio…»,
+#: «cámbiale al café el precio…», «change for the coffee the price…»): such a verb puts no name said later. What a name
+#: said apart is put on goes after «a», «al», «for», «on» (``_DONE_TO``: «ponle a la lista el nombre»).
 _OWN_OBJECT = frozenset({"el", "la", "los", "las", "the"})
 #: The word after which a verb's infinitive says what is not to be done («sin cambiar los pedidos», «sin borrarlo»), as
 #: English says it with «without» and a form ``VERBS`` has not («without changing»): no action asked (ERPlora/live#60).
@@ -233,6 +233,17 @@ _DETERMINERS = frozenset({"el", "la", "su", "mi", "tu", "un", "otro", "otra", "o
 #: «la subida de precio»).
 _WHERE = frozenset({"en", "de", "del", "a", "al"})
 _WITH_ITS_ARTICLE = frozenset({"del", "al"})
+#: The words after which an article opens what a command is done to, not the verb's own object: where the thing is
+#: («cámbiale a la tablet en la barra…», «… tras la barra…», «change on the menu of the terrace…», «… behind the bar…»)
+#: or another thing joined to it or left out («ponle a la mesa y la silla…», «… a todas menos la 3…»); «para», «for»,
+#: «con» and «and» name nothing (``STOP_WORDS``) either.
+_DONE_TO = frozenset(
+    {*_WHERE, "on", "in", "at", "of"}
+    | {"sobre", "tras", "bajo", "ante", "desde", "hasta", "hacia", "entre", "contra", "y", "e", "o"}
+    | {"to", "by", "near", "behind", "under", "over", "above", "below", "beneath", "beside", "inside", "outside"}
+    | {"between", "across", "through", "around", "along", "against", "within", "upon", "toward", "onto", "past", "or"}
+    | {"menos", "salvo", "excepto", "except", "both", "only", "just"}
+)
 #: Words of ``VERBS`` that name a thing, not an action of it: no verb's stem.
 _NOT_VERBS = frozenset({"alta", "nuevo", "nueva", "new", "datos", "detalle", "detail"})
 #: Verbs whose stem joins forms ``VERBS`` does not list, and the irregular ones («haz» is «hacer», «di» is «decir»).
