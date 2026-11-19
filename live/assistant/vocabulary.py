@@ -109,7 +109,8 @@ VERBS = {
     "assign": ("asigna", "asignar", "assign"),
     "archive": ("archiva", "archivar", "archive"),
     "redeem": ("canjea", "canjear", "gasta", "gastar", "consume", "consumir", "redeem"),
-    "hold": ("reten", "retener", "aparta", "apartar", "hold"),
+    # «Aparta» is left out: it also sets a table aside («apártame la mesa 3»).
+    "hold": ("reten", "retener", "hold"),
     "release": ("libera", "liberar", "suelta", "soltar", "release"),
 }
 #: The words of a verb's phrase that still name what they name: «cambia el nombre» changes a name, «da de baja» names
@@ -154,6 +155,9 @@ _TO_WHOM = frozenset({"me", "te", "le", "nos", "les"})
 _OTHER_CLAUSE = frozenset({"si", "que", "porque", "pero", "cuando"})
 #: The words after which a verb says what someone will do, not what is asked («I'll approve it», «we will open»).
 _FUTURE = frozenset({"ll", "will"})
+#: The words of ``VERBS`` that also name a thing or say what it is («the empty check», «la venta suelta», «drop the hold
+#: on table 6», «the new release»): they ask for their action only where a command starts (ERPlora/live#67).
+_LEADING = frozenset({"empty", "clear", "hold", "release", "vacia", "suelta"})
 #: The words after which a thing is named for what another is («para las próximas ventas», «for the new sales»): to the
 #: end of their sentence, it is not what a command switches (ERPlora/live#50).
 _FOR_WHAT = frozenset({"para", "for"})
@@ -177,10 +181,11 @@ _CHANGES = frozenset({"update", "set"})
 #: The actions whose words also ask ``update``, for what has none of its own («ordena el menú»): where a tool does the
 #: action itself, it comes before the change of the same thing.
 _BEFORE_UPDATE = frozenset({"reorder"})
-#: A word of an action → the actions it does said another way: the state it sets (``set_enabled``) turns a thing on and
-#: off (ERPlora/live#53), and emptying a thing (``clear``) takes what it holds away, as «borra el enrutado de los zumos»
-#: says (ERPlora/live#67).
-_SAID_OTHERWISE = {"enabled": frozenset({"enable", "disable"}), "clear": frozenset({"delete", "remove"})}
+#: The state an action sets (``set_enabled``) → the actions it does: it turns a thing on and off (ERPlora/live#53).
+_SET_STATES = {"enabled": frozenset({"enable", "disable"})}
+#: Emptying a thing (``clear``) takes away what it holds, as «borra el enrutado de los zumos» says: only of what the
+#: command acts on, never of a thing something is taken out of («quita el vino de la cesta»; ERPlora/live#67).
+_EMPTYING = {"clear": frozenset({"delete", "remove"})}
 #: What a word that notes something down asks for («anota», «apunta»: ``VERBS``): writing it down, adding it to what
 #: there is, or writing on what is named (``_WRITTEN_ON``: «anota en la cita de Ana…»), never on a setting a word names
 #: in passing («anota una salida de 15 € de la caja»: no setting of the till; ERPlora/live#88).

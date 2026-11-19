@@ -23,8 +23,9 @@ from live.assistant.tools import (
 from live.assistant.vocabulary import (
     _BEFORE_UPDATE,
     _CHANGES,
+    _EMPTYING,
     _REGISTERS,
-    _SAID_OTHERWISE,
+    _SET_STATES,
     _TURNS,
     HOWTO_POINTS,
     READ_VERBS,
@@ -72,13 +73,21 @@ _QUALIFIERS = frozenset({"for", "by", "from", "to", "of", "in", "with"})
 @lru_cache(maxsize=4_096)
 def _acts(op: Operation) -> frozenset[str]:
     """The words of ``op``'s action (``create_folder`` → «create», «folder») and what they do said another way: the
-    state it sets turns a thing on and off and emptying takes away (``_SAID_OTHERWISE``: ``set_enabled``, ``clear``),
-    and a change that takes a name renames («renombra Bienvenida»: ``flow.flow.update``; ERPlora/live#53)."""
+    state it sets turns a thing on and off (``_SET_STATES``: ``set_enabled``), emptying takes away (``_emptied``) and a
+    change that takes a name renames («renombra Bienvenida»: ``flow.flow.update``; ERPlora/live#53)."""
     words = frozenset(op.name.split(".")[2].split("_"))
-    does = {verb for word in words for verb in _SAID_OTHERWISE.get(word, ())}
+    does = {verb for word in words for verb in _SET_STATES.get(word, ())} | _emptied(op)
     if "update" in words and "name" in getattr(op.input, "model_fields", {}):
         does.add("rename")
     return words | does
+
+
+@lru_cache(maxsize=4_096)
+def _emptied(op: Operation) -> frozenset[str]:
+    """What ``op``'s action does by emptying a thing (``_EMPTYING``), besides its own words: asked only of what the
+    command acts on."""
+    words = frozenset(op.name.split(".")[2].split("_"))
+    return frozenset(verb for word in words for verb in _EMPTYING.get(word, ())) - words
 
 
 @lru_cache(maxsize=4_096)
@@ -244,6 +253,8 @@ def _relevant(  # noqa: C901, PLR0913, PLR0915
         app, entity, action = op.name.split(".")
         named_app, named_entity = app_words(app, language), _stems_of(entity.replace("_", " "))
         acted_on, doing, qualified = _parts(action)
+        # A word that names the tool's thing is not also its action named («asignaciones», «assigned»: an assignment).
+        doing -= named_entity
         acts = _acts(op)
         # A switch of the action asked whose asks name what is turned on or off, and one of the apps said with it if
         # any, switches that thing.
@@ -280,7 +291,7 @@ def _relevant(  # noqa: C901, PLR0913, PLR0915
         points = places + named(_stems_of(description(op))) + named(asks(op)) + takes
         matched = verbs.intersection(acts)
         if not aimed:
-            matched -= _REGISTERS
+            matched -= _REGISTERS | _emptied(op)
         if matched:
             if thing:
                 points += 9 + (action in verbs) + (action in verbs & _BEFORE_UPDATE) + 3 * aimed

@@ -24,6 +24,7 @@ KEPT_AND_FREED = [
     tool("cart_checkout.cart.delete", "Delete a shopping cart in any status."),
     tool("cart_checkout.cart.get", "Get one shopping cart with all its lines.", "query"),
     tool("cart_checkout.cart.list", "List the shopping carts with their status.", "query"),
+    tool("cart_checkout.item.remove", "Remove a line from a shopping cart."),
     tool("kitchen.routing.clear", "Take away where a product or a category goes: from now on it goes by its category."),
     tool("kitchen.routing.list", "Which products and categories go to which station.", "query"),
     tool("kitchen.routing.set", "Send a product or a category of the catalogue to a station."),
@@ -42,7 +43,7 @@ KEPT_AND_FREED = [
     tool("service.session.get", "Get one session of a voucher sold: the voucher, its owner, the service.", "query"),
     tool("service.session.hold", "Reserve one session of a customer's voucher for a line of an open check."),
     tool("service.session.release", "Give back a session held for a line that is undone."),
-    tool("table.hold.place", "Set a table aside by hand for a party."),
+    tool("table.hold.place", "Set a table aside by hand for a party.", asks={"es": ("aparta la mesa 6 para Pedro",)}),
     tool("table.hold.release", "Release a table set aside: its name is forgotten."),
     *NOISE,
 ]
@@ -78,7 +79,6 @@ HUB_WORDS = (
         ("hay que canjear una sesión del bono de Ana", "redeem"),
         ("redeem a session of Ana's voucher", "redeem"),
         ("retén la sesión de Ana", "hold"),
-        ("aparta una sesión del bono de Ana", "hold"),
         ("hay que retener una sesión del bono de Ana", "hold"),
         ("hold Ana's session", "hold"),
         ("libera la sesión de Ana", "release"),
@@ -142,3 +142,79 @@ def test_deleting_a_thing_that_can_be_emptied_still_deletes_it(asked, language, 
     said another way."""
     names = ranked(KEPT_AND_FREED, asked, language, synonyms=HUB_WORDS)
     assert names[0] == first, names[:4]
+
+
+@pytest.mark.parametrize(
+    ("said", "action"),
+    [
+        ("delete that empty check", "clear"),
+        ("abre una cuenta vacía en la mesa 4", "clear"),
+        ("cobra la venta suelta de la barra", "release"),
+        ("drop the hold on table 6", "hold"),
+        ("free the session Pilar's voucher had on hold", "hold"),
+        ("list the roles with how many people hold each", "hold"),
+        ("guarda la mesa 5 para Ana con referencia QA-HOLD-2", "hold"),
+        ("publish the new release of the app", "release"),
+        ("the routing is clear now, close the station", "clear"),
+    ],
+)
+def test_a_word_that_also_names_or_describes_asks_nothing_where_no_command_starts(said, action):
+    """«Empty», «clear», «hold», «release», «vacía» and «suelta» are also what a thing is or the thing itself («the empty
+    check», «la venta suelta», «the hold on table 6»): they ask for their action only where a command starts."""
+    assert action not in assistant.asked([said]).verbs
+
+
+@pytest.mark.parametrize(
+    ("said", "action"),
+    [
+        ("please empty Carmen's cart", "clear"),
+        ("can you hold Ana's session?", "hold"),
+        ("hola, vacía la cesta de Carmen", "clear"),
+        ("cobra la mesa 4 y suelta la sesión del bono de Ana", "release"),
+        ("charge table 4 and release Ana's session", "release"),
+        ("clear the routing of the juices", "clear"),
+    ],
+)
+def test_such_a_word_asks_for_its_action_where_a_command_starts(said, action):
+    """First, after the words of a request or a greeting, or after «y», «and»: there it is the command."""
+    assert action in assistant.asked([said]).verbs
+
+
+def test_setting_a_table_aside_is_not_holding_a_voucher_session():
+    """«Aparta» sets a table aside (``table.hold.place``) as much as it holds a session of a voucher: it asks for no
+    hold, and the table's tool comes first by what people say to ask for it."""
+    assert "hold" not in assistant.asked(["apártame la mesa 3 para los García esta noche"]).verbs
+    names = ranked(KEPT_AND_FREED, "apártame la mesa 3 para los García esta noche", "es", synonyms=HUB_WORDS)
+    assert names[0] == "table.hold.place", names[:4]
+
+
+@pytest.mark.parametrize(
+    ("asked", "language"),
+    [
+        ("¿qué tiene asignado Raquel?", "es"),
+        ("¿a quién tenemos asignadas las mechas?", "es"),
+        ("what is Sonia assigned to?", "en"),
+    ],
+)
+def test_a_word_that_names_the_assignment_does_not_also_name_its_assigning(asked, language):
+    """«Asignado», «assigned» name an assignment, the thing of every tool of ``service.assignment``: its stem is the one
+    of the action ``assign`` too, and it counts once, as the thing, so a question about it reads first."""
+    names = ranked(KEPT_AND_FREED, asked, language, synonyms=HUB_WORDS)
+    assert names.index("service.assignment.list") < names.index("service.assignment.assign"), names[:4]
+
+
+@pytest.mark.parametrize(
+    ("asked", "language"),
+    [
+        ("elimina Ejemplo junto con todas sus líneas", "es"),
+        ("quita el vino de la cesta de Nuria", "es"),
+        ("remove the wine from Nuria's basket", "en"),
+    ],
+)
+def test_taking_something_away_empties_only_what_is_taken_away(asked, language):
+    """Taking away is emptying only the thing taken away («borra el enrutado»): something taken out of a cart («quita
+    el vino de la cesta») or a thing no tool empties takes nothing away from a cart, and its delete or remove comes
+    first."""
+    names = ranked(KEPT_AND_FREED, asked, language, synonyms=HUB_WORDS)
+    taking_away = [name for name in names if name.endswith((".delete", ".remove"))]
+    assert names.index(taking_away[0]) < names.index("cart_checkout.cart.clear"), names[:6]
