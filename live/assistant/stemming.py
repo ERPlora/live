@@ -5,6 +5,7 @@ from collections.abc import Iterable
 from functools import lru_cache
 
 from live.assistant.vocabulary import (
+    _AFTER_PARTICLE,
     _APART_PREFIXES,
     _APART_WORDS,
     _BREAK_KEPT,
@@ -16,6 +17,10 @@ from live.assistant.vocabulary import (
     _NOR,
     _NOT,
     _NOT_COMMANDS,
+    _NOT_PARTICLES,
+    _OWN_PARTICLES,
+    _SPLIT,
+    _THEN,
     _VERB_S_ENDINGS,
     _VERB_WORDS,
     _WHOLE,
@@ -83,15 +88,44 @@ def stem(word: str) -> str:  # noqa: C901
     return word[:5]
 
 
+def _ends_switch(words: list[str], head: str, at: int) -> bool:
+    """Whether ``words[at]`` is the particle of the switch ``head`` said before it (``_SPLIT``): one that is not
+    of the word before it (``_NOT_PARTICLES``: «Ana's time off», «the shift Marta is on») and ends the sentence or comes
+    before a word that cannot be what it is said of (``_AFTER_PARTICLE``: «switch the kitchen app on now», never
+    «switch the order on table 4 to table 6»)."""
+    return (
+        words[at] in _SPLIT[head]
+        and (words[at - 1], words[at]) not in _NOT_PARTICLES
+        and (at + 1 == len(words) or words[at + 1] in _AFTER_PARTICLE)
+    )
+
+
+def _in_a_row(words: list[str]) -> list[str]:
+    """``words`` with each switch said apart from its particle (``_ends_switch``: «turn the bookings off») said in a row,
+    as ``VERBS`` has it («turn off the bookings»): never of a verb with its own particle right after it
+    (``_OWN_PARTICLES``: «turn down»), nor past a word that starts another command (``_THEN``: «switch the order to
+    table 6 and leave the lights on»)."""
+    for at, word in enumerate(words):
+        if word not in _SPLIT or (at + 1 < len(words) and words[at + 1] in _OWN_PARTICLES):
+            continue
+        for later in range(at + 1, len(words)):
+            if words[later] in _THEN:
+                break
+            if _ends_switch(words, word, later):
+                return [*words[: at + 1], words[later], *words[at + 1 : later], *_in_a_row(words[later + 1 :])]
+    return words
+
+
 def _sentences(text: str) -> list[list[str]]:
     """The plain words of ``text``, by sentence or quote (``_BREAK``), a noun at the start that is a command
-    (``_COMMANDS``) said as its verb. A comma before a ``_NOR`` that goes on from a ``_WITHOUT`` of the sentence before
-    (``_goes_on``) ends none: «sin tocar caja, ni cambiar importes» is «sin tocar caja ni cambiar importes»
-    (ERPlora/live#81); with nothing for the «ni» to go on from («cámbiale el precio, ni el nombre»), it does."""
+    (``_COMMANDS``) said as its verb and a switch said apart from its particle said in a row (``_in_a_row``). A comma
+    before a ``_NOR`` that goes on from a ``_WITHOUT`` of the sentence before (``_goes_on``) ends none: «sin tocar caja,
+    ni cambiar importes» is «sin tocar caja ni cambiar importes» (ERPlora/live#81); with nothing for the «ni» to go on
+    from («cámbiale el precio, ni el nombre»), it does."""
     found: list[list[str]] = []
     pieces = _BREAK_KEPT.split(text)
     for at in range(0, len(pieces), 2):
-        words = _WORD.findall(_plain(pieces[at]))
+        words = _in_a_row(_WORD.findall(_plain(pieces[at])))
         if words and words[0] in _COMMANDS:
             verb, before = _COMMANDS[words[0]]
             if len(words) > 1 and words[1] in before:
