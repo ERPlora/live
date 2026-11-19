@@ -24,6 +24,7 @@ from live.assistant.vocabulary import (
     _BEFORE_UPDATE,
     _CHANGES,
     _REGISTERS,
+    _SET_STATES,
     _TURNS,
     HOWTO_POINTS,
     READ_VERBS,
@@ -70,8 +71,14 @@ _QUALIFIERS = frozenset({"for", "by", "from", "to", "of", "in", "with"})
 
 @lru_cache(maxsize=4_096)
 def _acts(op: Operation) -> frozenset[str]:
-    """The words of ``op``'s action (``create_folder`` → «create», «folder»)."""
-    return frozenset(op.name.split(".")[2].split("_"))
+    """The words of ``op``'s action (``create_folder`` → «create», «folder») and what they do said another way: the
+    state it sets turns a thing on and off (``_SET_STATES``: ``set_enabled``) and a change that takes a name renames
+    («renombra Bienvenida»: ``flow.flow.update``; ERPlora/live#53)."""
+    words = frozenset(op.name.split(".")[2].split("_"))
+    does = {verb for word in words for verb in _SET_STATES.get(word, ())}
+    if "update" in words and "name" in getattr(op.input, "model_fields", {}):
+        does.add("rename")
+    return words | does
 
 
 @lru_cache(maxsize=4_096)
@@ -113,7 +120,8 @@ def relevant(  # noqa: PLR0913
     names the action itself, 1 when it names what the action says it is for (``list_for_customer``), and 1 for each of
     its description, what people say to ask for it (``asks_of``, in any language) and the data its input takes.
 
-    The action asked (``VERBS``) of a thing the question names adds 9, 1 more when the tool's action is that verb
+    The action asked (``VERBS``) of a thing the question names, or another way of saying it (``_acts``: «activa» is
+    the ``set_enabled`` of an automation), adds 9, 1 more when the tool's action is that verb
     itself (``create``, before ``bulk_create``), 1 more again when its words ask ``update`` only for what has none of
     its own (``_BEFORE_UPDATE``: ``reorder``, before ``update``) and 3 more when that thing is what the command acts on
     (``Asked.objects``: «crea la carpeta Facturas» creates a folder, not an invoice); setting a device up
@@ -221,7 +229,7 @@ def _relevant(  # noqa: C901, PLR0913, PLR0915
         said_by: dict[frozenset[str], set[tuple[str, str]]] = {}
         for op in tools.values():
             app, entity, action = op.name.split(".")
-            if not _TURNS.isdisjoint(verbs.intersection(action.split("_"))):
+            if not _TURNS.isdisjoint(verbs.intersection(_acts(op))):
                 its = asks(op)
                 for rest, _ in unnamed:
                     for concept in rest:
@@ -236,7 +244,7 @@ def _relevant(  # noqa: C901, PLR0913, PLR0915
         app, entity, action = op.name.split(".")
         named_app, named_entity = app_words(app, language), _stems_of(entity.replace("_", " "))
         acted_on, doing, qualified = _parts(action)
-        acts = action.split("_")
+        acts = _acts(op)
         # A switch of the action asked whose asks name what is turned on or off, and one of the apps said with it if
         # any, switches that thing.
         by_asks: set[frozenset[str]] = set()
