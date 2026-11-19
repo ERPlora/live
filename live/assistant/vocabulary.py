@@ -233,9 +233,9 @@ _DETERMINERS = frozenset({"el", "la", "su", "mi", "tu", "un", "otro", "otra", "o
 #: «la subida de precio»).
 _WHERE = frozenset({"en", "de", "del", "a", "al"})
 _WITH_ITS_ARTICLE = frozenset({"del", "al"})
-#: The words after which an article opens what a command is done to, not the verb's own object («cámbiale al café…»,
-#: «change for the coffee…», «change on the menu of the terrace…»).
-_DONE_TO = frozenset({*_WHERE, *_FOUND_BY, "para", "for", "on", "to", "in", "at"})
+#: The words after which an article opens what a command is done to, not the verb's own object («cámbiale a la tablet
+#: en la barra…», «change on the menu of the terrace…»); «para», «for» and «con» name nothing (``STOP_WORDS``) either.
+_DONE_TO = frozenset({*_WHERE, "on", "in", "at", "of"})
 #: Words of ``VERBS`` that name a thing, not an action of it: no verb's stem.
 _NOT_VERBS = frozenset({"alta", "nuevo", "nueva", "new", "datos", "detalle", "detail"})
 #: Verbs whose stem joins forms ``VERBS`` does not list, and the irregular ones («haz» is «hacer», «di» is «decir»).

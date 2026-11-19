@@ -51,7 +51,12 @@ def test_no_verb_said_after_the_object_makes_the_name_a_rename(template):
 @pytest.mark.parametrize(
     "said",
     [
-        # What it is done to is said with how many, or with a number.
+        # What it is done to goes on with where it is or what it is of.
+        "cámbiale a la tablet en la barra el nombre",
+        "change in the bar tablet the name to Bar",
+        "change for the tablet at the bar the name to Bar",
+        "change for the menu of the terrace the name to Summer",
+        # Or it is said with how many, or with a number.
         "ponle a todas las mesas el nombre «Terraza»",
         "change for all the tables the name to Terrace",
         "cámbiale a la mesa 4 de la terraza el nombre",
