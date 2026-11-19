@@ -217,6 +217,14 @@ def test_the_tool_that_renames_comes_before_a_change_that_takes_a_name(asked, la
     assert names[:2] == ["base.device.rename", "printing.device.update"], names[:4]
 
 
+def test_a_tool_that_takes_a_name_without_changing_it_renames_nothing():
+    """Setting a device up takes its name too, and is no rename: it stays behind the change."""
+    setup = tool("printing.device.create", "Set a device up to print, with its name and its printers.",
+                 input=takes("name", "printers"))
+    names = ranked([*DEVICES, setup], "renombra esta tablet como Barra", "es")
+    assert names.index("printing.device.update") < names.index("printing.device.create"), names[:4]
+
+
 def test_a_change_that_takes_no_name_renames_nothing():
     """It ranks as the other tools of its thing, by name."""
     names = offered("renombra Bienvenida como «Primera visita»", "es")
