@@ -118,6 +118,9 @@ def test_the_words_of_one_thing_name_it_in_either_language(said, english):
         # A computer is no putting in order nor an order: all of them cut to «orden» (ERPlora/live#61).
         ("ordenador", "ordena"), ("ordenadores", "ordenar"), ("ordenador", "orden"), ("ordenador", "ordenado"),
         ("ordenadores", "ordenadas"),
+        # To confirm is no setting up: «confirma» and «configura» both cut to «confi» (ERPlora/live#68).
+        ("confirma", "configura"), ("confirmación", "configuración"), ("confirm", "configure"),
+        ("confírmalo", "ajustes"), ("confirmation", "settings"), ("confirmed", "setup"),
     ],
 )
 def test_words_of_two_things_are_never_one_stem(one, other):
@@ -150,6 +153,7 @@ def test_words_of_two_things_are_never_one_stem(one, other):
         ("comprueba compruebo comprobar comprobando comprobado comprobación comprobante compruébalo", "comprobar"),
         ("recordatorio recordatorios", "recordatori"),
         ("ordenador ordenadores", "ordenador"),
+        ("confirma confirmar confirmo confírmalo confirmación confirmada confirm confirmed confirmation", "confirm"),
     ],
 )
 def test_the_forms_of_a_word_kept_apart_still_join(words, stem):
@@ -164,6 +168,8 @@ def test_the_forms_of_a_word_kept_apart_still_join(words, stem):
         ("existencias", "stock"), ("existencia", "inventario"),
         ("producto", "product"), ("productos", "products"), ("artículo", "product"),
         ("compra", "purchase"), ("compras", "purchases"), ("comprar", "compro"),
+        # Setting up keeps naming the settings once confirming leaves them (ERPlora/live#68).
+        ("configura", "ajustes"), ("configuración", "settings"), ("configure", "setup"), ("configurar", "setting"),
     ],
 )
 def test_the_words_a_word_kept_apart_was_cut_like_still_name_one_thing(one, other):
@@ -217,6 +223,49 @@ def test_sealing_existing_production_and_checking_name_no_sale_stock_product_or_
     named = assistant.asked([said]).concepts
     for thing in ("venta", "existencias", "producto", "compra"):
         assert assistant._concept(thing) not in named, thing
+
+
+@pytest.mark.parametrize(
+    ("said", "language"),
+    [
+        ("confirma la reserva de Ana", "es"), ("confírmame la cita de las cinco", "es"),
+        ("la confirmación de la cita de Ana", "es"), ("¿está confirmada la reserva de Ana?", "es"),
+        ("confirm Ana's booking", "en"), ("the confirmation of Ana's appointment", "en"),
+        ("is Ana's booking confirmed?", "en"),
+    ],
+)
+def test_confirming_names_no_settings(said, language):
+    assert assistant._concept("ajustes") not in assistant.asked([said]).concepts
+
+
+@pytest.mark.parametrize(
+    ("said", "language"),
+    [("configura las reservas", "es"), ("la configuración de las citas", "es"), ("set up the bookings", "en")],
+)
+def test_setting_up_names_no_confirmation(said, language):
+    assert assistant._concept("confirma") not in assistant.asked([said]).concepts
+
+
+@pytest.mark.parametrize(
+    ("said", "language"),
+    [("confirma la reserva de Ana", "es"), ("confirm Ana's booking", "en"), ("confirm the reservation", "en")],
+)
+def test_confirming_a_booking_offers_its_settings_after_the_booking(said, language):
+    names = ranked(APPROVED_OR_SWITCHED, said, language)
+    assert names[0] == "reservation.reservation.confirm", names
+    assert names.index("reservation.settings.update") > names.index("reservation.reservation.list"), names
+
+
+@pytest.mark.parametrize(
+    ("said", "language"),
+    [("configura las reservas", "es"), ("cambia la configuración de las reservas", "es")],
+)
+def test_setting_up_the_bookings_offers_no_confirmation_before_the_booking(said, language):
+    """Setting up asks for a write: confirming a booking, or an appointment, is no closer to it than cancelling one."""
+    names = ranked(APPROVED_OR_SWITCHED, said, language)
+    assert names[0] == "reservation.settings.update", names
+    for confirm in ("reservation.reservation.confirm", "appointment.appointment.confirm"):
+        assert names.index(confirm) > names.index("reservation.reservation.cancel"), names
 
 
 ATTENDANCE_AND_CUSTOMER = [
