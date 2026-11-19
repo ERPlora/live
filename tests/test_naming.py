@@ -69,6 +69,32 @@ def test_the_name_put_after_whom_it_is_done_to_still_renames(said):
     assert {"rename", "set", "update"} <= assistant.asked([said]).verbs
 
 
+#: The words that say where the thing is, join another thing to it or leave one out, before the name put on it.
+PLACED_ES = [
+    *("sobre", "tras", "bajo", "ante", "desde", "hasta", "hacia", "entre", "contra", "y", "e", "o"),
+    *("menos", "salvo", "excepto"),
+]
+PLACED_EN = [
+    *("to", "by", "near", "behind", "under", "over", "above", "below", "beneath", "beside", "inside", "outside"),
+    *("between", "across", "through", "around", "along", "against", "within", "upon", "toward", "onto", "past", "or"),
+    *("except", "both", "only", "just"),
+]
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        *(f"ponle al menú {word} la barra el nombre «Verano»" for word in PLACED_ES),
+        *(f"change for the menu {word} the bar the name to Summer" for word in PLACED_EN),
+    ],
+)
+def test_the_name_put_on_a_thing_said_with_where_it_is_still_renames(said):
+    """«Sobre la barra» goes on saying which menu: its article opens no object of the verb, and renaming comes first."""
+    assert "rename" in assistant.asked([said]).verbs
+    language = "es" if said.startswith("ponle") else "en"
+    assert ranked(MENU, said, language)[0].endswith(".rename")
+
+
 @pytest.mark.parametrize(
     ("said", "language"),
     [
