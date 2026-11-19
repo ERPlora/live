@@ -215,3 +215,28 @@ DEVICES = [
 def test_the_tool_that_renames_comes_before_a_change_that_takes_a_name(asked, language):
     names = ranked(DEVICES, asked, language)
     assert names[:2] == ["base.device.rename", "printing.device.update"], names[:4]
+
+
+def test_a_change_that_takes_no_name_renames_nothing():
+    """It ranks as the other tools of its thing, by name."""
+    names = offered("renombra Bienvenida como «Primera visita»", "es")
+    assert names.index("appointment.thing00.list") < names.index("appointment.thing00.update"), names[:10]
+
+
+#: An automation's switch and a recipe's, whose asks both say the reminders, beside a write that takes them.
+SWITCHED_REMINDERS = [
+    tool("flow.flow.set_enabled", "Turn an automation on or pause it, by its id or its name.",
+         input=takes("id", "flow", "enabled"), asks={"es": ("pausa la automatización de los recordatorios de citas",)}),
+    tool("flow.recipe.disable", "Turn off a ready-made automation an app brings.", input=takes("recipe"),
+         asks={"es": ("apaga la receta del recordatorio de citas",)}),
+    tool("appointment.settings.update", "Change the appointments' settings: the reminders, the slot length.",
+         input=takes("reminders", "slot_minutes")),
+    *NOISE,
+]
+
+
+def test_what_an_automation_and_a_recipe_both_switch_by_their_asks_is_the_thing_of_neither():
+    """«Desactiva los recordatorios»: the asks of two things' switches say them, so neither is what is turned off
+    (ERPlora/live#89) and the write that takes them comes first; the automation's ``set_enabled`` counts as a switch."""
+    names = ranked(SWITCHED_REMINDERS, "desactiva los recordatorios", "es")
+    assert names[0] == "appointment.settings.update", names[:4]
