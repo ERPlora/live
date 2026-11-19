@@ -168,6 +168,26 @@ def test_what_is_asked_about_beats_the_app_of_who_does_it(asked, language):
     assert ranked(CUSTOMER_AND_SALE, asked, language, app_words=app_names)[0] == "sale.payment_method.list"
 
 
+@pytest.mark.parametrize(
+    "asked",
+    ["¿se puede abonar con tarjeta?", "¿con qué pueden abonar los clientes?", "¿con qué abona el cliente?",
+     "¿con qué pueden abonarlo los clientes?", "¿de qué maneras pueden abonarme los clientes?"],
+)
+def test_how_customers_may_abonar_brings_the_payment_methods(asked):
+    assert ranked(CUSTOMER_AND_SALE, asked, app_words=app_names)[0] == "sale.payment_method.list"
+
+
+@pytest.mark.parametrize(
+    "asked",
+    ["haz una factura de abono para Ana", "véndele a Ana un abono de 10 sesiones", "¿cuántos abonos hicimos este mes?"],
+)
+def test_a_credit_note_or_a_voucher_moves_nothing_towards_paying(asked):
+    """«Abono» names no payment: said as a word nothing here is called, the same tools come in the same order."""
+    unknown = asked.replace("abono", "zarzo")
+    assert ranked(CUSTOMER_AND_SALE, asked, app_words=app_names) == ranked(CUSTOMER_AND_SALE, unknown,
+                                                                          app_words=app_names)
+
+
 def test_a_customers_notes_are_not_the_quick_notes_app():
     """The till's quick notes make «notas» a word of the whole ``sale`` app: a customer's notes are still asked."""
     names = ranked(CUSTOMER_AND_SALE, "¿qué notas tiene la ficha de Ana?", app_words=app_names)
