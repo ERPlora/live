@@ -339,7 +339,13 @@ la parchea en el módulo que la llama (`assistant.ranking.asks_of`, `assistant.c
   recordatorios de citas» apaga la receta («apaga la receta del recordatorio de citas») antes que la app de Citas, y
   «desactiva al cliente Ana» no sube el interruptor de un empleado cuyas `asks` solo dicen «Ana», y una palabra
   que dicen las `asks` de los interruptores de varias cosas («de momento», «por ahora») no es la cosa de ninguno
-  (live#89); «ponme la
+  (live#89); «vacía», «asigna», «archiva», «canjea» (y «gasta», «consume»), «retén» y «libera» (y «suelta») piden su
+  acción (`clear`, `assign`, `archive`, `redeem`, `hold`, `release`; en inglés «clear» o «empty», «assign», «archive»,
+  «redeem», «hold» y «release»), y borrar, quitar o eliminar lo que una herramienta vacía es vaciarlo solo cuando es lo
+  que la orden quita («borra el enrutado de los zumos»; «quita el vino de la cesta» no vacía la cesta); «aparta» no, que
+  también aparta una mesa. «Empty», «clear», «hold», «release», «vacía» y «suelta» piden su acción solo donde empieza
+  la orden (al principio, tras un saludo o un «can you», o tras «y»): en otro sitio dicen cómo es algo o lo nombran
+  («delete that empty check», «la venta suelta», «drop the hold on table 6»; live#67); «ponme la
   app»,
   «instala» encienden; «how many» y «cuántos» cuentan (`count`, `list`, `stats`). «How», «which»,
   «cómo» y «cuál» ya no son el verbo «listar». Un verbo no nombra cosas salvo por sus sinónimos («cobra» nombra la

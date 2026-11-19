@@ -103,8 +103,8 @@ VERBS = {
     # de reseñas»; ERPlora/live#53). «Autoriza» is left out: it also approves («autoriza el pago»).
     "grant": ("permite", "permitir", "concede", "conceder", "dale permiso", "da permiso", "dar permiso",
               "darle permiso", "grant", "allow"),
-    # Emptying takes everything out of a thing and keeps it («vacía el carrito»); a voucher's session is redeemed,
-    # held for a check and released, and a professional is assigned to a service (ERPlora/live#67).
+    # Emptying takes everything out of a thing and keeps it («vacía el carrito»); spending a voucher's session redeems
+    # it («gasta una sesión del bono»; ERPlora/live#67).
     "clear": ("vacia", "vaciar", "clear", "empty"),
     "assign": ("asigna", "asignar", "assign"),
     "archive": ("archiva", "archivar", "archive"),
@@ -156,7 +156,8 @@ _OTHER_CLAUSE = frozenset({"si", "que", "porque", "pero", "cuando"})
 #: The words after which a verb says what someone will do, not what is asked («I'll approve it», «we will open»).
 _FUTURE = frozenset({"ll", "will"})
 #: The words of ``VERBS`` that also name a thing or say what it is («the empty check», «la venta suelta», «drop the hold
-#: on table 6», «the new release»): they ask for their action only where a command starts (``describes``; ERPlora/live#67).
+#: on table 6», «the new release»): they ask for their action only where a command starts (``describes``;
+#: ERPlora/live#67).
 _LEADING = frozenset({"empty", "clear", "hold", "release", "vacia", "suelta"})
 #: The words after which a thing is named for what another is («para las próximas ventas», «for the new sales»): to the
 #: end of their sentence, it is not what a command switches (ERPlora/live#50).

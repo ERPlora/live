@@ -125,16 +125,18 @@ def relevant(  # noqa: PLR0913
     or what its action acts on (``_parts``: ``create_folder`` acts on a folder), else 1 when it names only the tool's
     app (in either language, ``app_words``: an app's name breaks ties, it never drowns the thing asked) — unless the
     question names no tool's thing at all: then the app named by its own name is the thing of its tools («la cocina»:
-    its tickets and stations; «abre la caja»: the till's session); 2 more when it
-    names the action itself, 1 when it names what the action says it is for (``list_for_customer``), and 1 for each of
-    its description, what people say to ask for it (``asks_of``, in any language) and the data its input takes.
+    its tickets and stations; «abre la caja»: the till's session); 2 more when it names the action itself and not the
+    tool's entity («asignado» names an assignment, not assigning), 1 when it names what the action says it is for
+    (``list_for_customer``), and 1 for each of its description, what people say to ask for it (``asks_of``, in any
+    language) and the data its input takes.
 
     The action asked (``VERBS``) of a thing the question names, or another way of saying it (``_acts``: «activa» is
     the ``set_enabled`` of an automation), adds 9, 1 more when the tool's action is that verb
     itself (``create``, before ``bulk_create``), 1 more again when its words ask ``update`` only for what has none of
     its own (``_BEFORE_UPDATE``: ``reorder``, before ``update``) and 3 more when that thing is what the command acts on
     (``Asked.objects``: «crea la carpeta Facturas» creates a folder, not an invoice); setting a device up
-    (``_REGISTERS``) counts only when that thing is what the command acts on («registra esta tablet», never «registra en
+    (``_REGISTERS``) and taking away what a tool empties (``_emptied``: «borra el enrutado») count only when that thing
+    is what the command acts on («registra esta tablet», never «registra en
     esta tablet una salida…»); «activa la app» is
     ``base.app.enable``, never an operation of the app named after it, and so is «activa los clientes», an app named
     by its name. What a switch turns on or off (``Asked.switched``) that names no tool's thing but an app is the thing

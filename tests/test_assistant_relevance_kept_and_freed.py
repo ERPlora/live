@@ -7,7 +7,7 @@ from live import assistant
 from tests.assistant_catalogue import NOISE, ranked, tool
 
 
-#: A write of each of those things that does nothing asked comes first by name: what the verb asks has to earn its place.
+#: A write of each of those things that does nothing asked comes first by name: what the verb asks earns its place.
 FIRST_BY_NAME = [
     tool(f"{name}.aaa", f"Does it to {what}.")
     for name, what in (
@@ -28,7 +28,7 @@ KEPT_AND_FREED = [
     tool("kitchen.routing.clear", "Take away where a product or a category goes: from now on it goes by its category."),
     tool("kitchen.routing.list", "Which products and categories go to which station.", "query"),
     tool("kitchen.routing.set", "Send a product or a category of the catalogue to a station."),
-    tool("service.assignment.assign", "Assign a professional of Staff to a service, with their own duration and price."),
+    tool("service.assignment.assign", "Assign a professional of Staff to a service, with their own duration, price."),
     tool("service.assignment.list", "List who performs each service.", "query"),
     tool("service.assignment.remove", "Remove a professional from a service: they no longer perform it."),
     tool("service.assignment.update", "Change who performs a service: their own duration or price."),
@@ -159,9 +159,17 @@ def test_deleting_a_thing_that_can_be_emptied_still_deletes_it(asked, language, 
     ],
 )
 def test_a_word_that_also_names_or_describes_asks_nothing_where_no_command_starts(said, action):
-    """«Empty», «clear», «hold», «release», «vacía» and «suelta» are also what a thing is or the thing itself («the empty
-    check», «la venta suelta», «the hold on table 6»): they ask for their action only where a command starts."""
+    """«Empty», «clear», «hold», «release», «vacía» and «suelta» are also what a thing is or the thing itself («the
+    empty check», «la venta suelta», «the hold on table 6»): they ask for their action only where a command starts."""
     assert action not in assistant.asked([said]).verbs
+
+
+@pytest.mark.parametrize(
+    ("said", "word"),
+    [("drop the hold on table 6", "hold"), ("publish the new release of the app", "release")],
+)
+def test_such_a_word_names_the_thing_where_it_asks_nothing(said, word):
+    assert any(assistant.stem(word) in concept for concept in assistant.asked([said]).concepts)
 
 
 @pytest.mark.parametrize(
