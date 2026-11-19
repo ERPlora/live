@@ -157,8 +157,9 @@ def test_turning_on_an_automation_named_by_its_name_offers_its_switch_first(aske
 def test_pausing_it_offers_the_same_switch_before_its_other_tools(asked, language):
     """``set_enabled`` takes whether it is on: it turns off too."""
     names = offered(asked, language)
-    others = ("flow.flow.detail", "flow.flow.duplicate", "flow.flow.grant", "flow.flow.update")
-    assert names.index("flow.flow.set_enabled") < min(names.index(name) for name in others), names[:8]
+    assert "flow.flow.set_enabled" in names, names[:8]
+    ahead = names[: names.index("flow.flow.set_enabled")]
+    assert not [name for name in ahead if name.startswith("flow.flow.")], ahead
 
 
 @pytest.mark.parametrize(

@@ -99,10 +99,14 @@ VERBS = {
     "invite": ("invita", "invitar", "invite"),
     "print": ("imprime", "imprimir", "saca", "sacar", "print"),
     "refund": ("devuelve", "devolver", "reembolsa", "reembolsar", "refund"),
+    # Letting something do an action grants it the permission («permite a Bienvenida leer la venta», «dale permiso a la
+    # de reseñas»; ERPlora/live#53). «Autoriza» is left out: it also approves («autoriza el pago»).
+    "grant": ("permite", "permitir", "concede", "conceder", "dale permiso", "da permiso", "dar permiso",
+              "darle permiso", "grant", "allow"),
 }
 #: The words of a verb's phrase that still name what they name: «cambia el nombre» changes a name, «da de baja» names
-#: the leave («baja») a member or a stock takes.
-_PHRASE_NAMES = frozenset({"nombre", "name", "datos", "modulo", "app", "aplicacion", "baja"})
+#: the leave («baja») a member or a stock takes, «dale permiso» the permission given.
+_PHRASE_NAMES = frozenset({"nombre", "name", "datos", "modulo", "app", "aplicacion", "baja", "permiso"})
 #: The phrases of ``VERBS`` that put a name on something («ponle el nombre», «change its name»), by their verb and what
 #: follows it: said with what is named in between («pon al dispositivo que uso ahora el nombre «Barra»»), they count
 #: as said in a row (ERPlora/live#47). Only a name with its article: «de nombre» and «nombre» alone may say what a thing
@@ -165,6 +169,8 @@ _CHANGES = frozenset({"update", "set"})
 #: The actions whose words also ask ``update``, for what has none of its own («ordena el menú»): where a tool does the
 #: action itself, it comes before the change of the same thing.
 _BEFORE_UPDATE = frozenset({"reorder"})
+#: The state an action sets (``set_enabled``) → the actions it does: it turns a thing on and off (ERPlora/live#53).
+_SET_STATES = {"enabled": frozenset({"enable", "disable"})}
 #: What a word that notes something down asks for («anota», «apunta»: ``VERBS``): writing it down, adding it to what
 #: there is, or writing on what is named (``_WRITTEN_ON``: «anota en la cita de Ana…»), never on a setting a word names
 #: in passing («anota una salida de 15 € de la caja»: no setting of the till; ERPlora/live#88).
