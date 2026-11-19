@@ -77,7 +77,8 @@ def test_a_yes_after_a_write_keeps_the_write_asked_first(before, yes, language, 
         ("los dispositivos", "device"), ("este aparato", "device"), ("la carpeta", "folder"), ("mi perfil", "profile"),
         ("mi foto de perfil", "avatar"), ("la ficha", "card"), ("recibir", "receive"), ("la devolución", "refund"),
         ("el reembolso", "refund"), ("las cuentas aparcadas", "park"),
-        ("las etiquetas", "tag"), ("el portátil", "device"), ("este ordenador", "device"), ("la tablet", "device"),
+        ("las etiquetas", "tag"), ("el portátil", "device"), ("este ordenador", "device"), ("los ordenadores", "device"),
+        ("la tablet", "device"),
         ("los comensales", "guest"), ("un comensal", "guest"), ("la regla", "rule"), ("las reglas", "rule"),
         ("el método de pago", "method"), ("los métodos", "method"),
         # A switch whose asks only say it in English is still its switch (ERPlora/live#89).
@@ -114,6 +115,9 @@ def test_the_words_of_one_thing_name_it_in_either_language(said, english):
         ("comprueba", "compra"), ("comprobando", "compras"), ("comprobante", "purchase"), ("compruebo", "comprar"),
         # A reminder is no record: both cut to «recor» (ERPlora/live#89).
         ("recordatorio", "record"), ("recordatorios", "records"), ("recordatorios", "recordar"),
+        # A computer is no putting in order nor an order: all of them cut to «orden» (ERPlora/live#61).
+        ("ordenador", "ordena"), ("ordenadores", "ordenar"), ("ordenador", "orden"), ("ordenador", "ordenado"),
+        ("ordenadores", "ordenadas"),
     ],
 )
 def test_words_of_two_things_are_never_one_stem(one, other):
@@ -145,6 +149,7 @@ def test_words_of_two_things_are_never_one_stem(one, other):
         ("producción producciones production productions", "produccion"),
         ("comprueba compruebo comprobar comprobando comprobado comprobación comprobante compruébalo", "comprobar"),
         ("recordatorio recordatorios", "recordatori"),
+        ("ordenador ordenadores", "ordenador"),
     ],
 )
 def test_the_forms_of_a_word_kept_apart_still_join(words, stem):
@@ -307,6 +312,63 @@ def test_a_device_named_but_not_registered_is_not_set_up_to_print(asked, languag
     and opening the till 20th, not 8th)."""
     names = ranked(REGISTERED_DEVICES, asked, language, app_words=till_apps)
     assert names.index(first) < names.index("printing.device.register"), names[:5]
+
+
+#: The choices and the courses of a menu as the Hub's Menus describe them, beside the tools of devices.
+MENU_CHOICES = [
+    tool("combo.option.reorder", "Put the choices of a course in a new order: give every choice id, in order."),
+    tool("combo.option.bulk_create", "Add several choices to a course at once, in the order given."),
+    tool("combo.option.create", "Add a choice to a course of a menu."),
+    tool("combo.option.update", "Change a choice of a course: its supplement."),
+    tool("combo.option.delete", "Remove a choice from a course."),
+    tool("combo.group.reorder", "Put the courses of a menu in a new order."),
+    tool("combo.combo.update", "Change a menu: its name, its price."),
+    *REGISTERED_DEVICES,
+]
+#: The Hub's words for a choice of a menu.
+CHOICE = (("opcion", "opciones", "eleccion", "elecciones", "option", "options", "choice", "choices"),)
+
+
+@pytest.mark.parametrize(
+    ("asked", "language"),
+    [
+        ("ordena las opciones del primer plato", "es"),
+        ("ordena las opciones de Platos QA del Menú QA así: flan, merluza, lentejas y café, incluyendo todas", "es"),
+        ("reorder the choices of the first course", "en"),
+    ],
+)
+def test_putting_things_in_order_offers_reordering_them_first(asked, language):
+    """«Ordena» puts things in order and names no computer (ERPlora/live#61: reordering the choices of a menu came 9th
+    in the Hub, after changing a printing device)."""
+    names = ranked(MENU_CHOICES, asked, language, synonyms=CHOICE)
+    assert names[0] == "combo.option.reorder", names[:5]
+
+
+@pytest.mark.parametrize(
+    ("asked", "language"),
+    [
+        ("ofrece en Platos QA del Menú QA, y en este orden, lentejas, merluza y flan, todos sin suplemento", "es"),
+        ("add to the first course, in this order, lentils, hake and flan", "en"),
+    ],
+)
+def test_a_list_said_in_order_offers_no_device_first(asked, language):
+    names = ranked(MENU_CHOICES, asked, language, synonyms=CHOICE)
+    ahead = names[: names.index("combo.option.bulk_create")]
+    assert not [name for name in ahead if ".device." in name], names[:8]
+
+
+@pytest.mark.parametrize(
+    ("said", "names_a_device"),
+    [
+        ("ordena las opciones del primer plato", False),
+        ("pon los platos en este orden: sopa, merluza y flan", False),
+        ("borra el ordenador de la oficina", True),
+        ("ordena los ordenadores por nombre", True),
+    ],
+)
+def test_only_a_computer_is_a_device_to_act_on(said, names_a_device):
+    device = assistant._concept("dispositivo")
+    assert any(not thing.isdisjoint(device) for thing in assistant.asked([said]).objects) is names_a_device
 
 
 @pytest.mark.parametrize(
