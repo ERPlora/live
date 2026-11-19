@@ -107,7 +107,8 @@ VERBS = {
     # it («gasta una sesión del bono»; ERPlora/live#67).
     "clear": ("vacia", "vaciar", "clear", "empty"),
     "assign": ("asigna", "asignar", "assign"),
-    "archive": ("archiva", "archivar", "archive"),
+    # «Archiva» is left out: it also keeps a document («archiva el documento que te adjunto»), and archiving a service
+    # already comes first by its tool's name.
     "redeem": ("canjea", "canjear", "gasta", "gastar", "consume", "consumir", "redeem"),
     # «Aparta» is left out: it also sets a table aside («apártame la mesa 3»).
     "hold": ("reten", "retener", "hold"),

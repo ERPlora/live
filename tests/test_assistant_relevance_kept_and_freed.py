@@ -1,5 +1,5 @@
-"""What a turn offers when it empties, assigns, archives, redeems, holds or releases something: a cart, the routing of
-the kitchen, a professional's services, a voucher's sessions or a table set aside."""
+"""What a turn offers when it empties, assigns, redeems, holds or releases something, or archives it: a cart, the
+routing of the kitchen, a professional's services, a voucher's sessions, a table set aside or a document."""
 
 import pytest
 
@@ -69,13 +69,11 @@ HUB_WORDS = (
         ("hay que asignar los tintes a Raquel", "assign"),
         ("asígnale la depilación a Marta", "assign"),
         ("assign waxing to Marta", "assign"),
-        ("archiva el servicio de tinte", "archive"),
-        ("hay que archivar las permanentes", "archive"),
-        ("ya no hacemos permanentes, archívalo", "archive"),
-        ("archive the dye service", "archive"),
         ("canjea una sesión del bono de Ana", "redeem"),
         ("gasta una sesión del bono de Ana", "redeem"),
         ("consume una sesión del bono de Ana", "redeem"),
+        ("hay que gastar una sesión del bono de Ana", "redeem"),
+        ("quiero consumir una sesión del bono de Ana", "redeem"),
         ("hay que canjear una sesión del bono de Ana", "redeem"),
         ("redeem a session of Ana's voucher", "redeem"),
         ("retén la sesión de Ana", "hold"),
@@ -84,14 +82,15 @@ HUB_WORDS = (
         ("libera la sesión de Ana", "release"),
         ("suelta la sesión retenida del bono de Ana", "release"),
         ("hay que liberar la sesión de Ana", "release"),
+        ("hay que soltar la sesión retenida del bono de Ana", "release"),
         ("libérala, que ya no la usa", "release"),
         ("release Ana's session", "release"),
     ],
 )
-def test_emptying_assigning_archiving_redeeming_holding_or_releasing_is_asked(said, action):
+def test_emptying_assigning_redeeming_holding_or_releasing_is_asked(said, action):
     """Each is the action of the tools that do it (``cart_checkout.cart.clear``, ``service.assignment.assign``,
-    ``service.service.archive``, ``service.grant.redeem``, ``service.session.hold``, ``service.session.release``), in
-    either language, its infinitive and its pronouns too. Before, none was a verb but «asigna», only a ``set``, and the
+    ``service.grant.redeem``, ``service.session.hold``, ``service.session.release``), in either language, its
+    infinitive and its pronouns too. Before, none was a verb but «asigna», only a ``set``, and the
     action was read as the thing the tool acts on."""
     assert action in assistant.asked([said]).verbs
 
@@ -226,3 +225,22 @@ def test_taking_something_away_empties_only_what_is_taken_away(asked, language):
     names = ranked(KEPT_AND_FREED, asked, language, synonyms=HUB_WORDS)
     taking_away = [name for name in names if name.endswith((".delete", ".remove"))]
     assert names.index(taking_away[0]) < names.index("cart_checkout.cart.clear"), names[:6]
+
+
+#: Storing a file the person sends, as the Hub's tool is asked for in Spanish: «archivar» a document keeps it.
+FILED = [
+    *KEPT_AND_FREED,
+    tool("base.file.upload", "Upload a file to the business's documents.",
+         asks={"es": ("archiva el documento que te adjunto",)}),
+    tool("base.file.list", "List the business's documents.", "query"),
+    tool("invoice.invoice.document", "The PDF document of an invoice.", "query"),
+]
+
+
+def test_archiving_a_document_keeps_it_and_asks_no_archive():
+    """«Archiva» is no verb: in Spanish it also keeps a document («archiva el documento que te adjunto»), and read as
+    archiving it brought the reads of documents and the archive of a service before storing the file. Archiving a
+    service comes first by its tool's name («archiva el servicio de tinte»)."""
+    assert "archive" not in assistant.asked(["archiva el documento que te adjunto"]).verbs
+    names = ranked(FILED, "archiva el documento que te adjunto", "es", synonyms=HUB_WORDS)
+    assert names[0] == "base.file.upload", names[:4]

@@ -339,11 +339,12 @@ la parchea en el módulo que la llama (`assistant.ranking.asks_of`, `assistant.c
   recordatorios de citas» apaga la receta («apaga la receta del recordatorio de citas») antes que la app de Citas, y
   «desactiva al cliente Ana» no sube el interruptor de un empleado cuyas `asks` solo dicen «Ana», y una palabra
   que dicen las `asks` de los interruptores de varias cosas («de momento», «por ahora») no es la cosa de ninguno
-  (live#89); «vacía», «asigna», «archiva», «canjea» (y «gasta», «consume»), «retén» y «libera» (y «suelta») piden su
-  acción (`clear`, `assign`, `archive`, `redeem`, `hold`, `release`; en inglés «clear» o «empty», «assign», «archive»,
-  «redeem», «hold» y «release»), y borrar, quitar o eliminar lo que una herramienta vacía es vaciarlo solo cuando es lo
-  que la orden quita («borra el enrutado de los zumos»; «quita el vino de la cesta» no vacía la cesta); «aparta» no, que
-  también aparta una mesa. «Empty», «clear», «hold», «release», «vacía» y «suelta» piden su acción solo donde empieza
+  (live#89); «vacía», «asigna», «canjea» (y «gasta», «consume»), «retén» y «libera» (y «suelta») piden su acción
+  (`clear`, `assign`, `redeem`, `hold`, `release`; en inglés «clear» o «empty», «assign», «redeem», «hold» y
+  «release»); «archiva» no, que también es guardar un documento («archiva el documento que te adjunto»), y archivar un
+  servicio ya llega por el nombre de su herramienta; borrar, quitar o eliminar lo que una herramienta vacía es vaciarlo
+  solo cuando es lo que la orden quita («borra el enrutado de los zumos»; «quita el vino de la cesta» no vacía la
+  cesta); «aparta» no es retener, que también aparta una mesa. «Empty», «clear», «hold», «release», «vacía» y «suelta» piden su acción solo donde empieza
   la orden (al principio, tras un saludo o un «can you», o tras «y»): en otro sitio dicen cómo es algo o lo nombran
   («delete that empty check», «la venta suelta», «drop the hold on table 6»; live#67); «ponme la
   app»,
