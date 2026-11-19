@@ -268,6 +268,52 @@ def test_setting_up_the_bookings_offers_no_confirmation_before_the_booking(said,
         assert names.index(confirm) > names.index("reservation.reservation.cancel"), names
 
 
+PAYING_WITH_ABONAR = ("abonar", "abona", "abonan", "abonas", "abonamos", "abonarlo", "abonarme", "abonale", "abonado",
+                      "abonada", "abone", "abonen")
+
+
+@pytest.mark.parametrize("form", PAYING_WITH_ABONAR)
+def test_the_forms_of_abonar_name_paying(form):
+    """«Abonar» is how Spain often says paying («¿cómo quiere abonarlo?»): each of its forms names what «pagar» does."""
+    assert assistant._concept(form) == assistant._concept("pagar")
+
+
+@pytest.mark.parametrize("word", ["abono", "abonos"])
+def test_a_credit_note_or_a_voucher_names_no_paying(word):
+    """«Abono» is a credit note («factura de abono») or a pass («un abono de 10 sesiones»), never a payment."""
+    assert assistant._concept(word).isdisjoint(assistant._concept("pagar"))
+
+
+@pytest.mark.parametrize(
+    "said",
+    ["abona la cuenta de la mesa 4", "abónale la cuenta a la mesa 4", "hay que abonar la cuenta de la mesa 4",
+     "abónalo con tarjeta"],
+)
+def test_abonar_asks_to_charge_as_pagar_does(said):
+    assert "complete" in assistant.asked([said]).verbs
+
+
+@pytest.mark.parametrize(
+    "said",
+    ["¿se puede abonar con tarjeta?", "¿se puede pagar con tarjeta?", "¿con qué pueden abonarlo los clientes?",
+     "¿de qué maneras pueden abonarme los clientes en caja?"],
+)
+def test_a_question_about_abonar_is_about_paying(said):
+    assert assistant._concept("pagar") in assistant.asked([said]).about
+
+
+@pytest.mark.parametrize(
+    "said",
+    ["haz una factura de abono para Ana", "véndele a Ana un abono de 10 sesiones", "¿cuántos abonos hicimos este mes?",
+     "el abono de Ana"],
+)
+def test_a_credit_note_or_a_voucher_asks_for_no_payment(said):
+    asked = assistant.asked([said])
+    assert "complete" not in asked.verbs
+    assert not asked.about
+    assert all(concept.isdisjoint(assistant._concept("pagar")) for concept in asked.concepts), asked.concepts
+
+
 ATTENDANCE_AND_CUSTOMER = [
     tool("attendance.record.clock_in", "Clocks a member in («ficha la entrada de Ana»): opens the working day."),
     tool("customer.customer.get", "A customer's card: data, notes and purchases.", "query"),

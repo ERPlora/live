@@ -67,7 +67,7 @@ VERBS = {
     "export": ("exporta", "exportar", "descarga", "descargar", "saca", "sacar", "export", "download"),
     "import": ("importa", "importar", "sube", "subir", "subeme", "import", "upload"),
     "upload": ("sube", "subir", "subeme", "upload"),
-    "complete": ("cobra", "cobrar", "paga", "pagar", "charge", "pay"),
+    "complete": ("cobra", "cobrar", "paga", "pagar", "abona", "abonar", "charge", "pay"),
     "void": ("anula", "anular", "void"),
     "cancel": ("cancela", "cancelar", "anula", "anular", "cancel"),
     "close": ("cierra", "cerrar", "close"),
@@ -346,7 +346,7 @@ SYNONYMS = (
     ("reserva", "reservation", "booking"),
     ("cita", "appointment"),
     ("factura", "invoice"),
-    ("pago", "pagar", "payment", "pay"),
+    ("pago", "pagar", "abonar", "payment", "pay"),
     ("negocio", "empresa", "business", "company"),
     ("plan", "suscripcion", "subscription"),
     ("sesion", "session"),
@@ -409,8 +409,9 @@ _WHOLE = frozenset({"personal"})
 #: (a device), «sella» (to seal) no «sell» nor «sellable», «existir» (to exist, «existing») no «existencias» (the
 #: stock, which keep their stem), «producción» («production») no «producto» and «comprobar» (to check) no «compra»
 #: (ERPlora/live#71), «recordatorio» (a reminder) no «record» nor «recordar» (ERPlora/live#89), «ordenador» (a
-#: computer) no «ordena», «ordenar» nor «orden» (to put in order, an order; ERPlora/live#61), and «confirma» (to
-#: confirm) no «configura» (to set up, the settings; ERPlora/live#68).
+#: computer) no «ordena», «ordenar» nor «orden» (to put in order, an order; ERPlora/live#61), «confirma» (to
+#: confirm) no «configura» (to set up, the settings; ERPlora/live#68), and «abona», «abone» (to pay) no «abono» (a
+#: credit note, a pass; ERPlora/live#72).
 _APART_WORDS = {"ficha": "ficha", "carta": "carta", "recibo": "recibo", "registro": "registro", "fiche": "fichar",
                 "ficho": "fichar", "listo": "listo", "selle": "sellar", "sellen": "sellar"}
 _APART_PREFIXES = (
@@ -420,7 +421,8 @@ _APART_PREFIXES = (
     ("comensal", "comensal"), ("dispon", "dispon"), ("sellab", "sellab"), ("sella", "sellar"), ("sello", "sellar"),
     ("sellem", "sellar"), ("sellei", "sellar"), ("existenci", "exist"), ("exist", "existir"),
     ("produccion", "produccion"), ("production", "produccion"), ("comprob", "comprobar"), ("comprue", "comprobar"),
-    ("recordatori", "recordatori"), ("ordenador", "ordenador"), ("confirm", "confirm"),
+    ("recordatori", "recordatori"), ("ordenador", "ordenador"), ("confirm", "confirm"), ("abona", "abonar"),
+    ("abone", "abonar"),
 )
 #: A noun that is a command at the start of a sentence, followed by these: «ficha la entrada de Ana» clocks in, «abre
 #: la ficha de Ana» is her card; «reserva una mesa» books, «cancela la reserva» names one.
