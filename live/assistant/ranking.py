@@ -24,7 +24,7 @@ from live.assistant.vocabulary import (
     _BEFORE_UPDATE,
     _CHANGES,
     _REGISTERS,
-    _SET_STATES,
+    _SAID_OTHERWISE,
     _TURNS,
     HOWTO_POINTS,
     READ_VERBS,
@@ -72,10 +72,10 @@ _QUALIFIERS = frozenset({"for", "by", "from", "to", "of", "in", "with"})
 @lru_cache(maxsize=4_096)
 def _acts(op: Operation) -> frozenset[str]:
     """The words of ``op``'s action (``create_folder`` → «create», «folder») and what they do said another way: the
-    state it sets turns a thing on and off (``_SET_STATES``: ``set_enabled``) and a change that takes a name renames
-    («renombra Bienvenida»: ``flow.flow.update``; ERPlora/live#53)."""
+    state it sets turns a thing on and off and emptying takes away (``_SAID_OTHERWISE``: ``set_enabled``, ``clear``),
+    and a change that takes a name renames («renombra Bienvenida»: ``flow.flow.update``; ERPlora/live#53)."""
     words = frozenset(op.name.split(".")[2].split("_"))
-    does = {verb for word in words for verb in _SET_STATES.get(word, ())}
+    does = {verb for word in words for verb in _SAID_OTHERWISE.get(word, ())}
     if "update" in words and "name" in getattr(op.input, "model_fields", {}):
         does.add("rename")
     return words | does
