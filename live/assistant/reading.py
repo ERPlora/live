@@ -4,7 +4,7 @@ import unicodedata
 from collections.abc import Collection, Iterable, Mapping
 from typing import NamedTuple
 
-from live.assistant.asking import asks_nothing
+from live.assistant.asking import describes
 from live.assistant.naming import puts_name
 from live.assistant.stemming import (
     _concept,
@@ -25,6 +25,7 @@ from live.assistant.vocabulary import (
     _DETERMINERS,
     _FILLERS,
     _FOR_WHAT,
+    _FUTURE,
     _GREETINGS,
     _HAVE,
     _HOW_TO,
@@ -460,9 +461,11 @@ def _asked_before_without(words: list[str], at: int) -> bool:
     return any(_verbs_of(word) for word in heard) or any(f" {phrase} " in said for phrase in _PHRASES)
 
 
-def _asks_nothing(words: list[str], at: int) -> bool:
-    """Whether the word ``words[at]`` asks for nothing where it is said (``asks_nothing``)."""
-    return asks_nothing(words, at, len(words) - len(_opening(words)[0]))
+def _foretold(words: list[str], at: int) -> bool:
+    """Whether the word ``words[at]`` says what someone will do (after ``_FUTURE``: «knock 60% off the wine, I'll
+    approve it», «it will turn on at nine»): the speaker's own doing, not what the assistant is asked; «will you…?» is
+    a request."""
+    return at > 0 and words[at - 1] in _FUTURE
 
 
 def _without_yes(sentences: list[list[str]]) -> list[list[str]]:
@@ -488,7 +491,7 @@ def _split_naming(sentences: list[list[str]]) -> set[tuple[str, str]]:
     for words in sentences:
         for at, word in enumerate(words):
             head = word if word in _NAMING else _unclitic(word)
-            if head not in _NAMING or _unasked(words, at) or _asks_nothing(words, at):
+            if head not in _NAMING or _unasked(words, at) or _foretold(words, at):
                 continue
             end = next(
                 (later for later in range(at + 1, len(words)) if _starts_command(words, later) or _unasked(words, later)),
@@ -540,9 +543,9 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
         if not question:
             sentences = [_as_present(words, amounts) for words in sentences]
         # What asks to be done: every word but a verb that says what is not to be done («sin cambiar», ``_unasked``) or
-        # what someone will do, or a word that also names a thing where no command starts (``_asks_nothing``).
+        # what someone will do («I'll approve it», ``_foretold``).
         heard = [
-            [word for at, word in enumerate(words) if not _unasked(words, at) and not _asks_nothing(words, at)]
+            [word for at, word in enumerate(words) if not _unasked(words, at) and not _foretold(words, at)]
             for words in sentences
         ]
         joined = [f" {' '.join(words)} " for words in heard]
@@ -554,8 +557,9 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
         said = {verb for verb, forms in VERBS.items() if not found.isdisjoint(forms)}
         acting: dict[str, frozenset[str]] = {}
         for words in heard:
-            for word in words:
-                if word not in verbal and (of := _verbs_of(word)):
+            start = len(words) - len(_opening(words)[0])
+            for at, word in enumerate(words):
+                if word not in verbal and not describes(words, at, start) and (of := _verbs_of(word)):
                     acting[word] = of
         for word, of in list(acting.items()):
             if not _REGISTERS.isdisjoint(of) and not any(

@@ -156,7 +156,7 @@ _OTHER_CLAUSE = frozenset({"si", "que", "porque", "pero", "cuando"})
 #: The words after which a verb says what someone will do, not what is asked («I'll approve it», «we will open»).
 _FUTURE = frozenset({"ll", "will"})
 #: The words of ``VERBS`` that also name a thing or say what it is («the empty check», «la venta suelta», «drop the hold
-#: on table 6», «the new release»): they ask for their action only where a command starts (ERPlora/live#67).
+#: on table 6», «the new release»): they ask for their action only where a command starts (``describes``; ERPlora/live#67).
 _LEADING = frozenset({"empty", "clear", "hold", "release", "vacia", "suelta"})
 #: The words after which a thing is named for what another is («para las próximas ventas», «for the new sales»): to the
 #: end of their sentence, it is not what a command switches (ERPlora/live#50).

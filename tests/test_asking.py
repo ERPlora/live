@@ -1,23 +1,24 @@
-"""Whether a word of the verbs asks for its action where it is said (``live.assistant.asking``)."""
+"""Whether a word of the verbs that also names a thing asks for its action where it is said
+(``live.assistant.asking``)."""
 
 import pytest
 
-from live.assistant.asking import asks_nothing
+from live.assistant.asking import describes
 
 
 @pytest.mark.parametrize(
     ("words", "at", "start"),
     [
-        (["knock", "60", "off", "the", "wine", "i", "ll", "approve", "it"], 7, 0),
-        (["it", "will", "turn", "on", "at", "nine"], 2, 0),
         (["delete", "that", "empty", "check"], 2, 0),
         (["drop", "the", "hold", "on", "table", "6"], 2, 0),
+        (["publish", "the", "new", "release"], 3, 0),
+        (["is", "the", "routing", "clear"], 3, 0),
         (["cobra", "la", "venta", "suelta"], 3, 0),
         (["abre", "una", "cuenta", "vacia"], 3, 0),
     ],
 )
-def test_what_someone_will_do_or_a_word_that_names_or_describes_asks_nothing(words, at, start):
-    assert asks_nothing(words, at, start)
+def test_such_a_word_where_no_command_starts_names_or_describes(words, at, start):
+    assert describes(words, at, start)
 
 
 @pytest.mark.parametrize(
@@ -27,10 +28,20 @@ def test_what_someone_will_do_or_a_word_that_names_or_describes_asks_nothing(wor
         (["please", "hold", "ana", "s", "session"], 1, 1),
         (["cobra", "la", "mesa", "y", "suelta", "la", "sesion"], 4, 0),
         (["charge", "it", "and", "release", "the", "session"], 3, 0),
-        (["will", "you", "approve", "it"], 2, 2),
-        (["delete", "that", "check"], 0, 0),
-        (["borra", "la", "cuenta", "vacia"], 0, 0),
+        (["vacia", "la", "cesta"], 0, 0),
     ],
 )
-def test_a_command_where_it_starts_asks_for_its_action(words, at, start):
-    assert not asks_nothing(words, at, start)
+def test_such_a_word_where_a_command_starts_is_the_command(words, at, start):
+    assert not describes(words, at, start)
+
+
+@pytest.mark.parametrize(
+    ("words", "at"),
+    [
+        (["borra", "la", "cuenta"], 0),
+        (["delete", "that", "check"], 0),
+        (["cobra", "y", "luego", "borra", "la", "cuenta"], 3),
+    ],
+)
+def test_any_other_word_asks_for_its_action_wherever_it_is_said(words, at):
+    assert not describes(words, at, 0)

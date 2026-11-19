@@ -1,13 +1,10 @@
-"""Whether a word of ``VERBS`` asks for its action where it is said."""
+"""Whether a word of ``VERBS`` that also names a thing asks for its action where it is said."""
 
-from live.assistant.vocabulary import _FUTURE, _LEADING, _THEN
+from live.assistant.vocabulary import _LEADING, _THEN
 
 
-def asks_nothing(words: list[str], at: int, start: int) -> bool:
-    """Whether the word ``words[at]`` asks for nothing where it is said, ``start`` being where what its sentence says
-    starts (after greetings and the words of a request): what someone will do (after ``_FUTURE``: «knock 60% off the
-    wine, I'll approve it», «it will turn on at nine»: the speaker's own doing; «will you…?» is a request), or a word that
-    also names a thing or says what it is (``_LEADING``) where no command starts, neither first nor after ``_THEN``
-    («delete that empty check», «drop the hold on table 6»; ERPlora/live#67)."""
-    before = words[at - 1] if at > 0 else ""
-    return before in _FUTURE or (words[at] in _LEADING and at != start and before not in _THEN)
+def describes(words: list[str], at: int, start: int) -> bool:
+    """Whether the word ``words[at]``, one that also names a thing or says what it is (``_LEADING``), does so where it is
+    said: where no command starts, neither first in what its sentence says (``start``, after greetings and the words of
+    a request) nor after ``_THEN`` («delete that empty check», «drop the hold on table 6»; ERPlora/live#67)."""
+    return words[at] in _LEADING and at != start and (at == 0 or words[at - 1] not in _THEN)
