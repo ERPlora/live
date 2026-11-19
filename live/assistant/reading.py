@@ -4,9 +4,8 @@ import unicodedata
 from collections.abc import Collection, Iterable, Mapping
 from typing import NamedTuple
 
-from live.assistant.naming import (
-    puts_name,
-)
+from live.assistant.asking import describes
+from live.assistant.naming import puts_name
 from live.assistant.stemming import (
     _concept,
     _goes_on,
@@ -558,8 +557,9 @@ def asked(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> Asked
         said = {verb for verb, forms in VERBS.items() if not found.isdisjoint(forms)}
         acting: dict[str, frozenset[str]] = {}
         for words in heard:
-            for word in words:
-                if word not in verbal and (of := _verbs_of(word)):
+            start = len(words) - len(_opening(words)[0])
+            for at, word in enumerate(words):
+                if word not in verbal and not describes(words, at, start) and (of := _verbs_of(word)):
                     acting[word] = of
         for word, of in list(acting.items()):
             if not _REGISTERS.isdisjoint(of) and not any(
