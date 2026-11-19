@@ -456,8 +456,16 @@ _AFTER_PARTICLE = frozenset(
 #: The particles a verb takes right after it («turn down», «turn off», «switch back»): said there, they are its own,
 #: and none after what it acts on is («turn down Ana's request to take the afternoon off» rejects it).
 _OWN_PARTICLES = _PARTICLES | {"down", "up", "over", "out", "around", "back", "away"}
-#: The words an «off» names a leave with («Ana's time off», «a day off»): no particle of a switch.
-_NOT_PARTICLES = frozenset((word, "off") for word in ("time", "day", "days", "night", "week"))
+#: What an «on» or an «off» right after is no particle of a switch: the time an «off» names a leave with («Ana's time
+#: off», «a day off», «her Friday off»), the «now» of «from now on» and what says how something is («the shift Marta is
+#: on», «the screens that are off»).
+_LEAVES = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+_LEAVES += ("day", "night", "morning", "afternoon", "evening", "weekend")
+_NOT_PARTICLES = frozenset(
+    {(word, "off") for leave in _LEAVES for word in (leave, f"{leave}s")}
+    | {("time", "off"), ("week", "off"), ("now", "on")}
+    | {(is_, particle) for is_ in ("is", "are", "was", "were", "be", "been") for particle in _PARTICLES}
+)
 #: Each verb said in one word → the actions it asks for.
 _VERB_OF: dict[str, frozenset[str]] = {}
 for _verb, _forms in VERBS.items():

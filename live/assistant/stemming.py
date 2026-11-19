@@ -89,10 +89,10 @@ def stem(word: str) -> str:  # noqa: C901
 
 
 def _ends_switch(words: list[str], head: str, at: int) -> bool:
-    """Whether ``words[at]`` is the particle of the switch ``head`` said before it (``_SPLIT``): one that names no leave
-    with the word before it (``_NOT_PARTICLES``: «Ana's time off») and ends the sentence or comes before a word that
-    cannot be what it is said of (``_AFTER_PARTICLE``: «switch the kitchen app on now», never «switch the order on
-    table 4 to table 6»)."""
+    """Whether ``words[at]`` is the particle of the switch ``head`` said before it (``_SPLIT``): one that is not
+    of the word before it (``_NOT_PARTICLES``: «Ana's time off», «the shift Marta is on») and ends the sentence or comes
+    before a word that cannot be what it is said of (``_AFTER_PARTICLE``: «switch the kitchen app on now», never
+    «switch the order on table 4 to table 6»)."""
     return (
         words[at] in _SPLIT[head]
         and (words[at - 1], words[at]) not in _NOT_PARTICLES
