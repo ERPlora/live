@@ -232,12 +232,34 @@ def test_a_switch_said_apart_from_its_particle_asks_for_its_action(said, actions
         "switch the wine on the bill for a beer",
         # Nor is a particle of another command.
         "switch the order to table 6 and leave the lights on",
+        # Nor one after a verb that has its own particle right after it («turn down» rejects).
+        "turn down Ana's request to take the afternoon off",
+        "turn down Ana's pending time off",
+        "turn up the music they put on",
+        "turn over the bill she signed off",
+        "switch out the printer that keeps cutting off",
+        "switch around the shifts Ana is on",
+        "switch back the menu we had on",
+        "turn away the guests we can't take on",
+        "it is Ana's turn",
+        # Nor the «off» of a leave: «time off», «a day off».
+        "switch Ana's time off",
+        "switch Ana's day off",
+        "switch Marta's days off",
+        "switch Ana's night off",
+        "switch Pablo's week off",
     ],
 )
 def test_a_turn_or_a_switch_with_no_particle_of_its_own_switches_nothing(said):
     """«Turn the page», «switch tables» or «switch the order on table 4 to table 6» turn nothing on or off: only the
     verb's own particle makes it a switch (ERPlora/live#69)."""
     assert assistant.asked([said]).verbs.isdisjoint(SWITCHING_ON | SWITCHING_OFF)
+
+
+def test_a_switch_said_in_a_row_has_no_other_particle_later():
+    """A verb with its particle right after it has its own: «turn off the screens we left on» turns them off, and the
+    «on» of «left on» turns nothing on (ERPlora/live#69)."""
+    assert assistant.asked(["turn off the screens we left on"]).verbs == SWITCHING_OFF
 
 
 def test_a_name_someone_will_put_is_not_put_by_the_verb():
