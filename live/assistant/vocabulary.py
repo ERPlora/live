@@ -162,6 +162,9 @@ SWITCHES = frozenset({"enable", "disable"})
 _TURNS = frozenset({"enable", "disable", "activate", "deactivate"})
 #: The actions that change what a write takes.
 _CHANGES = frozenset({"update", "set"})
+#: The actions whose words also ask ``update``, for what has none of its own («ordena el menú»): where a tool does the
+#: action itself, it comes before the change of the same thing.
+_BEFORE_UPDATE = frozenset({"reorder"})
 #: What a word that notes something down asks for («anota», «apunta»: ``VERBS``): writing it down, adding it to what
 #: there is, or writing on what is named (``_WRITTEN_ON``: «anota en la cita de Ana…»), never on a setting a word names
 #: in passing («anota una salida de 15 € de la caja»: no setting of the till; ERPlora/live#88).
@@ -371,7 +374,8 @@ _WHOLE = frozenset({"personal"})
 #: «comenzar», «listo» (ready, done) no «lista» (to list, a list), «disponible» (available) no «dispositivo»
 #: (a device), «sella» (to seal) no «sell» nor «sellable», «existir» (to exist, «existing») no «existencias» (the
 #: stock, which keep their stem), «producción» («production») no «producto» and «comprobar» (to check) no «compra»
-#: (ERPlora/live#71), and «recordatorio» (a reminder) no «record» nor «recordar» (ERPlora/live#89).
+#: (ERPlora/live#71), «recordatorio» (a reminder) no «record» nor «recordar» (ERPlora/live#89), and «ordenador» (a
+#: computer) no «ordena», «ordenar» nor «orden» (to put in order, an order; ERPlora/live#61).
 _APART_WORDS = {"ficha": "ficha", "carta": "carta", "recibo": "recibo", "registro": "registro", "fiche": "fichar",
                 "ficho": "fichar", "listo": "listo", "selle": "sellar", "sellen": "sellar"}
 _APART_PREFIXES = (
@@ -381,7 +385,7 @@ _APART_PREFIXES = (
     ("comensal", "comensal"), ("dispon", "dispon"), ("sellab", "sellab"), ("sella", "sellar"), ("sello", "sellar"),
     ("sellem", "sellar"), ("sellei", "sellar"), ("existenci", "exist"), ("exist", "existir"),
     ("produccion", "produccion"), ("production", "produccion"), ("comprob", "comprobar"), ("comprue", "comprobar"),
-    ("recordatori", "recordatori"),
+    ("recordatori", "recordatori"), ("ordenador", "ordenador"),
 )
 #: A noun that is a command at the start of a sentence, followed by these: «ficha la entrada de Ana» clocks in, «abre
 #: la ficha de Ana» is her card; «reserva una mesa» books, «cancela la reserva» names one.
