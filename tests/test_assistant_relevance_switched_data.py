@@ -4,6 +4,7 @@ never one named in passing in what is said around it (ERPlora/live#76)."""
 import pytest
 from ninja import Schema
 
+from live import assistant
 from tests.assistant_catalogue import CHECK, ranked, tool
 
 
@@ -74,3 +75,42 @@ STOCK_SETTINGS = [
 def test_what_is_turned_off_is_said_with_what_it_is_of(asked):
     """«De stock» says what is turned off is of the stock, in the same sentence: the settings that take it change it."""
     assert ranked(STOCK_SETTINGS, asked, "es")[0] == "inventory.config.update"
+
+
+class PreferencesIn(Schema):
+    language: str | None = None
+    hub_alerts: bool | None = None
+
+
+ALERTS = [
+    tool("accounts.preferences.update", "Changes the account's language or alerts of its businesses.",
+         input=PreferencesIn),
+    tool("hubs.business.notify_people", "Sends a notice to every person of a business."),
+    tool("hubs.business.update", "Changes the name or time zone of a business."),
+]
+
+
+@pytest.mark.parametrize(
+    ("asked", "language"),
+    [
+        ("turn off the alerts, all the alerts from my businesses", "en"),
+        ("desactiva los avisos, todos los avisos de mis negocios", "es"),
+        ("desactiva los avisos, comprobando que no llegue ningún aviso a mis negocios", "es"),
+        ("turn off the alerts, making sure no alert reaches my businesses", "en"),
+        # With only a pronoun before the comma, what follows it is what is turned off.
+        ("desactívalos ya, los avisos", "es"),
+        ("turn them off now, the alerts", "en"),
+    ],
+)
+def test_what_is_turned_off_said_again_after_the_comma_is_still_what_it_changes(asked, language):
+    """The alerts said after the comma, again, for a pronoun or in what is checked, are still what is turned off: the
+    preferences that take them change it."""
+    assert ranked(ALERTS, asked, language)[0] == "accounts.preferences.update"
+
+
+def test_what_is_asked_and_the_words_read_once_rank_as_lists():
+    """``relevant`` takes any iterable: read once, as a generator is, they rank as the lists they hold."""
+    asked = "activa el envío real a la AEAT, comprobando antes que la cuenta y la autorización estén listas"
+    tools = {op.name: op for op in CHECKS_AND_GOING_LIVE}
+    once = assistant.relevant(tools, (text for text in [asked]), "es", synonyms=(group for group in CHECK))
+    assert [op.name for op in once] == ranked(CHECKS_AND_GOING_LIVE, asked, "es", synonyms=CHECK)

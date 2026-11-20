@@ -1,4 +1,4 @@
-"""``named_aside``: what a text names in a sentence of its own that asks for nothing (ERPlora/live#76)."""
+"""``named_aside``: what a text names in a clause of its own beside a command (ERPlora/live#76)."""
 
 import pytest
 
@@ -15,7 +15,7 @@ def concepts_of(*said: str, synonyms=()) -> frozenset[frozenset[str]]:
 @pytest.mark.parametrize(
     ("said", "aside"),
     [
-        # What a command checks first, after a comma, is named aside: it asks for nothing of its own.
+        # What a command checks first, after a comma, is named aside: a gerund opens it and it asks for nothing.
         ("activa el envío real a la AEAT a partir de ahora, comprobando antes que la cuenta y la autorización estén "
          "listas", concepts_of("comprobando", "antes", "cuenta", "autorización", "estén", "listas", synonyms=CHECK)),
         ("turn on real filing with the AEAT from now on, checking first that the account and the authorisation are "
@@ -26,9 +26,14 @@ def concepts_of(*said: str, synonyms=()) -> frozenset[frozenset[str]]:
         # What a thing is of, in the same sentence, is said with it.
         ("desactiva el control de stock", frozenset()),
         ("desactiva las alertas de stock bajo", frozenset()),
-        # A sentence that only names: aside, whatever said it before.
-        ("desactívalos ya, los recordatorios", concepts_of("recordatorios")),
+        # Or a word that opens another clause.
+        ("desactiva la unión de mesas, que la cuenta salga separada",
+         concepts_of("cuenta", "salga", "separada", synonyms=CHECK)),
+        # A sentence that only names, as what a pronoun before it stands for, is no clause of its own.
+        ("desactívalos ya, los recordatorios", frozenset()),
+        ("turn them off now, the alerts", frozenset()),
+        ("desactiva los avisos, todos los avisos de mis negocios", frozenset()),
     ],
 )
-def test_what_a_sentence_that_asks_for_nothing_names_is_aside(said, aside):
+def test_what_a_clause_beside_a_command_names_is_aside(said, aside):
     assert named_aside([said], CHECK) == aside
