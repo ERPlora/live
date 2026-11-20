@@ -7,6 +7,7 @@ from django.utils import translation
 
 from live.assistant.aside import named_aside
 from live.assistant.reading import (
+    Asked,
     asked,
 )
 from live.assistant.stemming import (
@@ -140,9 +141,9 @@ def relevant(  # noqa: PLR0913
     is what the command acts on («registra esta tablet», never «registra en
     esta tablet una salida…»); «activa la app» is
     ``base.app.enable``, never an operation of the app named after it, and so is «activa los clientes», an app named
-    by its name; named alone as what a switch turns on or off, the app adds the 3 of what the command acts on
-    («apaga las ventas», «turn off the kitchen»: before a write that takes what the app's name also names, a ticket;
-    never «turn off stock control»; ERPlora/live#77). What a switch turns on or off (``Asked.switched``) that names
+    by its name; named alone as what a switch turns on or off, with no other app nor thing, the app adds the 3 of
+    what the command acts on («apaga las ventas», «turn off the kitchen»: before a write that takes what the app's name
+    also names, a ticket; never «turn off stock control» nor «desactiva el control de stock»; ERPlora/live#77). What a switch turns on or off (``Asked.switched``) that names
     no tool's thing but an app is the thing
     of the switch of that action whose asks name it, with the apps said beside it: «desactiva los recordatorios de
     las citas» turns off the recipe whose asks say «apaga la receta del recordatorio de citas», before turning the
@@ -291,7 +292,7 @@ def _relevant(  # noqa: C901, PLR0913, PLR0915
             places += 2 if is_thing else in_app
             places += 2 * (not concept.isdisjoint(doing)) + (not concept.isdisjoint(qualified))
         if not thing and apps_named and not _APP_THING.isdisjoint(named_entity):
-            thing, aimed = 1, _one_app_switched(said.switched, apps_named)
+            thing, aimed = 1, _one_app_switched(said, apps_named, things)
         taken = _taken(op.input)
         takes = named(taken)
         points = places + named(_stems_of(description(op))) + named(asks(op)) + takes
@@ -355,12 +356,12 @@ def _naming_apps(
     )
 
 
-def _one_app_switched(
-    switched: frozenset[frozenset[frozenset[str]]], apps_named: frozenset[frozenset[str]]
-) -> bool:
-    """Whether what a switch turns on or off is one app named by its name and nothing else («las ventas», «the
-    kitchen»; never «stock control»: a setting of the stock)."""
-    return any(len(head) == 1 and head <= apps_named for head in switched)
+def _one_app_switched(said: Asked, apps_named: frozenset[frozenset[str]], things: frozenset[str]) -> bool:
+    """Whether what a switch turns on or off is one app named by its name (``apps_named``), the only app or thing of
+    the catalogue (``things``) the command names: «las ventas», «the kitchen»; never «stock control» nor «el control de
+    stock», a setting of the stock."""
+    named = frozenset(concept for concept in said.direct if concept in apps_named or not concept.isdisjoint(things))
+    return len(named) == 1 and named <= apps_named and named in said.switched
 
 
 @lru_cache(maxsize=4_096)

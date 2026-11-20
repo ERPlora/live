@@ -226,10 +226,11 @@ SETTINGS_SAID_WITH_THEIR_APP = [
          input=KitchenDisplayIn, asks={"en": ("mute the display",), "es": ("pon más bajo el sonido de la pantalla",)}),
     tool("cash_register.settings.update", "Change how the drawer works: cash register on, blind count, daily "
          "auto-close.", input=DrawerIn, asks={"en": ("turn on the blind count",), "es": ("activa el arqueo ciego",)}),
+    tool("attendance.entry.list", "Lists the clock-ins of the staff.", "query"),
     *NOISE,
 ]
 APPS_OF_THE_SETTINGS = {"inventory": "inventario inventory stock", "kitchen": "cocina kitchen",
-                        "cash_register": "caja arqueo cash register"}
+                        "cash_register": "caja arqueo cash register", "attendance": "control horario fichaje"}
 
 
 def apps_of_the_settings(label: str, language: str) -> frozenset[str]:
@@ -242,13 +243,16 @@ def apps_of_the_settings(label: str, language: str) -> frozenset[str]:
         ("turn off stock control", "en", "inventory.config.update"),
         ("turn off the kitchen sound alert", "en", "kitchen.settings.update"),
         ("activa el arqueo ciego", "es", "cash_register.settings.update"),
+        # What it is of, after «de», is named too: «control» alone would be the clock-ins' app.
+        ("desactiva el control de stock", "es", "inventory.config.update"),
         ("turn off the kitchen", "en", "base.app.disable"),
         ("apaga la cocina", "es", "base.app.disable"),
     ],
 )
 def test_an_app_is_what_a_switch_turns_off_only_when_named_alone(asked, language, first):
-    """«Turn off stock control» turns off a setting of the stock, not the Inventory app: only an app named alone by its
-    name («turn off the kitchen») is what the switch turns off."""
+    """«Turn off stock control» and «desactiva el control de stock» turn off a setting of the stock, not an app: only an
+    app named alone by its name, with no other app nor thing named («turn off the kitchen»), is what the switch turns
+    off."""
     names = ranked(SETTINGS_SAID_WITH_THEIR_APP, asked, language, app_words=apps_of_the_settings)
     assert names[0] == first, names[:4]
 
