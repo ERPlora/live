@@ -8,9 +8,7 @@ from live.assistant.stemming import _concept, _groups
 #: A text between quotes, in any of the marks people type.
 _QUOTED = r"(?:«[^«»]+»|\"[^\"]+\"|“[^“”]+”|‘[^‘’]+’|'[^']+')"
 #: One quoted text said for another: «cambia «A» por «B»», «change "A" to "B"», «pon «B» en vez de «A»».
-_FOR_ANOTHER = re.compile(
-    rf"{_QUOTED}\s+(?:por|a|en vez de|en lugar de|to|with|for|instead of)\s+{_QUOTED}", re.IGNORECASE
-)
+_FOR_ANOTHER = re.compile(rf"{_QUOTED}\s+(?:por|a|en vez de|en lugar de|to|with|for|instead of)\s+{_QUOTED}")
 
 
 def quoted_texts(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> frozenset[frozenset[str]]:

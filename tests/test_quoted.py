@@ -67,6 +67,9 @@ def test_saying_it_is_a_text_still_offers_it_first(phrase, language):
         "cambia «Sin cilantro»",
         # Two texts, but neither said for the other.
         "cambia «Sin cilantro» y «Nada de cilantro»",
+        # What is changed, or what is put in its place, is no quoted text: a product swapped on a check.
+        "cambia el café por «Té verde»",
+        "cambia «Café» por un té",
     ],
 )
 def test_without_one_quoted_text_said_for_another_nothing_names_a_text(phrase):
