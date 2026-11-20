@@ -4,7 +4,9 @@
 ``LIVE["vite"] = {"command": [...], "cwd": ...}``, the autoreloader's parent process (the one that
 lives as long as the terminal session) starts Vite in its own session, so a Python reload never
 restarts it, and kills its whole process group at exit: SIGTERM, then SIGKILL after 5 s.
-``--novite`` skips it.
+If Vite exits on its own while the server runs (another Vite holds its port, or it crashed), the
+server stops too and says so, rather than serve pages whose code comes from whatever answers on that
+port. ``--novite`` skips it.
 """
 
 from __future__ import annotations
@@ -14,6 +16,7 @@ import os
 import shlex
 import signal
 import subprocess
+import threading
 from typing import Any
 
 from daphne.management.commands.runserver import Command as DaphneRunserverCommand
@@ -48,6 +51,42 @@ def stop_vite(proc: subprocess.Popen, *, killpg=os.killpg, timeout: float = 5.0)
         pass
 
 
+def _interrupt_main() -> None:
+    """Stop the server as CONTROL-C does, waking the main thread even while it waits for the reloaded child."""
+    signal.pthread_kill(threading.main_thread().ident, signal.SIGINT)
+
+
+class ViteWatch:
+    """Interrupt the server when its Vite exits, unless the server is already stopping."""
+
+    def __init__(self, process: subprocess.Popen, *, interrupt=_interrupt_main):
+        self.process = process
+        self.exit_code: int | None = None
+        self._interrupt = interrupt
+        self._stopping = threading.Event()
+        self._thread = threading.Thread(target=self.wait, name="vite-watch", daemon=True)
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def stop(self) -> None:
+        """From now on Vite exits because the server stops it."""
+        self._stopping.set()
+
+    def wait(self) -> None:
+        """Block until Vite exits; interrupt the server if it was not stopping already."""
+        code = self.process.wait()
+        if not self._stopping.is_set():
+            self.exit_code = code
+            self._interrupt()
+
+    def error(self) -> CommandError:
+        return CommandError(
+            f"Vite: `{shlex.join(self.process.args)}` exited with code {self.exit_code}, so the server stopped; "
+            "if another Vite holds its port, set another VITE_DEV_PORT, or run with --novite."
+        )
+
+
 class Command(DaphneRunserverCommand):
     help = "Start the ASGI development server and, with DEBUG, the Vite dev server (HMR)."
 
@@ -61,8 +100,21 @@ class Command(DaphneRunserverCommand):
         )
 
     def run(self, **options):
-        self.maybe_start_vite(options)
-        super().run(**options)
+        vite = self.maybe_start_vite(options)
+        if vite is None:
+            super().run(**options)
+            return
+        watch = ViteWatch(vite)
+        try:
+            watch.start()
+            super().run(**options)
+        except KeyboardInterrupt:
+            if watch.exit_code is None:
+                raise
+        finally:
+            watch.stop()
+        if watch.exit_code is not None:
+            raise watch.error()
 
     def maybe_start_vite(self, options: dict[str, Any]) -> subprocess.Popen | None:
         """Start Vite when DEBUG, ``LIVE["vite"]`` and no ``--novite``, in the reloader's parent only."""
