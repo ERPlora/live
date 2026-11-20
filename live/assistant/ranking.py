@@ -5,6 +5,7 @@ from functools import cache, lru_cache
 
 from django.utils import translation
 
+from live.assistant.aside import named_aside
 from live.assistant.reading import (
     asked,
 )
@@ -144,7 +145,9 @@ def relevant(  # noqa: PLR0913
     las citas» turns off the recipe whose asks say «apaga la receta del recordatorio de citas», before turning the
     Appointments app off; a word the asks of the switches of several things say («de momento», «por ahora») is the
     thing of none (ERPlora/live#89). Of no thing named, it adds 7 to a write that takes a datum the question names
-    («cambia el precio»: a write that takes a ``price``; «turn off the alerts»: a write that takes them, as turning on or off changes it), 3 to
+    («cambia el precio»: a write that takes a ``price``; «turn off the alerts»: a write that takes what is turned on
+    or off, as switching changes it, never a datum a clause said beside the command names (``named_aside``:
+    «activa el envío real, comprobando antes que la cuenta…» changes no check; ERPlora/live#76)), 3 to
     any other write unless a tool does that to what the command acts on, or it is an app named by its name («reserva
     una mesa»: no write of the staff; «abre la cocina»: no other app's open), 1 to
     a read of the app named and nothing to any other read: «¿cuántos…?» is no list of everything, and what a read is
@@ -164,7 +167,9 @@ def relevant(  # noqa: PLR0913
     and the reads of what it asks about 3 more («what can customers pay with?»: the payment methods); a how-to question
     gives the help (``howto``, the project's documentation search) ``HOWTO_POINTS``. Ties go by name: the same
     question, the same tools."""
-    return _relevant(tools, texts, language, always=always, app_words=app_words, synonyms=synonyms, howto=howto)
+    return _relevant(
+        tools, list(texts), language, always=always, app_words=app_words, synonyms=tuple(synonyms), howto=howto
+    )
 
 
 def _relevant(  # noqa: C901, PLR0913, PLR0915
@@ -250,6 +255,8 @@ def _relevant(  # noqa: C901, PLR0913, PLR0915
             (frozenset(concept for concept in rest if len(said_by.get(concept, ())) == 1), apps)
             for rest, apps in unnamed
         ]
+    # What a clause beside the command names, but what a switch turns on or off, is no datum the switch changes.
+    beside = named_aside(texts, synonyms) - frozenset().union(*said.switched)
 
     def score(op: Operation) -> int:  # noqa: C901, PLR0912
         app, entity, action = op.name.split(".")
@@ -317,7 +324,11 @@ def _relevant(  # noqa: C901, PLR0913, PLR0915
                 )
                 if not in_passing:
                     points += 7 if takes and writes else 3 if writes and not aimed_at else 1 if app_named else 0
-        elif switching and takes and not _CHANGES.isdisjoint(acts):
+        elif (
+            switching
+            and not _CHANGES.isdisjoint(acts)
+            and any(not concept.isdisjoint(taken) for concept in concepts - beside)
+        ):
             points += 7
         if op.kind == "query":
             if about and any(not concept.isdisjoint(named_entity) for concept in about):
