@@ -357,11 +357,11 @@ def _naming_apps(
 
 
 def _one_app_switched(said: Asked, apps_named: frozenset[frozenset[str]], things: frozenset[str]) -> bool:
-    """Whether what a switch turns on or off is one app named by its name (``apps_named``), the only app or thing of
-    the catalogue (``things``) the command names: «las ventas», «the kitchen»; never «stock control» nor «el control de
-    stock», a setting of the stock."""
+    """Whether what a switch turns on or off is the one app the command names (of ``apps_named``, never empty here),
+    and nothing else it names is an app or a thing of the catalogue (``things``): «las ventas», «the kitchen»; never
+    «stock control» nor «el control de stock», a setting of the stock."""
     named = frozenset(concept for concept in said.direct if concept in apps_named or not concept.isdisjoint(things))
-    return len(named) == 1 and named <= apps_named and named in said.switched
+    return len(named) == 1 and named in said.switched
 
 
 @lru_cache(maxsize=4_096)
