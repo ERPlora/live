@@ -2,7 +2,7 @@
 
 from collections.abc import Iterable
 
-from live.assistant.reading import _verbs_of
+from live.assistant.clauses import _verbs_of
 from live.assistant.stemming import _concept, _groups, _sentences
 from live.assistant.vocabulary import _OTHER_CLAUSE, _PHRASES, STOP_WORDS
 
