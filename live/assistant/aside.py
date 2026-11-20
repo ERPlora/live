@@ -6,10 +6,9 @@ from live.assistant.reading import _verbs_of
 from live.assistant.stemming import _concept, _groups, _sentences
 from live.assistant.vocabulary import _OTHER_CLAUSE, _PHRASES, STOP_WORDS
 
-#: How a clause said beside a command opens: with a gerund («comprobando», «viendo», «checking») or a word that opens
-#: another clause («que», «that»).
+#: How a clause said beside a command opens, besides a word that opens another clause (``_OTHER_CLAUSE``: «que»): with
+#: a gerund («comprobando», «viendo», «checking»).
 _GERUNDS = ("ando", "iendo", "yendo", "ing")
-_OPENS = _OTHER_CLAUSE | {"that"}
 
 
 def named_aside(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) -> frozenset[frozenset[str]]:
@@ -30,12 +29,11 @@ def named_aside(texts: Iterable[str], synonyms: Iterable[Iterable[str]] = ()) ->
 
 
 def _beside(words: list[str]) -> bool:
-    """Whether ``words`` open as a clause beside a command (``_GERUNDS``, ``_OPENS``) and say no verb of ``VERBS``, in
-    one word or in several («turn on»)."""
+    """Whether ``words`` open as a clause beside a command (``_OTHER_CLAUSE``, ``_GERUNDS``) and say no verb of
+    ``VERBS``, in one word or in several («turn on»)."""
     said = f" {' '.join(words)} "
     return (
-        bool(words)
-        and (words[0] in _OPENS or words[0].endswith(_GERUNDS))
+        (words[0] in _OTHER_CLAUSE or words[0].endswith(_GERUNDS))
         and not any(_verbs_of(word) for word in words)
         and not any(f" {phrase} " in said for phrase in _PHRASES)
     )

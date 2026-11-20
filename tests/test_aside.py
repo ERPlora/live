@@ -20,7 +20,9 @@ def concepts_of(*said: str, synonyms=()) -> frozenset[frozenset[str]]:
          "listas", concepts_of("comprobando", "antes", "cuenta", "autorización", "estén", "listas", synonyms=CHECK)),
         ("turn on real filing with the AEAT from now on, checking first that the account and the authorisation are "
          "ready", concepts_of("checking", "first", "account", "authorisation", "ready", synonyms=CHECK)),
-        # A sentence with a verb of its own asks for it: what it names is not aside.
+        # A sentence with a verb of its own asks for it, in one word or in several: what it names is not aside.
+        ("cierra la caja, comprobando antes el efectivo y luego activa la alarma", frozenset()),
+        ("close the till, checking the cash first and then turn on the alarm", frozenset()),
         ("activa la web de reservas, exige email y permite elegir profesional a la clienta", frozenset()),
         ("activa las propinas y cierra la cuenta", frozenset()),
         # What a thing is of, in the same sentence, is said with it.
