@@ -151,6 +151,14 @@ def debug_with_vite(settings):
     settings.LIVE = {**settings.LIVE, "vite": VITE}
 
 
+@pytest.fixture
+def sigint_ignored():
+    """SIGINT ignored, as a script's `runserver &` (no job control) starts runserver; pytest gets its handler back."""
+    previous = signal.signal(signal.SIGINT, signal.SIG_IGN)
+    yield
+    signal.signal(signal.SIGINT, previous)
+
+
 def options(**overrides):
     return {"use_reloader": True, "use_vite": True, **overrides}
 
@@ -212,6 +220,19 @@ class TestWhenViteStarts:
         runserver.Command().run(**options())
 
         assert order == [("server", [VITE])]
+
+    @pytest.mark.parametrize(
+        ("use_vite", "handler"), [(True, signal.default_int_handler), (False, signal.SIG_IGN)], ids=["vite", "novite"]
+    )
+    def test_an_ignored_sigint_is_accepted_again_only_to_watch_vite(
+        self, spawned, debug_with_vite, sigint_ignored, monkeypatch, use_vite, handler
+    ):
+        seen = []
+        monkeypatch.setattr(DaphneCommand, "run", lambda self, **opts: seen.append(signal.getsignal(signal.SIGINT)))
+
+        runserver.Command().run(**options(use_vite=use_vite))
+
+        assert seen == [handler]
 
 
 class TestViteWatch:
