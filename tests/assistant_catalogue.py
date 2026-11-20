@@ -2,6 +2,7 @@
 slices more than one of those tests ranks."""
 
 from ninja import Schema
+from pydantic import create_model
 
 from live import assistant
 from live.operations import AI, Operation
@@ -17,6 +18,11 @@ class ReservationIn(Schema):
     guest_name: str
     party_size: int
     table: str | None = None
+
+
+def takes(*fields: str) -> type[Schema]:
+    """An input that takes ``fields``, none of them required."""
+    return create_model("In", __base__=Schema, **{field: (str | None, None) for field in fields})
 
 
 def tool(name: str, description: str, kind: str = "command", input: type[Schema] = NoIn, asks=None) -> Operation:

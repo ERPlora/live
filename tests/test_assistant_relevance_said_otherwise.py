@@ -3,15 +3,9 @@
 automation named by its own name was offered none of the three)."""
 
 import pytest
-from ninja import Schema
-from pydantic import create_model
 
 from live import assistant
-from tests.assistant_catalogue import NOISE, ranked, tool
-
-
-def takes(*fields: str) -> type[Schema]:
-    return create_model("In", __base__=Schema, **{field: (str | None, None) for field in fields})
+from tests.assistant_catalogue import NOISE, ranked, takes, tool
 
 
 #: The Hub's tools of an automation, as Automations describes them and asks for them.

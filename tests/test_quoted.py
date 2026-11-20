@@ -3,19 +3,13 @@ read as «cambia el texto «Sin cilantro» por «Nada de cilantro»», so the ch
 (ERPlora/live#167)."""
 
 import pytest
-from ninja import Schema
-from pydantic import create_model
 
-from tests.assistant_catalogue import NOISE, ranked, tool
-
-
-def takes(*fields: str) -> type[Schema]:
-    return create_model("In", __base__=Schema, **{field: (str | None, None) for field in fields})
+from tests.assistant_catalogue import NOISE, ranked, takes, tool
 
 
 NOTE = "sale.quick_note.update"
 #: The Hub's change of a quick note of the till, beside the writes that tie with it when nothing names what changes:
-#: the noise's updates, whose names come first, a product's change that takes a name and the till's settings.
+#: the noise's updates, whose names come first, the note's create, a product's change and a device's rename.
 TILL_NOTES = [
     tool(NOTE, "Change the text or the position of a quick note of the till. Pass its current text in quick_note, or "
          "its id when already known.", input=takes("id", "quick_note", "text", "sort_order")),
