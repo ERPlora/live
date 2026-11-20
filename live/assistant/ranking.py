@@ -7,9 +7,13 @@ from django.utils import translation
 
 from live.assistant.aside import named_aside
 from live.assistant.reading import (
+    Asked,
     asked,
 )
 from live.assistant.stemming import (
+    _concept,
+    _groups,
+    _sentences,
     _stems_of,
     _taken,
     stem,
@@ -25,6 +29,7 @@ from live.assistant.vocabulary import (
     _BEFORE_UPDATE,
     _CHANGES,
     _EMPTYING,
+    _OF,
     _REGISTERS,
     _SET_STATES,
     _TURNS,
@@ -140,7 +145,11 @@ def relevant(  # noqa: PLR0913
     is what the command acts on («registra esta tablet», never «registra en
     esta tablet una salida…»); «activa la app» is
     ``base.app.enable``, never an operation of the app named after it, and so is «activa los clientes», an app named
-    by its name. What a switch turns on or off (``Asked.switched``) that names no tool's thing but an app is the thing
+    by its name; named alone as what a switch turns on or off, with no other app nor thing nor what it is of, the app
+    adds the 3 of what the command acts on («apaga las ventas», «turn off the kitchen»: before a write that takes what
+    the app's name also names, a product's sold out or a ticket; never «turn off stock control», «desactiva el control
+    de stock» nor «desactiva la venta del café»; ERPlora/live#77). What a switch turns on or off (``Asked.switched``)
+    that names no tool's thing but an app is the thing
     of the switch of that action whose asks name it, with the apps said beside it: «desactiva los recordatorios de
     las citas» turns off the recipe whose asks say «apaga la receta del recordatorio de citas», before turning the
     Appointments app off; a word the asks of the switches of several things say («de momento», «por ahora») is the
@@ -201,15 +210,11 @@ def _relevant(  # noqa: C901, PLR0913, PLR0915
     things = frozenset().union(*(_things(op) for op in tools.values())) if concepts else frozenset()
     every_app = {op.app_label for op in tools.values()} if concepts else set()
     names_a_thing = any(not concept.isdisjoint(things) for concept in concepts)
-    by_app = set() if names_a_thing else {
-        concept for concept in concepts if any(not concept.isdisjoint(app_words(label, language)) for label in every_app)
-    }
+    by_app = frozenset() if names_a_thing else _naming_apps(concepts, every_app, app_words, language)
     # An app switched is one the command names («activa las ventas», «activa otra vez las ventas», «ya no usamos la
     # cocina, desactívala»), not one named for what something is («vuelve a activar Mayorista para las próximas ventas»:
     # a price list, ERPlora/live#50).
-    apps_named = switching and any(
-        not concept.isdisjoint(app_words(label, language)) for concept in said.direct for label in every_app
-    )
+    apps_named = _naming_apps(said.direct, every_app, app_words, language) if switching else frozenset()
     # What a command acts on, when a tool does that to it or it is an app named by its name: then the writes of other
     # things are not what it asks («reserva una mesa» is no staff's create; «create a 10% discount» has no tool that
     # creates a discount, so the creates stay).
@@ -233,9 +238,7 @@ def _relevant(  # noqa: C901, PLR0913, PLR0915
     # to ask for a tool names it (ERPlora/live#89).
     unnamed: list[tuple[frozenset[frozenset[str]], frozenset[frozenset[str]]]] = []
     for head in said.switched:
-        apps = frozenset(
-            concept for concept in head if any(not concept.isdisjoint(app_words(label, language)) for label in every_app)
-        )
+        apps = _naming_apps(head, every_app, app_words, language)
         rest = head - apps
         if rest and all(concept.isdisjoint(things) for concept in rest):
             unnamed.append((rest, apps))
@@ -294,7 +297,7 @@ def _relevant(  # noqa: C901, PLR0913, PLR0915
             places += 2 if is_thing else in_app
             places += 2 * (not concept.isdisjoint(doing)) + (not concept.isdisjoint(qualified))
         if not thing and apps_named and not _APP_THING.isdisjoint(named_entity):
-            thing = 1
+            thing, aimed = 1, _one_app_switched(said, apps_named, things, _said_of(texts, synonyms))
         taken = _taken(op.input)
         takes = named(taken)
         points = places + named(_stems_of(description(op))) + named(asks(op)) + takes
@@ -344,6 +347,42 @@ def _relevant(  # noqa: C901, PLR0913, PLR0915
     first = [tools[name] for name in always if name in tools]
     ranked = sorted((op for op in tools.values() if op.name not in always), key=lambda op: (-score(op), op.name))
     return [*first, *ranked][:MAX_TOOLS]
+
+
+def _naming_apps(
+    concepts: Iterable[frozenset[str]],
+    labels: Iterable[str],
+    app_words: Callable[[str, str], frozenset[str]],
+    language: str,
+) -> frozenset[frozenset[str]]:
+    """The ``concepts`` that name one of the apps of ``labels`` by its name (``app_words``)."""
+    return frozenset(
+        concept for concept in concepts if any(not concept.isdisjoint(app_words(label, language)) for label in labels)
+    )
+
+
+def _one_app_switched(
+    said: Asked, apps_named: frozenset[frozenset[str]], things: frozenset[str], said_of: frozenset[frozenset[str]]
+) -> bool:
+    """Whether what a switch turns on or off is the one app the command names (of ``apps_named``, never empty here),
+    nothing else it names is an app or a thing of the catalogue (``things``) and it is not said with what it is of
+    (``said_of``): «las ventas», «the kitchen»; never «stock control» nor «el control de stock», a setting of the
+    stock, nor «la venta del café», the sales of a product."""
+    named = frozenset(concept for concept in said.direct if concept in apps_named or not concept.isdisjoint(things))
+    return len(named) == 1 and named in said.switched and named.isdisjoint(said_of)
+
+
+def _said_of(texts: Iterable[str], synonyms: Iterable[Iterable[str]]) -> frozenset[frozenset[str]]:
+    """What ``texts`` name with what it is of right after it (``_OF``: «la venta del café», «the sales of the
+    coffee»)."""
+    extra = _groups(synonyms)
+    return frozenset(
+        _concept(word, extra)
+        for text in texts
+        for words in _sentences(text)
+        for word, after in zip(words, words[1:], strict=False)
+        if after in _OF
+    )
 
 
 @lru_cache(maxsize=4_096)
