@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# pre-push of live, switched on once per clone with `git config core.hooksPath .githooks` (README).
+#   1. The machine's global pre-push runs first, with the same arguments and input: a repository's core.hooksPath
+#      hides it, and its checks would stop running unnoticed.
+#   2. Every pushed commit is checked out in a temporary worktree and `scripts/checks.sh fast` runs there, with the
+#      Python environment of this checkout: what is checked is what is pushed, never the working tree.
+# A red check stops the push, and nothing switches it off. Tests: tests/test_githooks.py.
+set -u
+
+zero=0000000000000000000000000000000000000000
+hook_dir=$(cd "$(dirname "$0")" && pwd -P)
+scratch=$(mktemp -d "${TMPDIR:-/tmp}/live-pre-push.XXXXXX") || exit 1
+tree=
+cleanup() {
+  [ -n "$tree" ] && git worktree remove --force "$tree" > /dev/null 2>&1
+  rm -rf "${scratch:?}"
+  git worktree prune > /dev/null 2>&1
+}
+trap cleanup EXIT
+# Kept byte for byte: the global hook and this one read the same refs.
+cat > "$scratch/stdin"
+
+global=$(git config --global --path --get core.hooksPath 2>/dev/null || true)
+if [ -n "$global" ] && [ -x "$global/pre-push" ] && [ "$(cd "$global" 2>/dev/null && pwd -P)" != "$hook_dir" ]; then
+  if ! "$global/pre-push" "$@" < "$scratch/stdin"; then
+    echo "pre-push: the global pre-push hook ($global/pre-push) rejected the push" >&2
+    exit 1
+  fi
+fi
+
+# uv reads a relative UV_PROJECT_ENVIRONMENT from the project's folder, and the checks run in another one.
+environment=${UV_PROJECT_ENVIRONMENT:-.venv}
+case "$environment" in /*) ;; *) environment="$PWD/$environment" ;; esac
+
+checked=
+while read -r local_ref local_sha _; do
+  [ -n "${local_sha:-}" ] || continue
+  # Deleting a remote branch uploads nothing: there is nothing to check.
+  [ "$local_sha" = "$zero" ] && continue
+  case " $checked " in *" $local_sha "*) continue ;; esac
+  checked="$checked $local_sha"
+  short=$(git rev-parse --short "$local_sha")
+  if [ ! -d "$environment" ]; then
+    echo "pre-push: there is no Python environment at $environment to run the checks: run uv sync and push again" >&2
+    exit 1
+  fi
+  tree="$scratch/tree"
+  if ! git worktree add --quiet --detach "$tree" "$local_sha" > /dev/null 2>&1; then
+    echo "pre-push: could not check out $short in a temporary worktree: push aborted" >&2
+    exit 1
+  fi
+  if [ ! -f "$tree/scripts/checks.sh" ]; then
+    echo "pre-push: $short ($local_ref) has no scripts/checks.sh: merge origin/main into it and push again" >&2
+    exit 1
+  fi
+  echo "pre-push: scripts/checks.sh fast on $short ($local_ref)" >&2
+  # The checks run as in a fresh clone: no variable of this push points git at another repository.
+  if ! (cd "$tree" && unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_COMMON_DIR \
+    && UV_PROJECT_ENVIRONMENT="$environment" bash scripts/checks.sh fast >&2); then
+    echo "pre-push: scripts/checks.sh fast failed on $short ($local_ref): push aborted" >&2
+    exit 1
+  fi
+  git worktree remove --force "$tree" > /dev/null 2>&1
+  tree=
+done < "$scratch/stdin"

@@ -26,6 +26,7 @@ dev = [
     "pytest-django>=4.14",
     "pytest-asyncio>=1.4",
     "ruff>=0.17.5",
+    "complexipy>=9.0.0",
 ]
 
 [tool.pytest.ini_options]
@@ -62,3 +63,12 @@ max-statements = 50
 "tests/**" = ["PLR0913", "PLR0917"]
 "**/test_*.py" = ["PLR0913", "PLR0917"]
 "**/conftest.py" = ["PLR0913", "PLR0917"]
+
+# complexipy (`uv run complexipy`; tests/test_function_limits.py runs it): no function's cognitive complexity goes over
+# 15, and no ignore comment switches that off. complexipy-snapshot.json froze the functions over it when it came in: it
+# only shrinks. Migrations are generated.
+[tool.complexipy]
+paths = ["."]
+exclude = ["**/migrations/**"]
+max-complexity-allowed = 15
+no-ignore = true
