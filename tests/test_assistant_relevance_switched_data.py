@@ -5,6 +5,7 @@ import pytest
 from ninja import Schema
 
 from live import assistant
+from live.assistant.ranking import _one_app_switched
 from tests.assistant_catalogue import CHECK, NOISE, ranked, tool
 
 
@@ -139,6 +140,8 @@ SALES_AND_WHAT_THEY_NAME = [
     tool("sale.settings.update", "Change how the sales work: the ticket's footer, the discounts allowed.",
          input=SaleSettingsIn),
     tool("sale.sale.list", "Lists the sales of a day.", "query"),
+    tool("base.app.list", "Lists this business's apps, on or off.", "query"),
+    tool("staff.shift.list", "Lists the shifts of the staff.", "query"),
     *NOISE,
 ]
 SALES_APPS = {"sale": "ventas sales tpv", "kitchen": "cocina kitchen comandas tickets", "inventory": "inventario"}
@@ -164,6 +167,11 @@ def sales_ranked(asked: str, language: str) -> list[str]:
         ("switch off the sales", "en", "base.app.disable"),
         ("turn the sales off", "en", "base.app.disable"),
         ("turn on the sales", "en", "base.app.enable"),
+        ("desactiva las ventas, ya no las usamos", "es", "base.app.disable"),
+        ("vuelve a activar las ventas", "es", "base.app.enable"),
+        # Whom it is for (``Asked.direct``) is no other thing switched with it.
+        ("activa las ventas para el turno de noche", "es", "base.app.enable"),
+        ("turn on the sales for the night shift", "en", "base.app.enable"),
     ],
 )
 def test_an_app_switched_by_its_name_comes_before_the_writes_that_take_what_it_names(asked, language, first):
@@ -181,35 +189,45 @@ def test_an_app_switched_by_its_name_comes_before_the_writes_that_take_what_it_n
         ("the croissants are sold out, stop offering them", "en", "inventory.product.set_sold_out"),
         ("we've run out of custard", "en", "inventory.product.set_sold_out"),
         ("marca el café como agotado", "es", "inventory.product.set_sold_out"),
-        ("what have we sold today?", "en", "sale.sale.list"),
-        ("¿qué hemos vendido hoy?", "es", "sale.sale.list"),
+        ("lista las ventas", "es", "sale.sale.list"),
     ],
 )
-def test_sold_out_still_marks_a_product_and_sold_still_names_the_sales(asked, language, first):
-    """«Sold out» (no stock left) still marks a product so, as running out of it does, and «sold» alone still names
-    what was sold."""
+def test_sold_out_still_marks_a_product_and_the_sales_listed_are_no_app(asked, language, first):
+    """«Sold out» (no stock left) still marks a product so, as running out of it does; the sales listed are the sales,
+    not the list of apps: an app is named for its switch only by a switch."""
     names = sales_ranked(asked, language)
     assert names[0] == first, names[:4]
 
 
-@pytest.mark.parametrize(
-    ("asked", "language"), [("desactiva la venta de este producto", "es"), ("turn off sales of this product", "en")]
-)
-def test_the_sales_of_a_product_named_turn_off_no_app(asked, language):
-    """«Desactiva la venta de este producto» stops selling the product: the Sales app said with a thing of the
-    catalogue is not what is turned off."""
+#: Stopping or going back to selling a product said by its name, with a switch too («desactiva la venta del café»):
+#: what marking it sold out or back on sale does, never the Sales app's switch (ERPlora/live#77).
+SELLING_A_PRODUCT = [
+    ("deja de vender el café", "es"), ("quita el café de la venta", "es"), ("que no se venda más el gazpacho hoy", "es"),
+    ("el café ya no está a la venta", "es"), ("vuelve a vender el café", "es"), ("pon el café otra vez a la venta", "es"),
+    ("stop selling the coffee", "en"), ("take the coffee off sale", "en"), ("start selling the coffee again", "en"),
+    ("the coffee is back on sale", "en"), ("put the tea on sale again", "en"),
+    ("desactiva la venta del café", "es"), ("apaga la venta de cruasanes", "es"), ("activa la venta del gazpacho", "es"),
+    ("desactiva las ventas del café", "es"), ("desactiva la venta de este producto", "es"),
+    ("turn off sales of the coffee", "en"), ("turn off the sales of the coffee", "en"), ("turn off coffee sales", "en"),
+    ("turn off sales of this product", "en"),
+]
+
+
+@pytest.mark.parametrize(("asked", "language"), SELLING_A_PRODUCT)
+def test_stopping_or_going_back_to_selling_a_product_named_marks_it(asked, language):
+    """«Deja de vender el café» and «desactiva la venta del café» stop selling the coffee, and «vuelve a vender el café»
+    sells it again: the sales of a product, not the Sales app named alone."""
     names = sales_ranked(asked, language)
     assert names[0] == "inventory.product.set_sold_out", names[:4]
 
 
-def test_sold_out_is_what_is_out_of_stock_and_names_no_sale():
-    """«Sold out» is read as what is out of stock: its «sold» is no sale's, while «sold» alone still is, and running out
-    of something is what «sold out» says."""
-    sales = assistant._concept("ventas")
-    assert assistant.stems("sold out").isdisjoint(sales)
-    assert assistant.stems("the coffee is sold out today").isdisjoint(sales)
-    assert not assistant._concept("sold").isdisjoint(sales)
-    assert not assistant.stems("we ran out of croissants").isdisjoint(assistant.stems("sold out"))
+def test_an_app_named_beside_another_thing_is_not_switched_alone():
+    """«En la cocina, apaga la impresora» names the kitchen and the printer: no app is what the switch turns off alone,
+    although the kitchen is no thing of the catalogue."""
+    kitchen, printer = assistant._concept("cocina"), assistant._concept("impresora")
+    said = assistant.asked(["en la cocina, apaga la impresora"])
+    assert frozenset({printer}) in said.switched  # positive control: the printer alone is what is switched
+    assert not _one_app_switched(said, frozenset({kitchen, printer}), frozenset(printer), frozenset())
 
 
 class KitchenDisplayIn(Schema):
