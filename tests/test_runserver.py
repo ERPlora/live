@@ -375,7 +375,7 @@ def real_server(tmp_path):
     """Start ``manage.py runserver`` for real, with ``FAKE_VITE`` as its Vite, in a process group of its own."""
     started = []
 
-    def start(vite_mode: str, *flags: str) -> tuple[subprocess.Popen, int, list[str]]:
+    def start(vite_mode: str, *flags: str, ignoring_sigint: bool = False) -> tuple[subprocess.Popen, int, list[str]]:
         port = _free_port()
         (tmp_path / "fake_vite.py").write_text(FAKE_VITE)
         vite = [sys.executable, str(tmp_path / "fake_vite.py"), vite_mode, str(port)]
@@ -393,6 +393,8 @@ def real_server(tmp_path):
             stderr=subprocess.PIPE,
             text=True,
             start_new_session=True,
+            # A script's `runserver &` (no job control, as the e2e restarts its stack) starts it with SIGINT ignored.
+            preexec_fn=functools.partial(signal.signal, signal.SIGINT, signal.SIG_IGN) if ignoring_sigint else None,
         )
         started.append(process)
         return process, port, vite
@@ -407,10 +409,11 @@ def real_server(tmp_path):
 class TestViteExits:
     """A Vite that exits while runserver runs (its port taken by another one) stops runserver with a clear error."""
 
+    @pytest.mark.parametrize("ignoring_sigint", [False, True], ids=["terminal", "background"])
     @pytest.mark.parametrize("flags", [(), ("--noreload",)], ids=["reloader", "noreload"])
     @pytest.mark.parametrize("vite_mode", ["at-once", "serving"])
-    def test_the_server_stops_and_says_why(self, real_server, vite_mode, flags):
-        process, port, vite = real_server(vite_mode, *flags)
+    def test_the_server_stops_and_says_why(self, real_server, vite_mode, flags, ignoring_sigint):
+        process, port, vite = real_server(vite_mode, *flags, ignoring_sigint=ignoring_sigint)
 
         try:
             _, stderr = process.communicate(timeout=30)

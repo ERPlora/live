@@ -51,6 +51,12 @@ def stop_vite(proc: subprocess.Popen, *, killpg=os.killpg, timeout: float = 5.0)
         pass
 
 
+def _accept_sigint() -> None:
+    """Let ``_interrupt_main`` reach the server: a script's ``runserver &`` (no job control) starts it ignored."""
+    if signal.getsignal(signal.SIGINT) == signal.SIG_IGN:
+        signal.signal(signal.SIGINT, signal.default_int_handler)
+
+
 def _interrupt_main() -> None:
     """Stop the server as CONTROL-C does, waking the main thread even while it waits for the reloaded child."""
     signal.pthread_kill(threading.main_thread().ident, signal.SIGINT)
@@ -104,6 +110,7 @@ class Command(DaphneRunserverCommand):
         if vite is None:
             super().run(**options)
             return
+        _accept_sigint()
         watch = ViteWatch(vite)
         try:
             watch.start()
