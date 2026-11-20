@@ -559,3 +559,34 @@ La suite comprueba también la regla de tamaño y responsabilidad única:
   `PLR0912` (≤ 12 ramas), `PLR0913` y `PLR0917` (≤ 5 argumentos, salvo en tests), `PLR0915` (≤ 50 sentencias) y
   `RUF100`. Las funciones que hoy se pasan llevan `# noqa: <regla>`, y `RUF100` hace fallar el que sobra. `ruff
   format` no cambia nada (`[tool.ruff.format] exclude = ["*"]`). A mano: `uv run ruff check`.
+- El mismo `tests/test_function_limits.py` corre complexipy: ninguna función pasa de complejidad cognitiva 15, la
+  medida de Sonar, que pesa el anidamiento que la ciclomática no ve. La configuración está en `[tool.complexipy]` de
+  `pyproject.toml` (sin las migraciones, y sin que valga un comentario para saltárselo). Las funciones que ya se
+  pasaban están congeladas con su puntuación en `complexipy-snapshot.json`, la lista de complexipy: una función que
+  se pasa sin entrada, o que puntúa más que la suya, falla, y también una entrada que puntúa más que su función o
+  cuya función ya no existe, hasta que `uv run complexipy` la baja o la quita. La lista solo encoge: frente a la de
+  `origin/main` no gana entradas ni puntos. Una entrada se reconoce por el nombre de su función, así que la sigue si
+  la función se mueve a otro módulo. A mano: `uv run complexipy`.
+
+### Comprobaciones antes de subir
+
+```bash
+git config core.hooksPath .githooks   # una vez por clon, cuando su HEAD ya trae .githooks/
+scripts/checks.sh fast                # lo mismo que corre el gancho, a mano, sobre el árbol de trabajo
+```
+
+`scripts/checks.sh fast` pasa en unos segundos, sin red ni base de datos, `tests/test_file_size.py` y
+`tests/test_function_limits.py`, con sus listas de excepciones, que solo encogen. Su salida dice qué fichero incumple
+y por qué.
+
+El gancho `.githooks/pre-push` corre primero el `pre-push` global de la máquina, con los mismos argumentos y la misma
+entrada, y después `scripts/checks.sh fast` sobre cada commit que se sube, sacado en un worktree temporal con el
+entorno de Python de este checkout (`.venv`, o el de `UV_PROJECT_ENVIRONMENT`): se comprueba lo que se sube, nunca el
+árbol de trabajo. Un rojo para el push, y no hay variable para saltárselo; sin el entorno (`uv sync`) también se para.
+`commit-msg`, `pre-commit` y `applypatch-msg` pasan el turno a los ganchos globales del mismo nombre, que
+`core.hooksPath` dejaría de correr. La suite de GitHub vuelve a pasar estas pruebas al fusionar, así que un clon sin
+el gancho no se salta nada. Sus tests: `tests/test_githooks.py` y `tests/test_scripts_checks.py`.
+
+El ajuste vale para todos los worktrees del clon, y la ruta es relativa a cada uno: en un worktree cuya rama aún no
+trae `.githooks/`, git no corre ningún gancho, tampoco los globales. Una rama que no trae `scripts/checks.sh` no se
+puede subir hasta que se le mergea `origin/main`.

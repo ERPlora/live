@@ -193,6 +193,27 @@ def test_the_snapshot_never_gains_an_entry_or_a_point():
     assert found == [], f"{SNAPSHOT} only shrinks: simplify the function instead of freezing it.\n" + "\n".join(found)
 
 
+def test_the_snapshot_on_the_baseline_is_read_there(monkeypatch):
+    monkeypatch.setitem(globals(), "BASELINE", "HEAD")
+    committed = subprocess.run(["git", "show", f"HEAD:{SNAPSHOT}"], cwd=ROOT, capture_output=True, text=True, check=True)
+
+    assert snapshot_on_baseline() == committed.stdout
+
+
+def test_a_baseline_without_the_snapshot_has_nothing_to_compare_with(monkeypatch):
+    monkeypatch.setitem(globals(), "BASELINE", "HEAD")
+    monkeypatch.setitem(globals(), "SNAPSHOT", "no-such-complexipy-snapshot.json")
+
+    assert snapshot_on_baseline() is None
+
+
+def test_a_missing_origin_main_fails_instead_of_skipping(monkeypatch):
+    monkeypatch.setitem(globals(), "BASELINE", "origin/no-such-branch-for-the-snapshot")
+
+    with pytest.raises(AssertionError, match="origin/no-such-branch-for-the-snapshot is missing"):
+        snapshot_on_baseline()
+
+
 def configured_tree(tmp_path: Path) -> Path:
     """An empty tree with this repo's pyproject.toml, and so its ruff and complexipy configuration."""
     tree = tmp_path / "tree"
