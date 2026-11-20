@@ -192,6 +192,16 @@ def test_sold_out_still_marks_a_product_and_sold_still_names_the_sales(asked, la
     assert names[0] == first, names[:4]
 
 
+@pytest.mark.parametrize(
+    ("asked", "language"), [("desactiva la venta de este producto", "es"), ("turn off sales of this product", "en")]
+)
+def test_the_sales_of_a_product_named_turn_off_no_app(asked, language):
+    """«Desactiva la venta de este producto» stops selling the product: the Sales app said with a thing of the
+    catalogue is not what is turned off."""
+    names = sales_ranked(asked, language)
+    assert names[0] == "inventory.product.set_sold_out", names[:4]
+
+
 def test_sold_out_is_what_is_out_of_stock_and_names_no_sale():
     """«Sold out» is read as what is out of stock: its «sold» is no sale's, while «sold» alone still is, and running out
     of something is what «sold out» says."""
