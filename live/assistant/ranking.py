@@ -140,8 +140,10 @@ def relevant(  # noqa: PLR0913
     is what the command acts on («registra esta tablet», never «registra en
     esta tablet una salida…»); «activa la app» is
     ``base.app.enable``, never an operation of the app named after it, and so is «activa los clientes», an app named
-    by its name, which adds the 3 of what the command acts on when it is («apaga las ventas»: before a write that
-    takes what the app's name also names, as a product's sold out or a ticket; ERPlora/live#77). What a switch turns on or off (``Asked.switched``) that names no tool's thing but an app is the thing
+    by its name; named alone as what a switch turns on or off, the app adds the 3 of what the command acts on
+    («apaga las ventas», «turn off the kitchen»: before a write that takes what the app's name also names, a ticket;
+    never «turn off stock control»; ERPlora/live#77). What a switch turns on or off (``Asked.switched``) that names
+    no tool's thing but an app is the thing
     of the switch of that action whose asks name it, with the apps said beside it: «desactiva los recordatorios de
     las citas» turns off the recipe whose asks say «apaga la receta del recordatorio de citas», before turning the
     Appointments app off; a word the asks of the switches of several things say («de momento», «por ahora») is the
@@ -289,7 +291,7 @@ def _relevant(  # noqa: C901, PLR0913, PLR0915
             places += 2 if is_thing else in_app
             places += 2 * (not concept.isdisjoint(doing)) + (not concept.isdisjoint(qualified))
         if not thing and apps_named and not _APP_THING.isdisjoint(named_entity):
-            thing, aimed = 1, not apps_named.isdisjoint(said.objects)
+            thing, aimed = 1, _one_app_switched(said.switched, apps_named)
         taken = _taken(op.input)
         takes = named(taken)
         points = places + named(_stems_of(description(op))) + named(asks(op)) + takes
@@ -351,6 +353,14 @@ def _naming_apps(
     return frozenset(
         concept for concept in concepts if any(not concept.isdisjoint(app_words(label, language)) for label in labels)
     )
+
+
+def _one_app_switched(
+    switched: frozenset[frozenset[frozenset[str]]], apps_named: frozenset[frozenset[str]]
+) -> bool:
+    """Whether what a switch turns on or off is one app named by its name and nothing else («las ventas», «the
+    kitchen»; never «stock control»: a setting of the stock)."""
+    return any(len(head) == 1 and head <= apps_named for head in switched)
 
 
 @lru_cache(maxsize=4_096)

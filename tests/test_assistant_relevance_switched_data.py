@@ -198,6 +198,57 @@ def test_sold_out_is_one_word_that_names_no_sale():
     assert not assistant._concept("sold").isdisjoint(sales)
 
 
+class KitchenDisplayIn(Schema):
+    show_timer: bool | None = None
+    sound_enabled: bool | None = None
+    sound_volume: int | None = None
+
+
+class DrawerIn(Schema):
+    enable_cash_register: bool | None = None
+    require_blind_count: bool | None = None
+    auto_close_enabled: bool | None = None
+
+
+#: The settings of the Hub's apps that a person says with the app's name («stock», «kitchen», «arqueo»), beside the
+#: apps' switches.
+SETTINGS_SAID_WITH_THEIR_APP = [
+    tool("base.app.disable", "Turns off one of this business's apps: it leaves everyone's menu and its screens."),
+    tool("base.app.enable", "Turns on one of this business's apps, with the apps it needs."),
+    tool("inventory.config.update", "Change the inventory settings: allow selling without stock, the default low-stock "
+         "threshold and whether stock is tracked.", input=StockSettingsIn,
+         asks={"en": ("stop tracking stock",), "es": ("no quiero controlar el stock",)}),
+    tool("kitchen.settings.update", "Change the kitchen display settings: the clock, the sound and its volume.",
+         input=KitchenDisplayIn, asks={"en": ("mute the display",), "es": ("pon más bajo el sonido de la pantalla",)}),
+    tool("cash_register.settings.update", "Change how the drawer works: cash register on, blind count, daily "
+         "auto-close.", input=DrawerIn, asks={"en": ("turn on the blind count",), "es": ("activa el arqueo ciego",)}),
+    *NOISE,
+]
+APPS_OF_THE_SETTINGS = {"inventory": "inventario inventory stock", "kitchen": "cocina kitchen",
+                        "cash_register": "caja arqueo cash register"}
+
+
+def apps_of_the_settings(label: str, language: str) -> frozenset[str]:
+    return frozenset(assistant.stems(APPS_OF_THE_SETTINGS.get(label, label)))
+
+
+@pytest.mark.parametrize(
+    ("asked", "language", "first"),
+    [
+        ("turn off stock control", "en", "inventory.config.update"),
+        ("turn off the kitchen sound alert", "en", "kitchen.settings.update"),
+        ("activa el arqueo ciego", "es", "cash_register.settings.update"),
+        ("turn off the kitchen", "en", "base.app.disable"),
+        ("apaga la cocina", "es", "base.app.disable"),
+    ],
+)
+def test_an_app_is_what_a_switch_turns_off_only_when_named_alone(asked, language, first):
+    """«Turn off stock control» turns off a setting of the stock, not the Inventory app: only an app named alone by its
+    name («turn off the kitchen») is what the switch turns off."""
+    names = ranked(SETTINGS_SAID_WITH_THEIR_APP, asked, language, app_words=apps_of_the_settings)
+    assert names[0] == first, names[:4]
+
+
 def test_what_is_asked_and_the_words_read_once_rank_as_lists():
     """``relevant`` takes any iterable: read once, as a generator is, they rank as the lists they hold."""
     asked = "activa el envío real a la AEAT, comprobando antes que la cuenta y la autorización estén listas"
