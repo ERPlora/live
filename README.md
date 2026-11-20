@@ -208,7 +208,8 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
     `info`, un `title`, `body` o `action_label` que no es un texto, o un `due` que no nombra un campo de la respuesta
     de su consulta (de sus filas, si las lista).
 
-  Los checks de los hooks necesitan las operaciones y los eventos registrados, cosa que
+  Los checks de los hooks (de `live.E009` a `live.E016` y `live.E018`) viven en `live.checks_hooks`, que
+  `check_app_metadata` llama para cada módulo. Necesitan las operaciones y los eventos registrados, cosa que
   `LiveConfig.ready` hace antes de cualquier check. La app de pruebas (`tests/testapp`) es un módulo
   (`kind = "app"`) con `icon`, `category`, `summary`, `description` y `verticals`, y un paso, un panel y
   un contador sobre su consulta `testapp.thing.list` y su evento `testapp.thing.created` (su
