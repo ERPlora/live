@@ -55,6 +55,7 @@ from live.assistant.fields import (
     sends_amount,
     verbose_name,
 )
+from live.assistant.money import _as_present
 from live.assistant.ranking import (
     _asks_stems,
     _relevant,
@@ -63,7 +64,6 @@ from live.assistant.ranking import (
 )
 from live.assistant.reading import (
     Asked,
-    _as_present,
     asked,
 )
 from live.assistant.running import (

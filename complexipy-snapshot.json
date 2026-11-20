@@ -32,16 +32,8 @@
         "complexity": 16
       },
       {
-        "name": "_switched",
-        "complexity": 17
-      },
-      {
         "name": "_split_naming",
         "complexity": 19
-      },
-      {
-        "name": "_objects",
-        "complexity": 23
       },
       {
         "name": "asked",
@@ -110,6 +102,20 @@
       {
         "name": "verify_or_raise",
         "complexity": 17
+      }
+    ]
+  },
+  {
+    "path": "live/assistant/objects.py",
+    "file_name": "objects.py",
+    "functions": [
+      {
+        "name": "_switched",
+        "complexity": 17
+      },
+      {
+        "name": "_objects",
+        "complexity": 23
       }
     ]
   }
