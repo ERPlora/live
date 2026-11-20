@@ -6,6 +6,7 @@ from functools import cache, lru_cache
 from django.utils import translation
 
 from live.assistant.aside import named_aside
+from live.assistant.quoted import quoted_texts
 from live.assistant.reading import (
     Asked,
     asked,
@@ -194,7 +195,8 @@ def _relevant(  # noqa: C901, PLR0913, PLR0915
 ) -> list[Operation]:
     """``relevant``, with what each tool's asks say read by ``asks`` (the QA leaves out the phrase it ranks)."""
     said = asked(texts, synonyms)
-    concepts, verbs, about = said.concepts, said.verbs, said.about
+    # One quoted text said for another names a text, as «el texto» would.
+    concepts, verbs, about = said.concepts | quoted_texts(texts, synonyms), said.verbs, said.about
     asks = asks or _asks_stems
     writing = bool(verbs - READ_VERBS)
     switching = not verbs.isdisjoint(SWITCHES)
