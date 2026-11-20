@@ -4,6 +4,5 @@
 # it. The list only shrinks (tests/test_file_size.py): no new path, no higher number, and a file back under its cap
 # leaves it.
 647 live/assistant/reading.py #147
-720 live/checks.py #147
 1111 tests/test_database_cut.py #147
 1349 tests/test_executor.py #147
