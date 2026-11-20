@@ -3,7 +3,7 @@
 Each counter may declare how grave it is (``severity``), its heading (``title``), one sentence with the consequence
 (``body``) and the label of its button (``action_label``), each a text or a lazy translation, and the field of its
 query's answer that holds its deadline (``due``) (E024). The rest of a counter, and a bell that is not a list of
-counters, is ``live.checks``' (E007, E009–E013).
+counters, is ``live.checks``' and ``live.checks_hooks``' (E007, E009–E013).
 """
 
 from typing import Any
@@ -12,7 +12,7 @@ from django.core import checks
 from django.utils.functional import Promise
 
 from live import operations
-from live.checks import FIELD_NAME_RE, _row_fields
+from live.checks_hooks import FIELD_NAME_RE, _row_fields
 from live.meta import BELL_SEVERITIES, BellCounter, all_live_app_configs
 
 WORDS = ("title", "body", "action_label")

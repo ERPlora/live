@@ -73,7 +73,7 @@ class SetupCheck:
     """One condition of ``SetupStep.configured_when`` on a field of the first row of the step's query.
 
     Exactly one of ``truthy`` (the field is truthy; ``False`` inverts it) and ``equals`` (the field
-    equals this value); ``live.checks`` rejects neither and both (E016).
+    equals this value); ``live.checks_hooks`` rejects neither and both (E016).
     """
 
     field: str
