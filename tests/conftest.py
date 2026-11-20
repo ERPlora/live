@@ -2,6 +2,7 @@
 
 import pytest
 from django.db import connections
+from live.executor import Executor
 from psycopg.conninfo import make_conninfo
 
 # An app that tests/test_apps.py loads in a fresh interpreter; its test-named modules are fixtures, not tests.
@@ -19,3 +20,19 @@ def db_dsn(django_db_setup):
         host=params["HOST"],
         port=params["PORT"],
     )
+
+
+@pytest.fixture
+def make_executor():
+    created = []
+
+    def make(**options):
+        options.setdefault("debounce", 0.05)
+        executor = Executor(**options)
+        created.append(executor)
+        return executor
+
+    yield make
+    for executor in created:
+        executor.reset()
+        executor.shutdown()

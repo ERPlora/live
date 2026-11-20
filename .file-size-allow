@@ -5,4 +5,3 @@
 # leaves it.
 647 live/assistant/reading.py #147
 1111 tests/test_database_cut.py #147
-1349 tests/test_executor.py #147
