@@ -24,6 +24,7 @@ def words(text: str) -> list[str]:
 def test_a_word_asks_for_its_actions_with_the_pronouns_of_a_command_too():
     assert _verbs_of("borrala") == _verbs_of("borra") != frozenset()
     assert _verbs_of("mesa") == frozenset()
+    assert _phrase_verbs(" turn off ") == _phrase_verbs("turn off")
     assert not _phrase_verbs("turn off").isdisjoint(SWITCHES)
 
 
@@ -59,6 +60,7 @@ def test_what_someone_cannot_even_do_after_a_ni_is_said_by_a_verb_after_it():
     [
         ("cobra la mesa 4 y muestra los pedidos", "muestra", True),
         ("cobra la mesa y dime el total", "dime", True),
+        ("cobra la mesa 4 dame el ticket", "dame", True),
         ("cobra la mesa de muestra", "muestra", False),
         ("la primera lista", "lista", False),
     ],
