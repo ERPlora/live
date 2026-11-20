@@ -118,7 +118,7 @@ def _in_a_row(words: list[str]) -> list[str]:
 
 
 def _as_one_word(words: list[str]) -> list[str]:
-    """``words`` with each pair of ``_ONE_WORD`` said in a row read as its one word («sold out»)."""
+    """``words`` with each pair of ``_ONE_WORD`` said in a row read as its one word («sold out» is «out»)."""
     read: list[str] = []
     for word in words:
         if read and (read[-1], word) in _ONE_WORD:

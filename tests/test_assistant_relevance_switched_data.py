@@ -179,23 +179,27 @@ def test_an_app_switched_by_its_name_comes_before_the_writes_that_take_what_it_n
     [
         ("mark the coffee as sold out", "en", "inventory.product.set_sold_out"),
         ("the croissants are sold out, stop offering them", "en", "inventory.product.set_sold_out"),
+        ("we've run out of custard", "en", "inventory.product.set_sold_out"),
         ("marca el café como agotado", "es", "inventory.product.set_sold_out"),
         ("what have we sold today?", "en", "sale.sale.list"),
         ("¿qué hemos vendido hoy?", "es", "sale.sale.list"),
     ],
 )
 def test_sold_out_still_marks_a_product_and_sold_still_names_the_sales(asked, language, first):
-    """«Sold out» (no stock left) still marks a product so, and «sold» alone still names what was sold."""
+    """«Sold out» (no stock left) still marks a product so, as running out of it does, and «sold» alone still names
+    what was sold."""
     names = sales_ranked(asked, language)
     assert names[0] == first, names[:4]
 
 
-def test_sold_out_is_one_word_that_names_no_sale():
-    """«Sold out» is read as one word: its «sold» is no sale's, while «sold» alone still is."""
+def test_sold_out_is_what_is_out_of_stock_and_names_no_sale():
+    """«Sold out» is read as what is out of stock: its «sold» is no sale's, while «sold» alone still is, and running out
+    of something is what «sold out» says."""
     sales = assistant._concept("ventas")
     assert assistant.stems("sold out").isdisjoint(sales)
     assert assistant.stems("the coffee is sold out today").isdisjoint(sales)
     assert not assistant._concept("sold").isdisjoint(sales)
+    assert not assistant.stems("we ran out of croissants").isdisjoint(assistant.stems("sold out"))
 
 
 class KitchenDisplayIn(Schema):
