@@ -1,0 +1,116 @@
+[
+  {
+    "path": "live/assistant/cards.py",
+    "file_name": "cards.py",
+    "functions": [
+      {
+        "name": "field",
+        "complexity": 18
+      },
+      {
+        "name": "said",
+        "complexity": 32
+      }
+    ]
+  },
+  {
+    "path": "live/assistant/ranking.py",
+    "file_name": "ranking.py",
+    "functions": [
+      {
+        "name": "_relevant",
+        "complexity": 109
+      }
+    ]
+  },
+  {
+    "path": "live/assistant/reading.py",
+    "file_name": "reading.py",
+    "functions": [
+      {
+        "name": "_how_to",
+        "complexity": 16
+      },
+      {
+        "name": "_switched",
+        "complexity": 17
+      },
+      {
+        "name": "_split_naming",
+        "complexity": 19
+      },
+      {
+        "name": "_objects",
+        "complexity": 23
+      },
+      {
+        "name": "asked",
+        "complexity": 70
+      }
+    ]
+  },
+  {
+    "path": "live/assistant/stemming.py",
+    "file_name": "stemming.py",
+    "functions": [
+      {
+        "name": "stem",
+        "complexity": 22
+      }
+    ]
+  },
+  {
+    "path": "live/checks.py",
+    "file_name": "checks.py",
+    "functions": [
+      {
+        "name": "_asks_problems",
+        "complexity": 27
+      }
+    ]
+  },
+  {
+    "path": "live/executor.py",
+    "file_name": "executor.py",
+    "functions": [
+      {
+        "name": "Executor::_run_subs",
+        "complexity": 30
+      }
+    ]
+  },
+  {
+    "path": "live/live_view.py",
+    "file_name": "live_view.py",
+    "functions": [
+      {
+        "name": "_LiveBody::_frames",
+        "complexity": 19
+      }
+    ]
+  },
+  {
+    "path": "live/operations.py",
+    "file_name": "operations.py",
+    "functions": [
+      {
+        "name": "operation",
+        "complexity": 16
+      },
+      {
+        "name": "Operation::__call__",
+        "complexity": 19
+      }
+    ]
+  },
+  {
+    "path": "live/recaptcha.py",
+    "file_name": "recaptcha.py",
+    "functions": [
+      {
+        "name": "verify_or_raise",
+        "complexity": 17
+      }
+    ]
+  }
+]

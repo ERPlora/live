@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# A repository's core.hooksPath (.githooks) hides the machine's global hooks: run the global hook of this name with the
+# same arguments and return its exit code. Without one, exit 0. The same file is commit-msg, pre-commit and
+# applypatch-msg. Tests: tests/test_githooks.py.
+set -u
+name=$(basename "$0")
+hook_dir=$(cd "$(dirname "$0")" && pwd -P)
+global=$(git config --global --path --get core.hooksPath 2>/dev/null || true)
+if [ -n "$global" ] && [ -x "$global/$name" ] && [ "$(cd "$global" 2>/dev/null && pwd -P)" != "$hook_dir" ]; then
+  exec "$global/$name" "$@"
+fi
+exit 0
