@@ -2,22 +2,14 @@
 
 Django logs a 503 where it turns the cut into a response, inside the chain, before ``DatabaseCutMiddleware`` decides to
 repeat the request: a read that waited and answered 200 must not leave an error behind. The project is the one of
-``tests/test_database_cut.py``, against the real Postgres.
+``project.py``, against the real Postgres.
 """
 
 import pytest
 from django.db import OperationalError
 
-from tests.test_database_cut import (  # noqa: F401 - its fixtures set up the project these requests run in
-    MIDDLEWARE,
-    always_cut,
-    async_request,
-    client,
-    cut_once,
-    project,
-    runs,
-    script,
-)
+from tests.database_cut.cutting import always_cut, cut_once
+from tests.database_cut.project import MIDDLEWARE, async_request, runs, script
 
 pytestmark = pytest.mark.django_db(databases=["default", "other"], transaction=True)
 
