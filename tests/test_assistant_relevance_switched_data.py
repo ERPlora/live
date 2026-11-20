@@ -5,7 +5,7 @@ import pytest
 from ninja import Schema
 
 from live import assistant
-from tests.assistant_catalogue import CHECK, ranked, tool
+from tests.assistant_catalogue import CHECK, NOISE, ranked, tool
 
 
 class LabelIn(Schema):
@@ -106,6 +106,96 @@ def test_what_is_turned_off_said_again_after_the_comma_is_still_what_it_changes(
     """The alerts said after the comma, again, for a pronoun or in what is checked, are still what is turned off: the
     preferences that take them change it."""
     assert ranked(ALERTS, asked, language)[0] == "accounts.preferences.update"
+
+
+class SoldOutIn(Schema):
+    product: str
+    sold_out: bool
+
+
+class RushIn(Schema):
+    ticket: str
+    rush: bool
+
+
+class SaleSettingsIn(Schema):
+    ticket_footer: str | None = None
+    allow_discount: bool | None = None
+
+
+#: The Sales app's switches beside the Hub's writes that take what «las ventas» names: marking a product sold out (or
+#: back on sale), rushing a kitchen ticket and the sales' settings, which take the ticket's footer.
+SALES_AND_WHAT_THEY_NAME = [
+    tool("base.app.disable", "Turns off one of this business's apps: it leaves everyone's menu and its screens."),
+    tool("base.app.enable", "Turns on one of this business's apps, with the apps it needs."),
+    tool(
+        "inventory.product.set_sold_out",
+        "Mark a product sold out (the till stops offering it, it stays active) or put it back on sale.",
+        input=SoldOutIn,
+        asks={"en": ("mark the Tea as sold out for today", "put the coffee back on sale"),
+              "es": ("marca el té con hielo como agotado", "vuelve a poner a la venta el café")},
+    ),
+    tool("kitchen.ticket.set_rush", "Rush a ticket that is being cooked, or take the rush away.", input=RushIn),
+    tool("sale.settings.update", "Change how the sales work: the ticket's footer, the discounts allowed.",
+         input=SaleSettingsIn),
+    tool("sale.sale.list", "Lists the sales of a day.", "query"),
+    *NOISE,
+]
+SALES_APPS = {"sale": "ventas sales tpv", "kitchen": "cocina kitchen comandas tickets", "inventory": "inventario"}
+#: The Hub's own words: in English a ticket is also a sale, and «desactiva» names a deactivation.
+SALES_WORDS = (("ticket", "tique", "recibo", "receipt", "sale"), ("desactiva", "desactivar", "deactivate"))
+
+
+def sales_apps(label: str, language: str) -> frozenset[str]:
+    return frozenset(assistant.stems(SALES_APPS.get(label, label)))
+
+
+def sales_ranked(asked: str, language: str) -> list[str]:
+    return ranked(SALES_AND_WHAT_THEY_NAME, asked, language, app_words=sales_apps, synonyms=SALES_WORDS)
+
+
+@pytest.mark.parametrize(
+    ("asked", "language", "first"),
+    [
+        ("desactiva las ventas", "es", "base.app.disable"),
+        ("apaga las ventas", "es", "base.app.disable"),
+        ("activa las ventas", "es", "base.app.enable"),
+        ("turn off the sales", "en", "base.app.disable"),
+        ("switch off the sales", "en", "base.app.disable"),
+        ("turn the sales off", "en", "base.app.disable"),
+        ("turn on the sales", "en", "base.app.enable"),
+    ],
+)
+def test_an_app_switched_by_its_name_comes_before_the_writes_that_take_what_it_names(asked, language, first):
+    """«Desactiva las ventas» turns the Sales app off: the app named by its name is what the switch turns off, not a
+    product's «sold out» nor a datum a write takes (ERPlora/live#77: marking a product sold out came first in Spanish,
+    and in English rushing a kitchen ticket and the sales' settings, as a ticket is also a sale)."""
+    names = sales_ranked(asked, language)
+    assert names[0] == first, names[:4]
+
+
+@pytest.mark.parametrize(
+    ("asked", "language", "first"),
+    [
+        ("mark the coffee as sold out", "en", "inventory.product.set_sold_out"),
+        ("the croissants are sold out, stop offering them", "en", "inventory.product.set_sold_out"),
+        ("marca el café como agotado", "es", "inventory.product.set_sold_out"),
+        ("what have we sold today?", "en", "sale.sale.list"),
+        ("¿qué hemos vendido hoy?", "es", "sale.sale.list"),
+    ],
+)
+def test_sold_out_still_marks_a_product_and_sold_still_names_the_sales(asked, language, first):
+    """«Sold out» (no stock left) still marks a product so, and «sold» alone still names what was sold."""
+    names = sales_ranked(asked, language)
+    assert names[0] == first, names[:4]
+
+
+def test_sold_out_is_one_word_that_names_no_sale():
+    """«Sold out» is read as one word: its «sold» is no sale's, while «sold» alone still is."""
+    sales = assistant._concept("ventas")
+    assert assistant.stems("sold out").isdisjoint(sales)
+    assert assistant.stems("the coffee is sold out today").isdisjoint(sales)
+    assert not assistant._concept("sold").isdisjoint(sales)
 
 
 def test_what_is_asked_and_the_words_read_once_rank_as_lists():

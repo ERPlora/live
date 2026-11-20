@@ -401,6 +401,9 @@ _BREAK = re.compile(r"[«»\"“”()\[\].,;:!?¿¡\n]+")
 _BREAK_KEPT = re.compile(f"({_BREAK.pattern})")
 #: Words kept whole: cut, they would be another word's stem («personal», the staff, is not «persona»).
 _WHOLE = frozenset({"personal"})
+#: Two words in a row that say one thing, read as one word: «sold out» (no stock left) is no «sold» of a sale
+#: (ERPlora/live#77).
+_ONE_WORD = {("sold", "out"): "soldout"}
 #: Words kept apart from another's stem (as said, or without their plural «s»): «tablet» is no «table», «compartido»
 #: no «company», «peluquería» (the business) no «peluquero» (its staff), «carta» (the menu) no «cart», «contrato» and
 #: «contraseña» no «control», «recibo» (a receipt) no «recibir», «ficha» (a customer's card) no «fichar»,

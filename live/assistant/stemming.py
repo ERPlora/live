@@ -18,6 +18,7 @@ from live.assistant.vocabulary import (
     _NOT,
     _NOT_COMMANDS,
     _NOT_PARTICLES,
+    _ONE_WORD,
     _OWN_PARTICLES,
     _SPLIT,
     _THEN,
@@ -116,16 +117,28 @@ def _in_a_row(words: list[str]) -> list[str]:
     return words
 
 
+def _as_one_word(words: list[str]) -> list[str]:
+    """``words`` with each pair of ``_ONE_WORD`` said in a row read as its one word («sold out»)."""
+    read: list[str] = []
+    for word in words:
+        if read and (read[-1], word) in _ONE_WORD:
+            read[-1] = _ONE_WORD[read[-1], word]
+        else:
+            read.append(word)
+    return read
+
+
 def _sentences(text: str) -> list[list[str]]:
-    """The plain words of ``text``, by sentence or quote (``_BREAK``), a noun at the start that is a command
-    (``_COMMANDS``) said as its verb and a switch said apart from its particle said in a row (``_in_a_row``). A comma
+    """The plain words of ``text``, by sentence or quote (``_BREAK``), two words that say one thing as one
+    (``_as_one_word``), a noun at the start that is a command (``_COMMANDS``) said as its verb and a switch said apart
+    from its particle said in a row (``_in_a_row``). A comma
     before a ``_NOR`` that goes on from a ``_WITHOUT`` of the sentence before (``_goes_on``) ends none: «sin tocar caja,
     ni cambiar importes» is «sin tocar caja ni cambiar importes» (ERPlora/live#81); with nothing for the «ni» to go on
     from («cámbiale el precio, ni el nombre»), it does."""
     found: list[list[str]] = []
     pieces = _BREAK_KEPT.split(text)
     for at in range(0, len(pieces), 2):
-        words = _in_a_row(_WORD.findall(_plain(pieces[at])))
+        words = _in_a_row(_as_one_word(_WORD.findall(_plain(pieces[at]))))
         if words and words[0] in _COMMANDS:
             verb, before = _COMMANDS[words[0]]
             if len(words) > 1 and words[1] in before:
