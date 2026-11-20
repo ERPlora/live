@@ -140,7 +140,6 @@ SALES_AND_WHAT_THEY_NAME = [
     tool("sale.settings.update", "Change how the sales work: the ticket's footer, the discounts allowed.",
          input=SaleSettingsIn),
     tool("sale.sale.list", "Lists the sales of a day.", "query"),
-    tool("base.app.list", "Lists this business's apps, on or off.", "query"),
     tool("staff.shift.list", "Lists the shifts of the staff.", "query"),
     *NOISE,
 ]
@@ -189,12 +188,10 @@ def test_an_app_switched_by_its_name_comes_before_the_writes_that_take_what_it_n
         ("the croissants are sold out, stop offering them", "en", "inventory.product.set_sold_out"),
         ("we've run out of custard", "en", "inventory.product.set_sold_out"),
         ("marca el café como agotado", "es", "inventory.product.set_sold_out"),
-        ("lista las ventas", "es", "sale.sale.list"),
     ],
 )
-def test_sold_out_still_marks_a_product_and_the_sales_listed_are_no_app(asked, language, first):
-    """«Sold out» (no stock left) still marks a product so, as running out of it does; the sales listed are the sales,
-    not the list of apps: an app is named for its switch only by a switch."""
+def test_sold_out_still_marks_a_product(asked, language, first):
+    """«Sold out» (no stock left) still marks a product so, as running out of it does."""
     names = sales_ranked(asked, language)
     assert names[0] == first, names[:4]
 
@@ -221,13 +218,24 @@ def test_stopping_or_going_back_to_selling_a_product_named_marks_it(asked, langu
     assert names[0] == "inventory.product.set_sold_out", names[:4]
 
 
-def test_an_app_named_beside_another_thing_is_not_switched_alone():
-    """«En la cocina, apaga la impresora» names the kitchen and the printer: no app is what the switch turns off alone,
-    although the kitchen is no thing of the catalogue."""
-    kitchen, printer = assistant._concept("cocina"), assistant._concept("impresora")
-    said = assistant.asked(["en la cocina, apaga la impresora"])
-    assert frozenset({printer}) in said.switched  # positive control: the printer alone is what is switched
-    assert not _one_app_switched(said, frozenset({kitchen, printer}), frozenset(printer), frozenset())
+@pytest.mark.parametrize(
+    ("said", "apps", "thing", "alone"),
+    [
+        ("apaga las ventas", ("ventas",), "ventas", True),
+        # The kitchen, an app that is no thing of the catalogue, beside the printer (the printing app's and a thing).
+        ("en la cocina, apaga la impresora", ("cocina", "impresora"), "impresora", False),
+        # The terrace, a thing that is no app, beside the sales.
+        ("en la terraza, apaga las ventas", ("ventas",), "terraza", False),
+    ],
+)
+def test_an_app_is_switched_alone_only_with_no_other_app_or_thing_named(said, apps, thing, alone):
+    """«En la cocina, apaga la impresora» and «en la terraza, apaga las ventas» name another app or thing besides what
+    is switched: no app is what the switch turns off alone."""
+    asked = assistant.asked([said])
+    switched = frozenset({assistant._concept(apps[-1])})
+    assert switched in asked.switched  # positive control: one app alone is what is switched
+    named = frozenset(assistant._concept(word) for word in apps)
+    assert _one_app_switched(asked, named, frozenset(assistant._concept(thing)), frozenset()) == alone
 
 
 class KitchenDisplayIn(Schema):
