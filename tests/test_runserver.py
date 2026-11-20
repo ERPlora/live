@@ -8,9 +8,12 @@ never starts another one; `--novite` skips it.
 import contextlib
 import functools
 import os
+import shlex
 import signal
+import socket
 import subprocess
 import sys
+import threading
 import time
 
 import pytest
@@ -110,11 +113,23 @@ class TestStopVite:
         runserver.stop_vite(process, killpg=killpg)
 
 
+class RunningVite(FakeProcess):
+    """A Vite that keeps running until the test ends, as a healthy one does while runserver serves."""
+
+    def __init__(self, pid):
+        super().__init__(pid=pid)
+        self.ended = threading.Event()
+
+    def wait(self, timeout=None):
+        self.ended.wait()
+        return super().wait(timeout)
+
+
 @pytest.fixture
 def spawned(monkeypatch):
     """Record start_vite and atexit registrations instead of spawning anything."""
     record = {"started": [], "atexit": []}
-    process = FakeProcess(pid=777)
+    process = RunningVite(pid=777)
 
     def fake_start(cfg, **kwargs):
         record["started"].append(cfg)
@@ -122,9 +137,12 @@ def spawned(monkeypatch):
 
     monkeypatch.setattr(runserver, "start_vite", fake_start)
     monkeypatch.setattr(runserver.atexit, "register", lambda fn, *a, **k: record["atexit"].append((fn, a, k)))
+    # A watch that fires must not send SIGINT to pytest itself.
+    monkeypatch.setattr(runserver, "ViteWatch", functools.partial(runserver.ViteWatch, interrupt=lambda: None))
     monkeypatch.delenv(autoreload.DJANGO_AUTORELOAD_ENV, raising=False)
     record["process"] = process
-    return record
+    yield record
+    process.ended.set()
 
 
 @pytest.fixture
@@ -194,6 +212,27 @@ class TestWhenViteStarts:
         runserver.Command().run(**options())
 
         assert order == [("server", [VITE])]
+
+
+class TestViteWatch:
+    def test_vite_exiting_on_its_own_interrupts_the_server(self):
+        interrupts = []
+        watch = runserver.ViteWatch(FakeProcess(returncode=1), interrupt=lambda: interrupts.append("SIGINT"))
+
+        watch.wait()
+
+        assert watch.exit_code == 1
+        assert interrupts == ["SIGINT"]
+
+    def test_vite_stopped_by_the_stopping_server_is_not_an_error(self):
+        interrupts = []
+        watch = runserver.ViteWatch(FakeProcess(returncode=-15), interrupt=lambda: interrupts.append("SIGINT"))
+
+        watch.stop()
+        watch.wait()
+
+        assert watch.exit_code is None
+        assert interrupts == []
 
 
 class TestCommand:
@@ -279,3 +318,121 @@ class TestRealProcessGroup:
 
         assert process.returncode == -signal.SIGKILL
         assert _dies(child)
+
+
+# What stands in for Vite in the real servers below: `at-once` exits as Vite does when its port is taken, `serving` does
+# the same once runserver answers on its port, and `forever` keeps running until runserver stops it.
+FAKE_VITE = """
+import socket, sys, time
+mode, port = sys.argv[1], int(sys.argv[2])
+deadline = time.monotonic() + 30
+while mode == "serving" and time.monotonic() < deadline:
+    try:
+        socket.create_connection(("127.0.0.1", port), timeout=1).close()
+        break
+    except OSError:
+        time.sleep(0.05)
+if mode == "forever":
+    time.sleep(60)
+print(f"Error: Port {port + 5} is already in use", file=sys.stderr, flush=True)
+sys.exit(1)
+"""
+
+SERVER_SETTINGS = """
+from tests.settings import *
+
+DEBUG = True
+DATABASES = {}
+ASGI_APPLICATION = "runserver_settings.application"
+LIVE = {**LIVE, "vite": {"command": %r}}
+
+
+async def application(scope, receive, send):
+    pass
+"""
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _free_port() -> int:
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+def _answers(port: int, within: float = 30.0) -> bool:
+    deadline = time.monotonic() + within
+    while time.monotonic() < deadline:
+        with contextlib.suppress(OSError):
+            socket.create_connection(("127.0.0.1", port), timeout=1).close()
+            return True
+        time.sleep(0.05)
+    return False
+
+
+@pytest.fixture
+def real_server(tmp_path):
+    """Start ``manage.py runserver`` for real, with ``FAKE_VITE`` as its Vite, in a process group of its own."""
+    started = []
+
+    def start(vite_mode: str, *flags: str) -> tuple[subprocess.Popen, int, list[str]]:
+        port = _free_port()
+        (tmp_path / "fake_vite.py").write_text(FAKE_VITE)
+        vite = [sys.executable, str(tmp_path / "fake_vite.py"), vite_mode, str(port)]
+        (tmp_path / "runserver_settings.py").write_text(SERVER_SETTINGS % (vite,))
+        env = {
+            **os.environ,
+            "DJANGO_SETTINGS_MODULE": "runserver_settings",
+            "PYTHONPATH": os.pathsep.join([str(tmp_path), ROOT]),
+        }
+        env.pop(autoreload.DJANGO_AUTORELOAD_ENV, None)
+        process = subprocess.Popen(
+            [sys.executable, "-m", "django", "runserver", f"127.0.0.1:{port}", *flags],
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,
+        )
+        started.append(process)
+        return process, port, vite
+
+    yield start
+    for process in started:  # whatever a failed test left alive
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(process.pid, signal.SIGKILL)
+        process.communicate()
+
+
+class TestViteExits:
+    """A Vite that exits while runserver runs (its port taken by another one) stops runserver with a clear error."""
+
+    @pytest.mark.parametrize("flags", [(), ("--noreload",)], ids=["reloader", "noreload"])
+    @pytest.mark.parametrize("vite_mode", ["at-once", "serving"])
+    def test_the_server_stops_and_says_why(self, real_server, vite_mode, flags):
+        process, port, vite = real_server(vite_mode, *flags)
+
+        try:
+            _, stderr = process.communicate(timeout=30)
+        except subprocess.TimeoutExpired:
+            pytest.fail("runserver kept running after its Vite exited")
+
+        assert process.returncode == 1
+        error = stderr.splitlines()[-1]
+        assert error.startswith("CommandError: ")
+        assert shlex.join(vite) in error
+        assert "code 1" in error
+        assert "VITE_DEV_PORT" in error
+        assert "--novite" in error
+        assert not _answers(port, within=0.5)
+
+    def test_stopping_the_server_is_not_a_vite_error(self, real_server):
+        process, port, _ = real_server("forever")
+        assert _answers(port)
+
+        os.killpg(process.pid, signal.SIGINT)  # what CONTROL-C does in a terminal
+        _, stderr = process.communicate(timeout=30)
+
+        assert process.returncode == 0
+        assert "CommandError" not in stderr
+        assert "Traceback" not in stderr
