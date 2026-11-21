@@ -50,12 +50,17 @@ class Category(models.TextChoices):
 
 @dataclass(frozen=True)
 class Nav:
-    """A menu entry; ``label`` is usually a lazy translation and ``icon`` an Iconify name."""
+    """A menu entry; ``label`` is usually a lazy translation and ``icon`` an Iconify name.
+
+    ``permission`` opens the entry and every screen under its ``path``: a module names one it declares
+    (``live.checks_nav``); a menu outside a module (the SaaS's panel) may leave it out.
+    """
 
     id: str
     label: str
     icon: str
     path: str
+    permission: str | None = None
 
 
 WidgetSize = Literal["sm", "md", "lg"]

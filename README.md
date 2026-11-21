@@ -104,7 +104,8 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
   `category` (`live.meta.Category`: `sales`, `catalog`, `people`, `restaurant` u `organization`, con
   etiqueta `en` + `es`; agrupa la página de apps del Hub), `premium` (`False` por defecto; `True` =
   necesita su derecho en la foto del SaaS), `requires` (etiquetas de otros módulos, grafo acíclico)
-  y `navigation` (`Nav(id, label, icon, path)`, las entradas del menú). El nombre es el
+  y `navigation` (`Nav(id, label, icon, path, permission)`, las entradas del menú; `permission`, el
+  permiso del propio módulo que abre la entrada y las pantallas de debajo de su `path`). El nombre es el
   `verbose_name`; sin versión. La página de apps del Hub pinta solo icono y nombre.
 - **Solo un módulo, para la tienda pública** (ronda 16; `register_apps` los escribe en `shared.app`):
   `summary` (una línea, ≤ 120 caracteres, `gettext_lazy`), `description` (un párrafo),
@@ -207,6 +208,8 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
   - `live.E024` (`live.checks_bell`): un contador de la campana con una gravedad que no es `danger`, `warning` ni
     `info`, un `title`, `body` o `action_label` que no es un texto, o un `due` que no nombra un campo de la respuesta
     de su consulta (de sus filas, si las lista).
+  - `live.E025` (`live.checks_nav`): una entrada del menú de un módulo sin `permission`, o con uno que el
+    módulo no declara en `permissions`. Fuera de un módulo (el panel del SaaS), `Nav` puede no llevarlo.
 
   Los checks de los hooks (de `live.E009` a `live.E016` y `live.E018`) viven en `live.checks_hooks`, que
   `check_app_metadata` llama para cada módulo. Necesitan las operaciones y los eventos registrados, cosa que
