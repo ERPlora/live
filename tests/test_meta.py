@@ -378,6 +378,26 @@ def test_help_is_immutable_and_two_never_share_their_videos():
     assert first.videos is not second.videos
 
 
+def test_help_without_flow_videos_has_no_video_in_any_flow():
+    assert Help().flow_videos == {}
+
+
+def test_help_says_the_videos_of_each_flow_by_language_code():
+    flow_videos = {"STOCK-F01": {"es": ["dQw4w9WgXcQ", "A1_-b2c3D4e"], "en": ["aqz-KE-bpKQ"]}}
+
+    assert Help(flow_videos=flow_videos).flow_videos == flow_videos
+
+
+def test_two_helps_never_share_their_flow_videos():
+    first, second = Help(), Help()
+
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        first.flow_videos = {"STOCK-F01": {"es": ["dQw4w9WgXcQ"]}}
+    assert first.flow_videos is not second.flow_videos
+
+
 def test_testapp_declares_its_help():
     """So that the help check runs over a real declaration too (test_checks_help.py)."""
-    assert apps.get_app_config("testapp").help == Help(videos={"es": "dQw4w9WgXcQ"})
+    assert apps.get_app_config("testapp").help == Help(
+        videos={"es": "dQw4w9WgXcQ"}, flow_videos={"TESTAPP-F01": {"es": ["dQw4w9WgXcQ"], "en": ["aqz-KE-bpKQ"]}}
+    )

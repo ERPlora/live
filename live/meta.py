@@ -196,9 +196,14 @@ class DeviceNotice:
 
 @dataclass(frozen=True)
 class Help:
-    """Declared on a module, its help window is ready; ``videos`` holds its optional YouTube video id by language."""
+    """Declared on a module, its help window is ready.
+
+    ``videos`` holds the module's optional YouTube video id by language; ``flow_videos``, the ids of the short videos
+    of each of its tasks, by flow id and then by language, one or several each.
+    """
 
     videos: Mapping[str, str] = field(default_factory=dict)
+    flow_videos: Mapping[str, Mapping[str, Sequence[str]]] = field(default_factory=dict)
 
 
 class LiveAppConfig(AppConfig):

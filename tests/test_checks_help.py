@@ -105,6 +105,77 @@ def test_help_that_is_no_help_value_is_e023(run, declared):
     assert message.msg == f"App 'stock' declares help={declared!r}, which is not a live.meta.Help."
 
 
+@pytest.mark.parametrize(
+    "flow_videos",
+    [
+        {"STOCK-F01": {"es": [VIDEO]}},
+        {"STOCK-F01": {"es": [VIDEO, "A1_-b2c3D4e"], "en": ("aqz-KE-bpKQ",)}, "STOCK-F02": {"en": [VIDEO]}},
+        {"STOCK-F01": {"es": [VIDEO]}, "STOCK-F02": {"es": [VIDEO]}},
+    ],
+)
+def test_a_module_with_well_declared_flow_videos_passes(run, flow_videos):
+    assert run(app(help=Help(videos={"es": VIDEO}, flow_videos=flow_videos))) == []
+
+
+@pytest.mark.parametrize("language", ["fr", "ES", "es-es", ""])
+def test_a_flow_video_for_a_language_of_no_settings_language_is_e023(run, language):
+    config = app(help=Help(flow_videos={"STOCK-F01": {language: [VIDEO]}}))
+
+    [message] = run(config)
+
+    assert (message.id, message.obj) == ("live.E023", config)
+    assert message.msg == (
+        f"App 'stock' has videos of flow 'STOCK-F01' for {language!r}, which is not one of settings.LANGUAGES."
+    )
+
+
+@pytest.mark.parametrize("video", ["dQw4w9WgXc", "dQw4w9WgXcQ\n", "https://youtu.be/dQw4w9WgXcQ", "", None, 12345678901])
+def test_a_flow_video_that_is_no_youtube_video_id_is_e023(run, video):
+    config = app(help=Help(flow_videos={"STOCK-F01": {"es": [VIDEO, video]}}))
+
+    [message] = run(config)
+
+    assert (message.id, message.obj) == ("live.E023", config)
+    assert message.msg == (
+        f"App 'stock' has the video {video!r} of flow 'STOCK-F01' for 'es', which is not a YouTube video id."
+    )
+
+
+@pytest.mark.parametrize("videos", [VIDEO, None, {VIDEO}])
+def test_flow_videos_of_a_language_that_are_no_list_are_one_e023(run, videos):
+    config = app(help=Help(flow_videos={"STOCK-F01": {"es": videos}}))
+
+    [message] = run(config)
+
+    assert (message.id, message.obj) == ("live.E023", config)
+    assert message.msg == (
+        f"App 'stock' has the videos {videos!r} of flow 'STOCK-F01' for 'es', which are not a list of YouTube video ids."
+    )
+
+
+@pytest.mark.parametrize("videos", [[VIDEO], VIDEO, None])
+def test_videos_of_a_flow_that_are_no_mapping_by_language_are_one_e023(run, videos):
+    config = app(help=Help(flow_videos={"STOCK-F01": videos}))
+
+    [message] = run(config)
+
+    assert (message.id, message.obj) == ("live.E023", config)
+    assert message.msg == (
+        f"App 'stock' has the videos {videos!r} of flow 'STOCK-F01', which are not YouTube video ids by language code."
+    )
+
+
+def test_each_bad_flow_video_is_its_own_message(run):
+    config = app(help=Help(flow_videos={"STOCK-F01": {"fr": ["bad"], "es": [VIDEO, "bad"]}, "STOCK-F02": {"en": "bad"}}))
+
+    assert [message.msg for message in run(config)] == [
+        "App 'stock' has videos of flow 'STOCK-F01' for 'fr', which is not one of settings.LANGUAGES.",
+        "App 'stock' has the video 'bad' of flow 'STOCK-F01' for 'fr', which is not a YouTube video id.",
+        "App 'stock' has the video 'bad' of flow 'STOCK-F01' for 'es', which is not a YouTube video id.",
+        "App 'stock' has the videos 'bad' of flow 'STOCK-F02' for 'en', which are not a list of YouTube video ids.",
+    ]
+
+
 def test_each_problem_is_its_own_message_on_its_app(run):
     platform = app("base", kind="platform", help=Help(videos={"fr": "bad"}))
     module = app("stock", help=Help(videos={"es": VIDEO, "en": "bad"}))
