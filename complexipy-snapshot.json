@@ -91,7 +91,7 @@
       },
       {
         "name": "Operation::__call__",
-        "complexity": 19
+        "complexity": 18
       }
     ]
   },

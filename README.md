@@ -40,6 +40,15 @@ desde la tenencia, `use_hub`) y el SaaS el suyo (el usuario); el resto (`live.sp
   sobre `live.api_errors.ApiErrorEnvelopeMiddleware` (en `MIDDLEWARE` tras auth), bajo
   `LIVE["api_prefix"]` (`/api/` por defecto); no toca JSON, streams, `/api/live` ni `/api/docs`. Los
   mensajes salen en el idioma de la petición (HTTP) o del stream (`ctx.language`, en `/api/live`).
+- **Datos con permiso** (`live.sensitive`): un campo de un esquema marcado `json_schema_extra={"requires":
+  "<permiso>"}` solo lo ve quien tiene ese permiso (en el Hub, el coste de un producto pide `base.view_costs`). Lo aplica
+  `Operation.__call__`, por donde pasan la ruta, la suscripción viva, el asistente y las claves de API, también cuando
+  una operación corre dentro de otra: la respuesta lleva el campo a nulo a quien no lo tiene, a cualquier profundidad
+  (un objeto dentro de otro, una lista o un mapa de ellos), en una copia que no toca los objetos que devolvió la
+  operación; una entrada que rellena un campo marcado (un filtro, una línea de una escritura) con algo distinto de su
+  valor por defecto se rechaza con el mismo 403 `permission_denied` que una operación sin su permiso. La marca sale
+  junto al campo en el OpenAPI. `live.E026` exige que nombre un permiso declarado y que, en una respuesta, el campo
+  admita nulo.
 - **Transacciones anidadas** (`live.operations.atomic`, `current_alias`): lo que un `services.py` envuelve en un
   savepoint va con `atomic()` (gestor de contexto o decorador, `savepoint` y `durable` como en Django), nunca con un
   `transaction.atomic()` desnudo, cuyo alias es `default`: con `LIVE["operation_database"]` la transacción de la
@@ -214,6 +223,9 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
     de su consulta (de sus filas, si las lista).
   - `live.E025` (`live.checks_nav`): una entrada del menú de un módulo sin `permission`, o con uno que el
     módulo no declara en `permissions`. Fuera de un módulo (el panel del SaaS), `Nav` puede no llevarlo.
+  - `live.E026` (`live.checks_sensitive`): un campo marcado con `requires` (en la entrada o en la respuesta de una
+    operación, a cualquier profundidad) que no nombra un permiso, que nombra uno que ninguna app declara o que, en una
+    respuesta, no admite nulo (`int | None`), que es lo que recibe quien no tiene el permiso.
 
   Los checks de los hooks (de `live.E009` a `live.E016` y `live.E018`) viven en `live.checks_hooks`, que
   `check_app_metadata` llama para cada módulo. Necesitan las operaciones y los eventos registrados, cosa que
