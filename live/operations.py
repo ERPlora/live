@@ -45,6 +45,7 @@ from django.utils.module_loading import import_string
 from django.utils.translation import gettext
 from ninja import Schema
 
+from live import sensitive
 from live.context import OperationContext, Scope
 from live.database_cut import COMMITTING, CONNECTING, RUNNING, DatabaseCut, command_ended, command_started, is_cut
 from live.errors import LiveMisuse, PermissionDenied
@@ -163,12 +164,8 @@ class Operation:
         risk = "high" if declared.get("risk") == "high" else "normal"
         return AI(description, risk, declared.get("preview"), declared.get("asks") or {})
 
-    def __call__(self, ctx: OperationContext, data: Schema) -> Schema:  # noqa: PLR0912
-        if not ctx.has(self.permission):
-            # Translated now, in the caller's language (the request's, or the live stream's).
-            raise PermissionDenied(
-                gettext("Permission “%(permission)s” is required.") % {"permission": self.permission}
-            )
+    def __call__(self, ctx: OperationContext, data: Schema) -> Schema:
+        self._authorize(ctx, data)
         if not self.database:
             return self._without_database(ctx, data)
         # An operation inside another, or inside someone's transaction, leaves a cut to the one that owns the transaction.
@@ -189,7 +186,7 @@ class Operation:
                                 cursor.execute(f"SET LOCAL statement_timeout = '{QUERY_STATEMENT_TIMEOUT}'")
                         else:
                             command_started(owner=owns_transaction, foreign=outermost and not owns_transaction)
-                        result = self._validated(self.fn(ctx, data))
+                        result = self._answer(ctx, self.fn(ctx, data))
                         if self.kind == "query":
                             # A query never commits. Nested in another transaction it runs in a savepoint:
                             # Postgres restores READ ONLY when the savepoint ends, but SET LOCAL
@@ -216,6 +213,18 @@ class Operation:
             command_ended(applied=True)
         return result
 
+    def _authorize(self, ctx: OperationContext, data: Schema) -> None:
+        """Refuse ``ctx`` an operation whose permission it lacks, or an input that fills a field marked with one it
+        lacks (``live.sensitive``)."""
+        missing = self.permission if not ctx.has(self.permission) else sensitive.unpermitted(ctx, data)
+        if missing is not None:
+            # Translated now, in the caller's language (the request's, or the live stream's).
+            raise PermissionDenied(gettext("Permission “%(permission)s” is required.") % {"permission": missing})
+
+    def _answer(self, ctx: OperationContext, result: Any) -> Schema:
+        """The validated output, as ``ctx`` may see it: each field marked with a permission it lacks, null."""
+        return sensitive.hidden(ctx, self._validated(result))
+
     def _may_repeat_after(self, stage: str) -> bool:
         """Whether a cut at ``stage`` of its transaction leaves this operation free to run again. A read, always; a
         command, if its body never ran, or if it says so and the COMMIT was not sent: once it was, nobody can know."""
@@ -233,7 +242,7 @@ class Operation:
                 if self.kind == "command":
                     # What it does on the network, no transaction undoes.
                     command_started(owner=outermost)
-                result = self._validated(self.fn(ctx, data))
+                result = self._answer(ctx, self.fn(ctx, data))
             if self.kind == "command" and outermost:
                 command_ended(applied=True)
             return result

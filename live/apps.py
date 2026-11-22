@@ -16,7 +16,7 @@ class LiveConfig(AppConfig):
 
     def ready(self) -> None:
         # Importing the live.checks* modules registers the app metadata checks (tag "live").
-        from live import checks, checks_bell, checks_help, checks_nav, operations, outbox  # noqa: F401
+        from live import checks, checks_bell, checks_help, checks_nav, checks_sensitive, operations, outbox  # noqa: F401
 
         operations.notify_hook = outbox.notify
         # Importing registers the operations; a second ready() hits Python's import cache and
