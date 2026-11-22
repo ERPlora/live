@@ -107,8 +107,11 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
   (un módulo de `apps/<id>/` del Hub, que un hub enciende y apaga). La carpeta = `label` = prefijo
   de las operaciones = id en `modules[]` de la foto del SaaS = `slug` de su `Module`; el código nunca
   mira la ruta del paquete.
-- **Toda app**: `permissions` (`<app>.<acción>`) y `role_permissions` (`{"hub_manager":
-  ["demo.*"]}`); `permissions_for_role` los une sobre todas las apps y expande `<app>.*`.
+- **Toda app**: `permissions`, un diccionario `{permiso: frase}` (`{"demo.view": _("See the items")}`): cada
+  permiso (`<app>.<acción>`) con la frase que dice, en palabras del negocio, lo que deja hacer a una persona, la que
+  se lee junto a su interruptor en un rol (en inglés, como fuente de i18n, con su traducción); recorrerlo da los
+  permisos. Y `role_permissions` (`{"hub_manager": ["demo.*"]}`); `permissions_for_role` los une sobre todas las
+  apps y expande `<app>.*`.
 - **Solo un módulo** (`kind = "app"`): `icon` (Iconify con prefijo de juego, `ion:people`),
   `category` (`live.meta.Category`: `sales`, `catalog`, `people`, `restaurant` u `organization`, con
   etiqueta `en` + `es`; agrupa la página de apps del Hub), `premium` (`False` por defecto; `True` =
@@ -226,6 +229,8 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
   - `live.E026` (`live.checks_sensitive`): un campo marcado con `requires` (en la entrada o en la respuesta de una
     operación, a cualquier profundidad) que no nombra un permiso, que nombra uno que ninguna app declara o que, en una
     respuesta, no admite nulo (`int | None`), que es lo que recibe quien no tiene el permiso.
+  - `live.E027` (`live.checks_permissions`): una app que declara sus `permissions` sin un diccionario (una lista), o
+    un permiso sin su frase (vacía, en blanco o que no es un texto). Vale para toda app, también las de plataforma.
 
   Los checks de los hooks (de `live.E009` a `live.E016` y `live.E018`) viven en `live.checks_hooks`, que
   `check_app_metadata` llama para cada módulo. Necesitan las operaciones y los eventos registrados, cosa que
