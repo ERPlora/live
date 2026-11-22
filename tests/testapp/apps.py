@@ -17,7 +17,7 @@ class TestAppConfig(LiveAppConfig):
     description = "A module of the test suite: its models, operations and live queries."
     verticals = ["restaurant"]
     help = Help(videos={"es": "dQw4w9WgXcQ"})
-    navigation = [Nav(id="testapp", label="Things", icon="ion:cube-outline", path="/testapp")]
+    navigation = [Nav(id="testapp", label="Things", icon="ion:cube-outline", path="/testapp", permission="testapp.view")]
     permissions = ["testapp.view", "testapp.manage"]
     role_permissions = {"admin": ["testapp.*"]}
     setup = [
