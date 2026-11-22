@@ -236,6 +236,33 @@ def test_a_marked_field_inside_the_input_is_refused_at_any_depth(data):
 
 
 @pytest.mark.django_db
+def test_an_operation_run_by_another_refuses_the_marked_field_before_it_runs():
+    """The assistant runs its tools inside its own turn: a tool whose input fills a marked field is refused there too."""
+    received = []
+    list_products = declare(body=lambda ctx, data: received.append(data) or {"items": []})
+
+    def turn(ctx, data):
+        list_products(ctx, ProductListIn(max_cost=500))
+        return {}
+
+    with pytest.raises(PermissionDenied) as info:
+        declare("stock.assistant.turn", body=turn, output=Done)(as_person(), ProductListIn())
+
+    assert info.value.envelope()["error"]["message"] == "Permission “stock.view_costs” is required."
+    assert received == []
+
+
+def test_an_operation_that_touches_no_database_refuses_the_marked_field_before_it_runs():
+    received = []
+    ask_supplier = declare(database=False, body=lambda ctx, data: received.append(data) or {"items": []})
+
+    with pytest.raises(PermissionDenied):
+        ask_supplier(as_person(), ProductListIn(max_cost=500))
+
+    assert received == []
+
+
+@pytest.mark.django_db
 def test_an_input_that_leaves_the_marked_field_at_its_default_runs():
     list_products = declare()
 
