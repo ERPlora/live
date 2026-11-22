@@ -20,7 +20,9 @@ def entry(permission=None, entry_id="items"):
 
 
 def app(*navigation, label="stock", kind="app", permissions=("stock.view", "stock.manage")):
-    return SimpleNamespace(label=label, kind=kind, navigation=list(navigation), permissions=list(permissions))
+    return SimpleNamespace(
+        label=label, kind=kind, navigation=list(navigation), permissions=dict.fromkeys(permissions, "A phrase")
+    )
 
 
 @pytest.fixture

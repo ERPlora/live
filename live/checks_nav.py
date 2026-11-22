@@ -4,6 +4,7 @@ Every entry of a module's ``navigation`` names the permission that opens it, one
 ``permissions`` (E025): a person is shown only the entries she may open. Only a module has a menu (E006).
 """
 
+from collections.abc import Collection
 from typing import Any
 
 from django.core import checks
@@ -28,7 +29,7 @@ def check_menu_permissions(app_configs: Any = None, **kwargs: Any) -> list[check
     ]
 
 
-def _permission_problem(permission: str | None, declared: list[str]) -> str | None:
+def _permission_problem(permission: str | None, declared: Collection[str]) -> str | None:
     if not permission:
         return "names no permission"
     if permission not in declared:

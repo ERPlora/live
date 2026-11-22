@@ -20,7 +20,7 @@ class TestAppConfig(LiveAppConfig):
         videos={"es": "dQw4w9WgXcQ"}, flow_videos={"TESTAPP-F01": {"es": ["dQw4w9WgXcQ"], "en": ["aqz-KE-bpKQ"]}}
     )
     navigation = [Nav(id="testapp", label="Things", icon="ion:cube-outline", path="/testapp", permission="testapp.view")]
-    permissions = ["testapp.view", "testapp.manage"]
+    permissions = {"testapp.view": "See the things", "testapp.manage": "Add, change and remove things"}
     role_permissions = {"admin": ["testapp.*"]}
     setup = [
         SetupStep(

@@ -43,7 +43,7 @@ CATEGORIES_ES = [
 
 
 def make_config(permissions, role_permissions):
-    return SimpleNamespace(permissions=permissions, role_permissions=role_permissions)
+    return SimpleNamespace(permissions=dict.fromkeys(permissions, "A phrase"), role_permissions=role_permissions)
 
 
 def test_role_wildcard_expands_to_the_declared_permissions():
@@ -89,7 +89,7 @@ def test_wildcard_does_not_match_another_app_with_the_same_prefix():
 def test_live_app_config_has_empty_metadata_by_default():
     assert LiveAppConfig.requires == []
     assert LiveAppConfig.navigation == []
-    assert LiveAppConfig.permissions == []
+    assert LiveAppConfig.permissions == {}
     assert LiveAppConfig.role_permissions == {}
 
 
@@ -105,7 +105,7 @@ def test_testapp_config_is_detected_as_a_live_app_config_although_apps_py_import
 
     assert isinstance(config, LiveAppConfig)
     assert type(config).__name__ == "TestAppConfig"
-    assert config.permissions == ["testapp.view", "testapp.manage"]
+    assert config.permissions == {"testapp.view": "See the things", "testapp.manage": "Add, change and remove things"}
     assert config.role_permissions == {"admin": ["testapp.*"]}
 
 

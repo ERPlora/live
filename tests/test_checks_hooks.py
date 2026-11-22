@@ -43,7 +43,7 @@ def test_a_query_without_a_list_of_models_has_no_rows(output):
 
 
 def hookless(**overrides):
-    fields = {"label": "stock", "permissions": [], "setup": [], "widgets": [], "bell": [], "notices": []}
+    fields = {"label": "stock", "permissions": {}, "setup": [], "widgets": [], "bell": [], "notices": []}
     return SimpleNamespace(**{**fields, **overrides})
 
 

@@ -1,8 +1,9 @@
 """App metadata declared where Django already expects it: the AppConfig.
 
 Every app of ours, platform and modules alike, extends ``LiveAppConfig`` and declares its
-permissions (``<app>.<action>``) and the permissions each role gets (``"demo.*"`` grants every
-``demo.`` permission). ``kind`` tells them apart:
+permissions (``<app>.<action>``), each with the phrase that says in business words what it lets a person do
+(``{"demo.view": _("See the items")}``, ``live.checks_permissions``), and the permissions each role gets
+(``"demo.*"`` grants every ``demo.`` permission). ``kind`` tells them apart:
 
 - ``"platform"`` (the default): always on, never turned on or off by a hub (``base``, ``control``…);
 - ``"app"``: a module of ``apps/`` that a hub turns on and off. Only a module carries the metadata
@@ -220,7 +221,8 @@ class LiveAppConfig(AppConfig):
     listed: ClassVar[bool] = True  # False keeps the module out of the public store
     requires: ClassVar[list[str]] = []
     navigation: ClassVar[list[Nav]] = []
-    permissions: ClassVar[list[str]] = []
+    # Each permission with its phrase, usually a lazy translation; iterating gives the permissions.
+    permissions: ClassVar[dict[str, str]] = {}
     role_permissions: ClassVar[dict[str, list[str]]] = {}
     # Module metadata: the Home's hooks, which base aggregates.
     setup: ClassVar[list[SetupStep]] = []
