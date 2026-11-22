@@ -16,7 +16,9 @@ class TestAppConfig(LiveAppConfig):
     summary = "Things to test the live package with."
     description = "A module of the test suite: its models, operations and live queries."
     verticals = ["restaurant"]
-    help = Help(videos={"es": "dQw4w9WgXcQ"})
+    help = Help(
+        videos={"es": "dQw4w9WgXcQ"}, flow_videos={"TESTAPP-F01": {"es": ["dQw4w9WgXcQ"], "en": ["aqz-KE-bpKQ"]}}
+    )
     navigation = [Nav(id="testapp", label="Things", icon="ion:cube-outline", path="/testapp", permission="testapp.view")]
     permissions = ["testapp.view", "testapp.manage"]
     role_permissions = {"admin": ["testapp.*"]}

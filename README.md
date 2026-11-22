@@ -141,8 +141,11 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
   `when` (lista de `SetupCheck` sobre la fila: solo las filas que las cumplen son de este aviso),
   `params`, `permission` y `refresh_on`.
 - **Solo un módulo, para su ventana de ayuda**: `help: Help | None`, `None` por defecto. Declararla
-  (`help = Help()`) dice que la ayuda del módulo está lista; el vídeo es opcional: `Help(videos={"es":
-  "<id>"})` guarda el id de un vídeo de YouTube por código de idioma.
+  (`help = Help()`) dice que la ayuda del módulo está lista; los vídeos son opcionales: `Help(videos={"es":
+  "<id>"})` guarda el id del vídeo de presentación de YouTube por código de idioma, y
+  `flow_videos={"<APP>-F<nn>": {"es": ["<id>", …]}}`, los de los vídeos cortos de cada tarea, por id de flujo y
+  después por código de idioma, uno o varios por idioma. Que el id de flujo exista en el `WORKBOOK.md` del módulo lo
+  comprueba el proyecto que lo publica, no `live`.
 - **Lectura**: `all_live_app_configs()` devuelve todas las apps nuestras instaladas (permisos,
   routers); `module_configs()`, solo las de `kind = "app"` (menú, página de apps, foto del SaaS, y
   sus `setup`, `widgets`, `bell` y `notices`); `declared_events()`, los eventos que declara la lista `ALL` del
@@ -203,8 +206,9 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
     `@operation` solo ve el nombre del módulo, y `<app>.queries.services` no se distingue de una app `<app>.queries`
     con su `services.py`: un comando ahí pasaría por bueno.
   - `live.E023` (`live.checks_help`): un `help` que no es un `Help`, declarado en una app que no es un módulo
-    (`kind = "app"`), con un vídeo bajo un idioma que no está en `settings.LANGUAGES` o con un id que no es el de un
-    vídeo de YouTube (11 caracteres: letras, cifras, `-` y `_`).
+    (`kind = "app"`), con un vídeo (el de presentación o el de un flujo) bajo un idioma que no está en
+    `settings.LANGUAGES` o con un id que no es el de un vídeo de YouTube (11 caracteres: letras, cifras, `-` y `_`), o
+    con los vídeos de un flujo que no van por idioma o, en un idioma, que no son una lista.
   - `live.E024` (`live.checks_bell`): un contador de la campana con una gravedad que no es `danger`, `warning` ni
     `info`, un `title`, `body` o `action_label` que no es un texto, o un `due` que no nombra un campo de la respuesta
     de su consulta (de sus filas, si las lista).
