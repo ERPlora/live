@@ -266,7 +266,7 @@ howto=…)` (solo las que nombran sus palabras y como mucho `MAX_TOOLS`, 20; sin
 cada herramienta; pesa más la acción pedida, `VERBS`, sobre la cosa que se nombra; live#16; detalle abajo), `tool_spec`, `card(op, arguments, language,
 words)` (la tarjeta de una escritura) con `confirmed` y `CONFIRM_WORD`, `invalid_arguments` (los datos que la operación
 rechazaría vuelven al modelo antes de dibujar la tarjeta, salvo la escritura peligrosa que no nombra registros,
-`blocked`; live#17), `run_tool` (ejecuta como la persona, resultado cortado en `MAX_RESULT_CHARS`), `preview` (la
+`blocked`; live#17), `run_tool` (ejecuta como la persona, resultado cortado en `MAX_RESULT_CHARS`; con `zone`, sus instantes en ese reloj, y con `money`, cada importe marcado `money` en su moneda como lo escriben las pantallas, «3.60 EUR», porque el modelo no ve el esquema de la respuesta y repite la cifra tal como la lee), `preview` (la
 lectura que nombra `AI.preview`) y `rounds`/`MAX_ROUNDS`. Cada proyecto dice los datos con sus palabras (`Words`: momento,
 registro, importe, nombre de la app); `PlainWords` no lee nada (euros con 2 decimales, UTC con los formatos de
 Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda del negocio, `refers`) viven en su
