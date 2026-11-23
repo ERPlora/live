@@ -6,6 +6,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from decimal import Decimal
+
 import pydantic
 import pydantic_core
 from django.utils import translation
@@ -17,6 +19,8 @@ from live.assistant.cards import (
     field,
 )
 from live.assistant.fields import (
+    fitting,
+    is_money,
     label,
 )
 from live.assistant.tools import (
@@ -88,10 +92,17 @@ def run(ctx: OperationContext, op: Operation, data: dict) -> tuple[ToolOutcome |
         return ToolOutcome("error", exc.code, error_content(exc.code, str(exc), getattr(exc, "fields", None))), None
 
 
-def run_tool(ctx: OperationContext, op: Operation, arguments: str, *, zone: dt.tzinfo | None = None) -> ToolOutcome:
+#: The currency an amount is told in and its decimals, given the one its object names (``None``: it names none): the
+#: project's, which knows its business's currency and the decimals of every other.
+Money = Callable[[str | None], tuple[str, int]]
+
+
+def run_tool(
+    ctx: OperationContext, op: Operation, arguments: str, *, zone: dt.tzinfo | None = None, money: Money | None = None
+) -> ToolOutcome:
     """Run ``op`` with the model's ``arguments`` (JSON text) for ``ctx``'s person, by its own operation. Its result
-    tells its moments on ``zone``'s clock, the one of whoever asks, since the model repeats an hour as it reads it;
-    without one, as the operation gives them."""
+    tells its moments on ``zone``'s clock, the one of whoever asks, and its amounts in their currency (``money``), since
+    the model repeats an hour or an amount as it reads it; without them, as the operation gives them."""
     try:
         data = json.loads(arguments or "{}")
     except ValueError:
@@ -101,18 +112,27 @@ def run_tool(ctx: OperationContext, op: Operation, arguments: str, *, zone: dt.t
     failure, result = run(ctx, op, data)
     if failure is not None:
         return failure
-    content = result.model_dump_json() if zone is None else _on_the_clock(result, zone)
+    content = _told_to_the_model(op, result, zone, money)
     if len(content) > MAX_RESULT_CHARS:
         content = content[:MAX_RESULT_CHARS] + " …(cut)"
     return ToolOutcome("ok", "", content)
 
 
+def _told_to_the_model(op: Operation, result: pydantic.BaseModel, zone: dt.tzinfo | None, money: Money | None) -> str:
+    """``result`` as ``model_dump_json`` writes it, with every moment that knows its zone told on ``zone``'s clock and
+    every amount in its currency (``_in_currency``)."""
+    if zone is None and money is None:
+        return result.model_dump_json()
+    written = result.model_dump(mode="json")
+    if zone is not None:
+        written = _told(result.model_dump(), written, zone)
+    if money is not None:
+        schema = output_schema(op)
+        written = _in_currency(written, schema, schema.get("$defs", {}), money, (None, None))
+    return pydantic_core.to_json(written).decode()
+
+
 _MOMENT = pydantic.TypeAdapter(dt.datetime)
-
-
-def _on_the_clock(result: pydantic.BaseModel, zone: dt.tzinfo) -> str:
-    """``result`` as ``model_dump_json`` writes it, with every moment that knows its zone told on ``zone``'s clock."""
-    return pydantic_core.to_json(_told(result.model_dump(), result.model_dump(mode="json"), zone)).decode()
 
 
 def _told(value: Any, written: Any, zone: dt.tzinfo) -> Any:
@@ -125,6 +145,35 @@ def _told(value: Any, written: Any, zone: dt.tzinfo) -> Any:
     if isinstance(value, list | tuple) and isinstance(written, list) and len(value) == len(written):
         return [_told(item, said, zone) for item, said in zip(value, written, strict=True)]
     return written
+
+
+def _in_currency(value: Any, prop: dict, defs: dict, money: Money, named: tuple) -> Any:
+    """``value`` (JSON) with every amount its schema ``prop`` marks (``is_money``) as the screens write it, «3.60 EUR»:
+    in the currency of the nearest object that names one (``named``: its ``currency``, with the ``currency_decimals``
+    it answers, else that currency's), else in ``money``'s, at any depth."""
+    prop = fitting(value, prop, defs)
+    if isinstance(value, int) and is_money(prop):
+        return _amount(value, named, money)
+    if isinstance(value, dict):
+        props = prop.get("properties", {})
+        currency = value.get("currency")
+        if isinstance(currency, str) and currency:
+            named = (currency, value.get("currency_decimals"))
+        return {key: _in_currency(inner, props.get(key, {}), defs, money, named) for key, inner in value.items()}
+    if isinstance(value, list):
+        items = prop.get("items")
+        items = items if isinstance(items, dict) else {}
+        return [_in_currency(item, items, defs, money, named) for item in value]
+    return value
+
+
+def _amount(value: int, named: tuple, money: Money) -> str:
+    """``value``, in the minor unit of its currency, as the screens write it in that currency: 360 → «3.60 EUR»."""
+    currency, answered = named
+    code, decimals = money(currency)
+    if isinstance(answered, int):
+        decimals = answered
+    return f"{Decimal(value).scaleb(-decimals):f} {code}"
 
 
 # ── What a dangerous write will do, on its card ──────────────────────────────────────────────────────────────────
