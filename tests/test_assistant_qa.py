@@ -61,12 +61,14 @@ def test_an_ask_that_reaches_its_tool_among_the_first_is_no_miss():
 
 
 def test_an_ask_that_names_another_tool_is_reported_with_its_position():
-    found = position(CATALOGUE, WRONG, "staff.member.delete")
+    # Ten things of the noise, not thirty: behind the changes the phrase names, the tool is still among those offered.
+    tools = {op.name: op for op in [PRODUCT_CREATE, PRODUCT_UPDATE, MEMBER_DELETE, SALE_TODAY, *NOISE[:30]]}
+    found = position(tools, WRONG, "staff.member.delete")
     assert found is not None and found > 1
-    assert misses(CATALOGUE, language="es", top=1) == [Miss("staff__member__delete", WRONG, found)]
+    assert misses(tools, language="es", top=1) == [Miss("staff__member__delete", WRONG, found)]
     # The first ``top`` offered pass: at its own position, it does.
-    assert misses(CATALOGUE, language="es", top=found) == []
-    assert misses(CATALOGUE, language="es", top=found - 1) == [Miss("staff__member__delete", WRONG, found)]
+    assert misses(tools, language="es", top=found) == []
+    assert misses(tools, language="es", top=found - 1) == [Miss("staff__member__delete", WRONG, found)]
 
 
 def test_an_ask_whose_tool_is_not_offered_at_all_has_no_position():

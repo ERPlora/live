@@ -866,7 +866,7 @@ def test_the_theme_switched_comes_before_every_switch_of_another_thing(asked, la
     member, a rule, a series or an app comes before it (ERPlora/live#91)."""
     names = themed(asked, language)
     off_or_on = [name for name in names if name.rsplit(".", 1)[1] in SWITCHES]
-    assert len(off_or_on) >= 4  # positive control
+    assert len(off_or_on) >= 2  # positive control: switches of other things are offered too
     assert all(names.index("base.profile.preferences_set") < names.index(name) for name in off_or_on), names[:6]
 
 

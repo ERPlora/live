@@ -344,9 +344,18 @@ def _relevant(  # noqa: C901, PLR0913, PLR0915
             points += HOWTO_POINTS
         return points
 
+    return _offered(tools, always, score)
+
+
+def _offered(
+    tools: dict[str, Operation], always: tuple[str, ...], score: Callable[[Operation], int]
+) -> list[Operation]:
+    """``always`` first, then the tools the words name (a ``score`` above 0), best first and by name, at most
+    ``MAX_TOOLS``: one they do not name is never offered to fill the share."""
     first = [tools[name] for name in always if name in tools]
-    ranked = sorted((op for op in tools.values() if op.name not in always), key=lambda op: (-score(op), op.name))
-    return [*first, *ranked][:MAX_TOOLS]
+    points = {op.name: score(op) for op in tools.values() if op.name not in always}
+    named = sorted((name for name, got in points.items() if got > 0), key=lambda name: (-points[name], name))
+    return [*first, *(tools[name] for name in named)][:MAX_TOOLS]
 
 
 def _naming_apps(

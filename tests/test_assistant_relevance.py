@@ -351,10 +351,10 @@ def test_a_reorder_reaches_the_operation_that_reorders():
 
 
 def test_a_que_inside_a_sentence_asks_nothing():
-    """«Marta dice que sí»: a conjunction, not «¿qué…?». The read and the write of the same thing tie, by name."""
+    """«Marta dice que sí»: a conjunction, not «¿qué…?», so it asks for no read; «¿qué dijo Marta?» does."""
     tools = [tool("a.consent.set", "Saves the answer.", asks={}), tool("b.consent.list", "Lists the answers.", "query")]
-    assert ranked(tools, "Marta dice que sí")[0] == "a.consent.set"
-    assert ranked(tools, "que Marta pueda decir que no")[0] == "a.consent.set"
+    assert "b.consent.list" not in ranked(tools, "Marta dice que sí")
+    assert "b.consent.list" not in ranked(tools, "que Marta pueda decir que no")
     assert ranked(tools, "¿Qué dijo Marta?")[0] == "b.consent.list"
     assert ranked(tools, "¿que dijo Marta?")[0] == "b.consent.list"
 

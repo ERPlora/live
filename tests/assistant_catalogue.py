@@ -88,6 +88,11 @@ def ranked(tools, asked: str, language: str = "es", **kwargs) -> list[str]:
     return [op.name for op in assistant.relevant({op.name: op for op in tools}, [asked], language, **kwargs)]
 
 
+def place(names: list[str], name: str) -> int:
+    """Where ``name`` is among the tools offered (0 is first); one not offered at all is behind every one offered."""
+    return names.index(name) if name in names else len(names)
+
+
 MENU_ACTIONS = {
     "add": "command", "check": "query", "count": "query", "create": "command", "delete": "command",
     "erase": "command", "export": "query", "get": "query", "import": "command", "list": "query",

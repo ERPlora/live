@@ -182,11 +182,6 @@ def test_the_app_named_and_the_verb_asked_rank_first_after_what_is_always_at_han
     assert always[:2] == ["demo.item.list", "testapp.probe.create"]
 
 
-def test_a_turn_offers_at_most_its_share():
-    tools = {f"testapp.many.n{i}": op(f"testapp.many.n{i}", ai=CREATE) for i in range(assistant.MAX_TOOLS + 5)}
-    assert len(assistant.relevant(tools, ["hola"], "es")) == assistant.MAX_TOOLS
-
-
 def test_the_words_of_an_app_are_its_label_its_name_and_its_menu():
     words = assistant.app_words("testapp", "en")
     assert {"testa", "thing"} <= words

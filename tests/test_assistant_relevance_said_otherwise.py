@@ -226,9 +226,10 @@ def test_a_tool_that_takes_a_name_without_changing_it_renames_nothing():
 
 
 def test_a_change_that_takes_no_name_renames_nothing():
-    """It ranks as the other tools of its thing, by name."""
+    """Its words named nothing else, so it is not offered; the changes that take a name are."""
     names = offered("renombra Bienvenida como «Primera visita»", "es")
-    assert names.index("appointment.thing00.list") < names.index("appointment.thing00.update"), names[:10]
+    assert "appointment.thing00.update" not in names, names[:10]
+    assert names[0] == "flow.flow.update", names[:10]
 
 
 #: An automation's switch and a recipe's, whose asks both say the reminders, beside a write that takes them.
