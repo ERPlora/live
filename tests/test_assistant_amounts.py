@@ -116,3 +116,8 @@ def test_on_a_clock_and_in_a_currency_at_once():
 
 def test_without_a_currency_a_result_reads_as_its_operation_wrote_it():
     assert read() == json.loads(FiguresOut.model_validate(FIGURES).model_dump_json())
+
+
+def test_on_a_clock_alone_an_amount_stays_as_its_operation_wrote_it():
+    told = read(zone=ZoneInfo("Europe/Madrid"))
+    assert (told["at"], told["total_revenue"], told["invoices"][0]["total_amount"]) == ("2026-11-22T16:18:00+01:00", 360, 1250)
