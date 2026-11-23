@@ -976,4 +976,10 @@ def test_the_rounds_are_the_models_tool_requests_since_the_persons_last_message(
     ]
     assert assistant.rounds(messages) == 2
     assert assistant.rounds([]) == 0
-    assert assistant.MAX_ROUNDS == 6
+
+
+def test_a_request_takes_as_many_rounds_as_the_market_gives_an_agent_before_it_stops():
+    """A guard against a loop, not an allowance: the gateway asks the model for one tool at a time, so a read and a
+    change per day of the week are eight rounds. 20 is where Windsurf stops its agent and the agent of Vercel's AI SDK
+    stops by default; OpenAI's Agents SDK stops at 10 and Cursor at 25."""
+    assert assistant.MAX_ROUNDS == 20
