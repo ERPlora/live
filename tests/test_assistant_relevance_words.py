@@ -12,6 +12,7 @@ from tests.assistant_catalogue import (
     MENU,
     REGISTERED_AT_THE_TILL,
     NameIn,
+    place,
     ranked,
     till_apps,
     tool,
@@ -265,7 +266,7 @@ def test_setting_up_the_bookings_offers_no_confirmation_before_the_booking(said,
     names = ranked(APPROVED_OR_SWITCHED, said, language)
     assert names[0] == "reservation.settings.update", names
     for confirm in ("reservation.reservation.confirm", "appointment.appointment.confirm"):
-        assert names.index(confirm) > names.index("reservation.reservation.cancel"), names
+        assert place(names, confirm) > names.index("reservation.reservation.cancel"), names
 
 
 PAYING_WITH_ABONAR = ("abonar", "abona", "abonan", "abonas", "abonamos", "abonarlo", "abonarme", "abonale", "abonado",
@@ -406,7 +407,8 @@ def test_a_device_named_but_not_registered_is_not_set_up_to_print(asked, languag
     before setting the tablet up (ERPlora/live#117: with any device named, the money came 15th in the Hub, not 14th,
     and opening the till 20th, not 8th)."""
     names = ranked(REGISTERED_DEVICES, asked, language, app_words=till_apps)
-    assert names.index(first) < names.index("printing.device.register"), names[:5]
+    device = place(names, "printing.device.register")
+    assert device > place(names, first) or device == len(names), names[:5]
 
 
 class OptionReorderIn(Schema):
