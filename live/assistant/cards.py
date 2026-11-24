@@ -69,6 +69,18 @@ class Words(Protocol):
     def app_name(self) -> str: ...
 
 
+#: How JSON writes a moment of each kind its schema declares (``MOMENTS``).
+_MOMENT_OF = {"date": dt.date.fromisoformat, "time": dt.time.fromisoformat, "date-time": dt.datetime.fromisoformat}
+
+
+def _moment(value: Any, kind: str) -> dt.date | dt.time | dt.datetime | None:
+    """The moment of its schema's ``kind`` that ``value`` writes as JSON does, or ``None`` when it writes none."""
+    try:
+        return _MOMENT_OF.get(kind, dt.datetime.fromisoformat)(value)
+    except (TypeError, ValueError):
+        return None
+
+
 @dataclass(frozen=True)
 class PlainWords:
     """Words that read nothing: amounts in ``currency`` with ``decimals`` (euros with two by default), a moment at UTC as
@@ -91,14 +103,13 @@ class PlainWords:
         return {"kind": "money", "value": value, "money": self.money()}
 
     def moment(self, value: str, kind: str) -> str | None:
-        try:
-            if kind == "date":
-                return formats.date_format(dt.date.fromisoformat(value), "DATE_FORMAT")
-            if kind == "time":
-                return formats.time_format(dt.time.fromisoformat(value).replace(tzinfo=None), "TIME_FORMAT")
-            moment = dt.datetime.fromisoformat(value)
-        except ValueError:
+        moment = _moment(value, kind)
+        if moment is None:
             return None
+        if kind == "date":
+            return formats.date_format(moment, "DATE_FORMAT")
+        if kind == "time":
+            return formats.time_format(moment.replace(tzinfo=None), "TIME_FORMAT")
         if moment.tzinfo is not None:
             moment = moment.astimezone(dt.UTC).replace(tzinfo=None)
         return formats.date_format(moment, "DATETIME_FORMAT")
@@ -235,8 +246,9 @@ def _in_words(value: Any, spoken: Any, prop: dict, defs: dict) -> bool:
         return _is_said_name(value)
     if isinstance(value, dict):
         return _line_in_words(value, spoken if isinstance(spoken, dict) else {}, prop, defs)
-    declared = prop.get("format") in MOMENTS or "enum" in prop or is_money(prop)
-    return declared and spoken != value
+    if prop.get("format") in MOMENTS:  # its words may write it as it was sent: «12:00» in Spanish
+        return spoken != value or _moment(value, prop["format"]) is not None
+    return ("enum" in prop or is_money(prop)) and spoken != value
 
 
 def _said_in_words(value: list, spoken: list, prop: dict, defs: dict) -> bool:

@@ -83,7 +83,7 @@ def stock():
 
 def said(write, name, items, words=None) -> tuple:
     words = SpokenWords(write, "en") if words is None else words
-    shown = fields(assistant.card(write, {name: items}, "en", words))[name]
+    shown = fields(assistant.card(write, {name: items}, words.language, words))[name]
     return shown["value"], shown.get(assistant.NAMED, False)
 
 
@@ -118,6 +118,17 @@ def test_a_line_of_moments_is_named_by_them(written):
     plain = assistant.PlainWords(written, "en")
     assert said(written, "intervals", [{"open_time": "12:00", "close_time": "23:30"}], plain)[1] is True
     assert said(written, "intervals", [{"open_time": "noon", "close_time": "23:30"}], plain)[1] is False
+
+
+def test_a_moment_its_words_write_as_it_was_sent_is_still_in_words(written):
+    """Spanish writes noon as «12:00», the same text the write sends: it is a moment said in words all the same, so the
+    hours of a day are said, never «1 elemento»."""
+    plain = assistant.PlainWords(written, "es")
+    hours = [{"open_time": "12:00", "close_time": "23:30"}]
+    assert said(written, "intervals", hours, plain) == (hours, True)
+    assert said(written, "intervals", [{"open_time": "12:00", "close_time": "mediodía"}], plain)[1] is False
+    # And one its words write though JSON writes no such date: a day without its year, as a birthday is sent.
+    assert said(written, "special_days", [{"date": "--12-25", "name": "Christmas", "intervals": []}])[1] is True
 
 
 def test_a_line_by_the_name_a_person_said_and_figures_beside_it_is_named(stock):
