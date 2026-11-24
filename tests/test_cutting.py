@@ -1,9 +1,11 @@
-"""A tool's result longer than the model is told at once: it keeps whole rows and says how to read on."""
+"""A tool's result longer than the model is told at once: it keeps whole rows and says how to read on, and it is
+always JSON the model can read."""
 
 import json
 
 import pytest
 from live import assistant
+from live.assistant import cutting
 from ninja import Field, Schema
 
 from tests.test_assistant import ctx, op
@@ -46,6 +48,16 @@ class Catalogue(Schema):
     actions: list[Row]
 
 
+class Record(Schema):
+    number: str
+    total: int
+    qr: str
+
+
+class Loose(Schema):
+    data: dict
+
+
 def rows(count: int, size: int = 1_000) -> list[dict]:
     return [{"name": f"café {i}", "note": "x" * size} for i in range(count)]
 
@@ -63,6 +75,14 @@ def told(output, answer, arguments: str = "", input=PageIn) -> str:
 
 def whole(output, answer) -> int:
     return len(output.model_validate(answer).model_dump_json())
+
+
+def cut_off(kept: int, of: int) -> str:
+    return f" …(cut: only the first {kept} of {of} characters fit)"
+
+
+def kept_of(text: str) -> int:
+    return text.index(" …(cut: ")
 
 
 def next_page(kept: int, of: int, offset: int) -> str:
@@ -150,17 +170,72 @@ def test_the_list_that_takes_the_most_room_is_the_one_shortened_though_another_h
     assert 1 <= len(page["actions"]) < 20
 
 
-def test_a_result_with_no_list_to_shorten_is_cut_and_says_how_much_was_seen():
-    long = op("testapp.probe.long", output=LongOut, fn=lambda ctx, data: {"text": "x" * (3 * LIMIT)})
-    content = assistant.run_tool(ctx("testapp.manage"), long, "").content
+def test_a_long_text_keeps_its_first_characters_and_the_rest_of_the_answer_comes_whole():
+    answer = {"number": "T-1", "total": 121, "qr": "q" * (3 * LIMIT)}
+    content = told(Record, answer, input=FilterIn)
+    record = json.loads(content)
+    kept = kept_of(record["qr"])
     assert len(content) <= LIMIT
-    seen = LIMIT - len(f" …(cut: only the first {LIMIT} of {3 * LIMIT + 11} characters fit)")
-    assert content == '{"text":"' + "x" * (seen - 9) + f" …(cut: only the first {seen} of {3 * LIMIT + 11} characters fit)"
+    assert record == {**answer, "qr": "q" * kept + cut_off(kept, 3 * LIMIT)}
+    assert len(written({**record, "qr": "q" * (kept + 1) + cut_off(kept + 1, 3 * LIMIT)})) > LIMIT
 
 
-def test_a_row_longer_than_the_whole_cut_is_told_cut_rather_than_as_no_rows():
+def test_every_long_text_is_cut_to_the_same_length_wherever_it_is_and_the_short_ones_stay_whole():
+    answer = {"data": {"qr": "q" * (2 * LIMIT), "lines": [{"xml": "<x/>" * LIMIT, "number": "T-1"}]}}
+    data = json.loads(told(Loose, answer, input=FilterIn))["data"]
+    kept = kept_of(data["qr"])
+    assert data == {
+        "qr": "q" * kept + cut_off(kept, 2 * LIMIT),
+        "lines": [{"xml": ("<x/>" * LIMIT)[:kept] + cut_off(kept, 4 * LIMIT), "number": "T-1"}],
+    }
+
+
+def test_a_text_its_cut_would_not_shorten_stays_whole():
+    shell = len(written({"data": {"a": "", "b": ""}}))
+    near = (LIMIT - shell - len(cut_off(8_000, 3 * LIMIT))) // 2 + 10
+    answer = {"data": {"a": "a" * (3 * LIMIT), "b": "b" * near}}
+    data = json.loads(told(Loose, answer, input=FilterIn))["data"]
+    assert near - len(cut_off(near, near)) < kept_of(data["a"]) < near
+    assert data["b"] == "b" * near
+
+
+@pytest.mark.parametrize("key", ["b", "bb"])
+def test_a_text_is_never_traded_for_a_cut_as_long_as_itself(key):
+    shell = len(written({"data": {"a": "", key: ""}}))
+    middle = (LIMIT - shell - len(cut_off(8_000, 3 * LIMIT))) // 2
+    for near in range(middle - 30, middle + 60):
+        answer = {"data": {"a": "a" * (3 * LIMIT), key: "b" * near}}
+        data = json.loads(told(Loose, answer, input=FilterIn))["data"]
+        assert data[key] == "b" * near or len(data[key]) < near, near
+
+
+def test_a_row_longer_than_the_whole_cut_keeps_every_row_with_its_text_cut():
     answer = {"rows": rows(2, size=2 * LIMIT), "total": 2, "limit": 50, "offset": 0}
     content = told(Page, answer)
+    page = json.loads(content)
+    kept = kept_of(page["rows"][0]["note"])
     assert len(content) <= LIMIT
-    assert content.startswith('{"rows":[{"name":"café 0","note":"xxx')
-    assert content.endswith(" characters fit)")
+    assert page == {**answer, "rows": [{**row, "note": "x" * kept + cut_off(kept, 2 * LIMIT)} for row in answer["rows"]]}
+
+
+def test_an_answer_too_long_even_without_its_texts_comes_as_its_first_characters_and_says_so():
+    answer = {"data": {f"amount_{i:05d}": i for i in range(3_000)}}
+    whole_answer = Loose.model_validate(answer).model_dump_json()
+    content = told(Loose, answer, input=FilterIn)
+    cut = json.loads(content)
+    seen = len(cut["answer"])
+    assert len(content) <= LIMIT < len(whole_answer)
+    assert cut == {
+        "cut": f"Only the first {seen} of the {len(whole_answer)} characters of the answer fit here: narrow the request.",
+        "answer": whole_answer[:seen],
+    }
+    assert seen > LIMIT // 2
+
+
+def test_an_answer_with_no_room_for_a_single_character_is_still_json():
+    read = op("testapp.probe.long", output=LongOut, fn=lambda ctx, data: {})
+    content = '{"text":"' + "x" * 100 + '"}'
+    assert json.loads(cutting.within(read, {}, content, 10)) == {
+        "cut": f"Only the first 0 of the {len(content)} characters of the answer fit here: narrow the request.",
+        "answer": "",
+    }
