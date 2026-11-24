@@ -45,6 +45,7 @@ def module(label, **overrides):
         "widgets": [],
         "bell": [],
         "notices": [],
+        "checkout": [],
     }
     return SimpleNamespace(**{**fields, **overrides})
 
@@ -69,6 +70,7 @@ def platform(label="base", **overrides):
         "widgets": [],
         "bell": [],
         "notices": [],
+        "checkout": [],
     }
     return SimpleNamespace(**{**fields, **overrides})
 
@@ -153,6 +155,7 @@ def test_module_with_only_the_defaults_misses_icon_category_summary_and_descript
             "widgets",
             "bell",
             "notices",
+            "checkout",
         )
     }
 

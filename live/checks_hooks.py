@@ -11,6 +11,9 @@ They need the operations and the events registered, which ``LiveConfig.ready`` d
 The device's notices of a module (``notices``) follow the same rules
 (E006, E009–E013), and their texts are templates on the fields of the rows of their query, which
 says what happened (``id``) and when (``at``) (E018).
+
+The steps a module adds to the charge of Sales (``checkout``) name no query: each is a list item of its dataclass
+(E009) with a permission of the module (E011) and its key (E013), and names the Vue component that paints it (E028).
 """
 
 import re
@@ -28,22 +31,25 @@ from live.meta import (
     WIDGET_KINDS,
     WIDGET_SIZES,
     BellCounter,
+    CheckoutStep,
     DeviceNotice,
     SetupCheck,
     SetupStep,
     Widget,
 )
 
-#: The hooks of a module (the Home's and the device's notices) and the dataclass of each item.
-HOOKS = {"setup": SetupStep, "widgets": Widget, "bell": BellCounter, "notices": DeviceNotice}
+#: The hooks of a module (the Home's, the device's notices and the steps of the charge) and the dataclass of each item.
+HOOKS = {"setup": SetupStep, "widgets": Widget, "bell": BellCounter, "notices": DeviceNotice, "checkout": CheckoutStep}
 HOOK_KEY_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+#: A component's name: a Vue file of the module's ``frontend/components/``, never a path.
+COMPONENT_NAME_RE = re.compile(r"^[A-Z][A-Za-z0-9]*$")
 #: What every row of a notice's query says: what happened and when (the device remembers both).
 NOTICE_ROW_FIELDS = ("id", "at")
 FIELD_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 def _hook_errors(config: Any, events: frozenset[str]) -> list[checks.CheckMessage]:
-    """E009–E016: the Home's hooks of a module."""
+    """E009–E016, E018 and E028: the hooks of a module."""
     errors = []
     for hook, item_class in HOOKS.items():
         items = getattr(config, hook)
@@ -94,6 +100,8 @@ def _key_errors(config: Any, hook: str, items: list[Any] | tuple[Any, ...]) -> l
 
 def _item_problems(config: Any, item: Any, events: frozenset[str]) -> list[tuple[str, str, str]]:
     """``(id, problem, hint)`` of each rule one item of a hook breaks."""
+    if isinstance(item, CheckoutStep):
+        return [*_component_problems(item), *_permission_problems(config, item)]
     problems = []
     if isinstance(item, Widget):
         problems += _widget_problems(item)
@@ -108,20 +116,39 @@ def _item_problems(config: Any, item: Any, events: frozenset[str]) -> list[tuple
                 f" e.g. '{config.label}.<entity>.status'.",
             )
         )
-    if item.permission is not None and item.permission not in config.permissions:
-        problems.append(
-            (
-                "live.E011",
-                f"needs permission {item.permission!r}, which {config.label!r} does not declare",
-                f"Use one of the module's permissions ({', '.join(config.permissions) or 'none declared'}), or None.",
-            )
-        )
+    problems += _permission_problems(config, item)
     problems += _refresh_problems(item.refresh_on, events)
     if isinstance(item, SetupStep):
         problems += _configured_when_problems(item.configured_when)
     if isinstance(item, DeviceNotice) and operation_problem is None:
         problems += _notice_problems(item, operations.registry[item.operation].output)
     return problems
+
+
+def _permission_problems(config: Any, item: Any) -> list[tuple[str, str, str]]:
+    """E011: the permission of an item is one of its module's, or ``None``."""
+    if item.permission is None or item.permission in config.permissions:
+        return []
+    return [
+        (
+            "live.E011",
+            f"needs permission {item.permission!r}, which {config.label!r} does not declare",
+            f"Use one of the module's permissions ({', '.join(config.permissions) or 'none declared'}), or None.",
+        )
+    ]
+
+
+def _component_problems(step: CheckoutStep) -> list[tuple[str, str, str]]:
+    """E028: a step of the charge names the Vue component of its module that paints it, never a path."""
+    if isinstance(step.component, str) and COMPONENT_NAME_RE.fullmatch(step.component):
+        return []
+    return [
+        (
+            "live.E028",
+            f"names component {step.component!r}, which is no component's name",
+            "Name a Vue component of the module's frontend/components/, without .vue: e.g. component='TipStep'.",
+        )
+    ]
 
 
 def _operation_problem(config: Any, name: Any) -> str | None:

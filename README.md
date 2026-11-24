@@ -152,6 +152,12 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
   obligatorios; `body` (partes que se juntan con « · », las que tengan todos sus campos rellenos),
   `when` (lista de `SetupCheck` sobre la fila: solo las filas que las cumplen son de este aviso),
   `params`, `permission` y `refresh_on`.
+- **Solo un módulo, para el cobro de Ventas**: `checkout: list[CheckoutStep]`, vacía por defecto, los pasos que el
+  módulo añade a la hoja **Cobro**, entre el importe y los medios de pago (la propina, por ejemplo). `key` y
+  `component` (el componente Vue de `frontend/components/` del módulo que pinta el paso, sin `.vue`), obligatorios, y
+  `permission` (quien no lo tiene no ve el paso). Ventas monta los pasos de los módulos encendidos sin saber cuáles son,
+  y el componente lee y escribe con las operaciones de su propio módulo. Lo que un paso añade a un cobro se cobra con la
+  venta pero aparte de su total: nunca es precio ni lleva impuestos.
 - **Solo un módulo, para su ventana de ayuda**: `help: Help | None`, `None` por defecto. Declararla
   (`help = Help()`) dice que la ayuda del módulo está lista; los vídeos son opcionales: `Help(videos={"es":
   "<id>"})` guarda el id del vídeo de presentación de YouTube por código de idioma, y
@@ -160,7 +166,7 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
   comprueba el proyecto que lo publica, no `live`.
 - **Lectura**: `all_live_app_configs()` devuelve todas las apps nuestras instaladas (permisos,
   routers); `module_configs()`, solo las de `kind = "app"` (menú, página de apps, foto del SaaS, y
-  sus `setup`, `widgets`, `bell` y `notices`); `declared_events()`, los eventos que declara la lista `ALL` del
+  sus `setup`, `widgets`, `bell`, `notices` y `checkout`); `declared_events()`, los eventos que declara la lista `ALL` del
   `events.py` de cada app nuestra (sin `events.py` o sin `ALL`, ninguno).
 - **Checks** (`live.checks`, etiqueta `live`, registrados al arrancar la app `live`; corren con
   `manage.py check` y `runserver` y miran siempre todas las apps nuestras):
@@ -172,7 +178,7 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
   - `live.E005`: un ciclo en `requires` (un error por ciclo);
   - `live.E006`: una app de plataforma no deja en su valor por defecto `requires`, `category`,
     `premium`, `navigation`, `summary`, `description`, `verticals`, `listed`, `setup`, `widgets`,
-    `bell` o `notices` (se compara con el valor por defecto, no con «verdadero»: `listed` vale `True`); los pasos
+    `bell`, `notices` o `checkout` (se compara con el valor por defecto, no con «verdadero»: `listed` vale `True`); los pasos
     de plataforma de `base` los pone `base.setup.status`, no su `LiveAppConfig`;
   - `live.E007`: un módulo sin `summary`, con un `summary` de más de una línea o de más de 120
     caracteres, sin `description` o con un `verbose_name` de más de 80 (medidos en inglés; el `es`
@@ -180,7 +186,7 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
   - `live.E008`: un id de `verticals` que no casa `^[a-z][a-z0-9]*(_[a-z0-9]+)*$`, pasa de 50
     caracteres (`hub_template_<vertical>` cabe en 63), es `test` (reservado) o se repite; o
     `verticals` no es una lista;
-  - `live.E009`: `setup`, `widgets`, `bell` o `notices` no es una lista (o tupla) de su dataclass;
+  - `live.E009`: `setup`, `widgets`, `bell`, `notices` o `checkout` no es una lista (o tupla) de su dataclass;
   - `live.E010`: el `operation` de un paso, panel, contador o aviso no es una consulta (`kind="query"`)
     declarada del propio módulo (su prefijo es el `label`); un panel por `component` puede no tenerlo;
   - `live.E011`: su `permission` no es uno de los `permissions` del módulo (`None` = sin permiso);
@@ -231,11 +237,14 @@ metadatos; `live`, `ninja`, `allauth` y `django.contrib.*` no lo son. Detalle en
     respuesta, no admite nulo (`int | None`), que es lo que recibe quien no tiene el permiso.
   - `live.E027` (`live.checks_permissions`): una app que declara sus `permissions` sin un diccionario (una lista), o
     un permiso sin su frase (vacía, en blanco o que no es un texto). Vale para toda app, también las de plataforma.
+  - `live.E028`: un paso del cobro (`checkout`) cuyo `component` no es el nombre de un componente: empieza por
+    mayúscula y lleva solo letras y cifras, sin `.vue` ni ruta. Si el fichero existe no lo mira `live`, cuyos checks no
+    leen ficheros.
 
-  Los checks de los hooks (de `live.E009` a `live.E016` y `live.E018`) viven en `live.checks_hooks`, que
+  Los checks de los hooks (de `live.E009` a `live.E016`, `live.E018` y `live.E028`) viven en `live.checks_hooks`, que
   `check_app_metadata` llama para cada módulo. Necesitan las operaciones y los eventos registrados, cosa que
   `LiveConfig.ready` hace antes de cualquier check. La app de pruebas (`tests/testapp`) es un módulo
-  (`kind = "app"`) con `icon`, `category`, `summary`, `description` y `verticals`, y un paso, un panel y
+  (`kind = "app"`) con `icon`, `category`, `summary`, `description` y `verticals`, un paso del cobro y un paso, un panel y
   un contador sobre su consulta `testapp.thing.list` y su evento `testapp.thing.created` (su
   `events.py`), para pasarlos.
 - **Routers**: `live.ninja.mount_app_routers(api)` monta en la raíz de la API el `router` del `api.py`
