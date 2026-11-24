@@ -12,6 +12,7 @@ from live.assistant.fields import (
     LEFT_OUT,
     MOMENTS,
     NAMED,
+    OWN_WORDS,
     _is_record,
     _is_said_name,
     _name_beside_its_record,
@@ -186,49 +187,54 @@ def _is_figure(value: Any, prop: dict, defs: dict) -> bool:
     return isinstance(value, int | float) or (isinstance(value, str) and _FIGURE.fullmatch(value) is not None)
 
 
-def _record_and_figures(carried: dict, spoken: Any, props: dict, defs: dict) -> bool:
-    """Whether the data a line carries (``carried``) are one record ``said`` named (``spoken``: by the name its read
-    gives it, never left out) and, beside it, only figures (``_is_figure``): a reception's product and its quantity.
-    Two records, or none the card names, are not: the line would read as the wrong one, or as a bare
-    figure."""
-    records = [
-        key for key, item in carried.items() if key in props and _is_record(item, fitting(item, props[key], defs))
-    ]
-    if len(records) != 1 or not isinstance(spoken, dict) or not _is_said_name(spoken.get(records[0])):
+def _is_empty(value: Any) -> bool:
+    """Whether a datum of a line shows nothing: none, an empty text or an empty list (the hours of a closed day)."""
+    return value is None or value == "" or value == []
+
+
+def _figure_beside_words(value: Any, prop: dict, defs: dict) -> bool:
+    """Whether ``value`` is a figure of its line (``_is_figure``: a quantity, sessions, an amount), not a record by its
+    number nor a value of a closed list, which are said by their names."""
+    fitted = fitting(value, prop, defs)
+    return not _is_record(value, fitted) and "enum" not in fitted and _is_figure(value, prop, defs)
+
+
+def _line_in_words(line: dict, spoken: dict, prop: dict, defs: dict) -> bool:
+    """Whether ``said`` put the line ``line`` of a list in words (``spoken``): each datum it carries in words
+    (``_in_words``) or a figure beside them (``_figure_beside_words``), one at least in words; and, when the card
+    leaves out a record of it, all of it is left out — the screen counts it among the more, never by what is beside
+    a record it cannot name (a bare quantity, a field's value without its field). An empty datum (``_is_empty``) does
+    not show, so it does not count; nor does a name beside its record, which the card leaves out."""
+    props = prop.get("properties", {})
+    carried = {
+        key: item
+        for key, item in line.items()
+        if not _is_empty(item) and not _name_beside_its_record(key, line, props, defs)
+    }
+    if not set(carried) <= set(props):
         return False
-    figures = {key: item for key, item in carried.items() if key != records[0]}
-    return all(key in props and _is_figure(item, props[key], defs) for key, item in figures.items())
+    words = {key: item for key, item in carried.items() if not _figure_beside_words(item, props[key], defs)}
+    shown = set(carried) & set(spoken)
+    return (
+        bool(words)
+        and shown in (set(), set(carried))
+        and all(_in_words(item, spoken.get(key), props[key], defs) for key, item in words.items())
+    )
 
 
 def _in_words(value: Any, spoken: Any, prop: dict, defs: dict) -> bool:
     """Whether ``said`` put the item ``value`` of a list in words (``spoken``) as its schema ``prop`` declares it — a
-    record (``REFERS`` or an id), a moment, a value of a closed list, an amount, or a line that carries only one of
-    them (a booking's services, ``[{"service_id": …}]``) or only the name a person said of its record
-    (``NAME_OF``: ``[{"service": "Tinte"}]``), or a record the card names and figures beside it
-    (``_record_and_figures``) —, not as sent (``NAMED``). Any other line with more than one datum is not:
-    which of them names it, only its app knows. An empty datum of a line (a name the model writes as null beside the id
-    it gives) does not count: it does not show; nor does a name beside its record, which the card leaves out."""
+    record (``REFERS`` or an id), a moment, a value of a closed list, an amount, the name a person said of a record
+    (``NAME_OF``: ``[{"service": "Tinte"}]``), the person's own words (``OWN_WORDS``: a select field's options), or a
+    line of them and figures beside them (``_line_in_words``: a booking's services, ``[{"service_id": …}]``, a
+    reception's products and quantities) —, not as sent (``NAMED``)."""
     prop = fitting(value, prop, defs)
     if _is_record(value, prop):
         return True
-    props = prop.get("properties", {})
-    carried = (
-        {
-            key: item
-            for key, item in value.items()
-            if item is not None and item != "" and not _name_beside_its_record(key, value, props, defs)
-        }
-        if isinstance(value, dict)
-        else {}
-    )
-    if len(carried) == 1:
-        key, item = next(iter(carried.items()))
-        inner = spoken.get(key) if isinstance(spoken, dict) else None
-        if key in props and _name_of(props[key], defs) is not None:
-            return _is_said_name(item)
-        return key in props and _in_words(item, inner, props[key], defs)
-    if _record_and_figures(carried, spoken, props, defs):
-        return True
+    if _name_of(prop, defs) is not None or prop.get(OWN_WORDS) is True:
+        return _is_said_name(value)
+    if isinstance(value, dict):
+        return _line_in_words(value, spoken if isinstance(spoken, dict) else {}, prop, defs)
     declared = prop.get("format") in MOMENTS or "enum" in prop or is_money(prop)
     return declared and spoken != value
 

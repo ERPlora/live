@@ -45,6 +45,7 @@ from live.assistant.fields import (
     MONEY,
     NAME_OF,
     NAMED,
+    OWN_WORDS,
     REFERS,
     choice_label,
     choices_of,
