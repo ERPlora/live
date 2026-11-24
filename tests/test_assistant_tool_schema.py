@@ -8,6 +8,7 @@ from typing import Annotated
 from live import assistant
 from live.operations import AI, Operation
 from ninja import Field, Schema
+from pydantic import StringConstraints
 
 
 class Color(str, Enum):
@@ -26,10 +27,12 @@ class PageIn(Schema):
     sections: list[Section] = []
     main: Section | None = None
     extra: dict = {"title": "Hola"}
+    sample: dict = Field({}, examples=[{"title": "Hola"}])
+    counts: dict[Annotated[str, StringConstraints(pattern="title")], int] = {}
 
 
-#: ``PageIn``'s schema as the model receives it: every keyword pydantic writes but its titles; a datum called «title»
-#: and a default that holds one are the app's, not titles.
+#: ``PageIn``'s schema as the model receives it: every keyword pydantic writes but its titles; a datum called «title»,
+#: a default or an example that holds one and the data whose names match «title» are the app's, not titles.
 TOLD = {
     "$defs": {
         "Color": {"enum": ["red"], "type": "string"},
@@ -49,6 +52,8 @@ TOLD = {
         "sections": {"default": [], "items": {"$ref": "#/$defs/Section"}, "type": "array"},
         "main": {"anyOf": [{"$ref": "#/$defs/Section"}, {"type": "null"}], "default": None},
         "extra": {"additionalProperties": True, "default": {"title": "Hola"}, "type": "object"},
+        "sample": {"additionalProperties": True, "default": {}, "examples": [{"title": "Hola"}], "type": "object"},
+        "counts": {"default": {}, "patternProperties": {"title": {"type": "integer"}}, "type": "object"},
     },
     "required": ["title"],
     "type": "object",
