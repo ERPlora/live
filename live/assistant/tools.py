@@ -126,9 +126,38 @@ def output_schema(op: Operation) -> dict:
     return op.output.model_json_schema()
 
 
+#: Keywords whose value is data as the app wrote it (a default, an example): a «title» in them is no schema's.
+DATA_KEYWORDS = frozenset({"default", "examples", "const", "enum"})
+#: Keywords that hold schemas by their names: a datum or a definition may well be called «title».
+NAMED_SCHEMAS = frozenset({"properties", "$defs", "patternProperties", "dependentSchemas"})
+
+
+def _untitled(schema: Any) -> Any:
+    if isinstance(schema, list):
+        return [_untitled(item) for item in schema]
+    if not isinstance(schema, dict):
+        return schema
+    return {key: _untitled_value(key, value) for key, value in schema.items() if key != "title"}
+
+
+def _untitled_value(key: str, value: Any) -> Any:
+    if key in DATA_KEYWORDS:
+        return value
+    if key in NAMED_SCHEMAS and isinstance(value, dict):
+        return {name: _untitled(schema) for name, schema in value.items()}
+    return _untitled(value)
+
+
+@cache
+def tool_parameters(op: Operation) -> dict:
+    """``op``'s input schema as the model is told it: without the titles pydantic writes, which repeat each datum's
+    name («Product Id») and weigh on every call. A write's card still reads them from ``input_schema``."""
+    return _untitled(input_schema(op))
+
+
 def tool_spec(op: Operation) -> dict:
     """``op`` as the gateway takes a tool (OpenAI's ``function``)."""
-    return {"type": "function", "name": tool_name(op.name), "description": description(op), "parameters": input_schema(op)}
+    return {"type": "function", "name": tool_name(op.name), "description": description(op), "parameters": tool_parameters(op)}
 
 
 def config_of(label: str) -> LiveAppConfig | None:
