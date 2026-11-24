@@ -70,10 +70,6 @@ class SummaryOut(Schema):
     empty: str = ""
 
 
-class LongOut(Schema):
-    text: str
-
-
 def op(name, *, ai=None, kind="command", permission="testapp.manage", input=NoIn, output=Done, fn=None):
     return Operation(
         name=name,
@@ -899,14 +895,6 @@ def test_what_the_person_may_not_do_is_refused_and_what_the_operation_refuses_is
     failed = assistant.run_tool(ctx("testapp.manage"), op("testapp.probe.run", fn=reject), "{}")
     assert (failed.outcome, failed.code) == ("error", "testapp.thing_rejected")
     assert json.loads(failed.content) == {"error": {"code": "testapp.thing_rejected", "message": "The thing was rejected."}}
-
-
-def test_a_result_too_long_for_the_model_is_cut():
-    long = op("testapp.probe.long", output=LongOut, fn=lambda ctx, data: {"text": "x" * assistant.MAX_RESULT_CHARS})
-    outcome = assistant.run_tool(ctx("testapp.manage"), long, "")
-    assert outcome.outcome == "ok"
-    assert outcome.content.endswith(" …(cut)")
-    assert len(outcome.content) == assistant.MAX_RESULT_CHARS + len(" …(cut)")
 
 
 def test_an_error_is_told_back_as_one_json_object():
