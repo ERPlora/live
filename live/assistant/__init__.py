@@ -14,6 +14,9 @@ the Hub's assistant and the SaaS's panel use the same ones, each with its own to
   that names no record is not done from the chat (``blocked``). Such a write may show what it will do (``preview``): a
   read of its own app its ``ai=`` names, run as the person before the card. A card is drawn only for data its operation
   takes (``invalid_arguments``): what it would refuse goes back to the model, which asks again with it corrected.
+  A card answered without a yes runs nothing, and the model hears why (``declined``): the person's no on a card that is
+  closed, «Cancel all» (``stopped``) or a write not done from the chat, in the envelope of an operation's error
+  (``refusal``).
 - **Words** (``Words``): the project says a moment, a record and an amount its own way (the Hub: at its business's
   hour, by the read a schema marks, in its business's currency); ``PlainWords`` reads nothing — amounts in euros with
   two decimals, moments at UTC as Django's formats of the language write them, a record left out.
@@ -27,6 +30,11 @@ from live.assistant.cards import (
     confirmed,
     field,
     said,
+)
+from live.assistant.declining import (
+    declined,
+    refusal,
+    stopped,
 )
 from live.assistant.fields import (
     ATTEMPT_KEY,
