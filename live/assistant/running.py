@@ -18,6 +18,7 @@ from live.assistant.cards import (
     blocked,
     field,
 )
+from live.assistant.cutting import within
 from live.assistant.fields import (
     fitting,
     is_money,
@@ -112,10 +113,7 @@ def run_tool(
     failure, result = run(ctx, op, data)
     if failure is not None:
         return failure
-    content = _told_to_the_model(op, result, zone, money)
-    if len(content) > MAX_RESULT_CHARS:
-        content = content[:MAX_RESULT_CHARS] + " …(cut)"
-    return ToolOutcome("ok", "", content)
+    return ToolOutcome("ok", "", within(op, data, _told_to_the_model(op, result, zone, money), MAX_RESULT_CHARS))
 
 
 def _told_to_the_model(op: Operation, result: pydantic.BaseModel, zone: dt.tzinfo | None, money: Money | None) -> str:

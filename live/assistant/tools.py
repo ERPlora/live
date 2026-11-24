@@ -17,8 +17,9 @@ MAX_TOOLS = 20
 #: Rounds of tools of one request of the person: a guard against a loop, not an allowance. One tool per round, so a
 #: read and a change per day of the week take eight.
 MAX_ROUNDS = 20
-#: A tool's result told back to the model: no more (a list of a hundred rows fits).
-MAX_RESULT_CHARS = 60_000
+#: A tool's result told back to the model at once: it travels again with every later call, so a longer one keeps the
+#: rows that fit and says how to read the rest (``cutting.within``). A default page of fifty short rows fits.
+MAX_RESULT_CHARS = 16_000
 SEPARATOR = "__"
 #: What a dangerous write asks to type, in the person's language.
 CONFIRM_WORD = pgettext_lazy("assistant", "CONFIRM")
