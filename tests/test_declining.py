@@ -51,6 +51,8 @@ def test_cancel_all_stops_the_request():
     outcome, error = heard(assistant.declined(card(), Decision(accepted=False, stop=True)))
 
     assert (outcome, error["code"]) == ("cancelled", "base.assistant_stopped")
+    assert "The person stopped this request" in error["message"]
+    assert "nothing more was done" in error["message"]
     assert assistant.declined(card(), Decision(stop=True)) == assistant.stopped()
 
 
@@ -58,6 +60,9 @@ def test_a_dangerous_write_that_names_no_record_is_not_done_from_the_chat_whatev
     for decision in (Decision(typed="CONFIRM"), Decision(accepted=False), Decision(stop=True)):
         outcome, error = heard(assistant.declined(card(word="CONFIRM", blocked=True), decision))
         assert (outcome, error["code"]) == ("cancelled", "base.assistant_not_from_chat")
+        assert "cannot be done from the chat" in error["message"]
+        assert "nothing was done" in error["message"]
+        assert "Say where it is done" in error["message"]
 
 
 def test_a_refusal_goes_in_the_envelope_of_an_operations_error():
