@@ -197,9 +197,9 @@ class DeviceNotice:
 
 @dataclass(frozen=True)
 class Help:
-    """Declared on a module, its help window is ready.
+    """Declared on an app, its help is ready.
 
-    ``videos`` holds the module's optional YouTube video id by language; ``flow_videos``, the ids of the short videos
+    ``videos`` holds the app's optional YouTube video id by language; ``flow_videos``, the ids of the short videos
     of each of its tasks, by flow id and then by language, one or several each.
     """
 
@@ -230,7 +230,7 @@ class LiveAppConfig(AppConfig):
     bell: ClassVar[list[BellCounter]] = []
     # Module metadata: the device's notices, which base fills in.
     notices: ClassVar[list[DeviceNotice]] = []
-    # Module metadata: its help window, shown only once declared (live.checks_help validates it).
+    # The app's help, shown only once declared, on a module or a platform app (live.checks_help validates it).
     help: ClassVar[Help | None] = None
     # The closed lists the app keeps where no field of its models holds them (inside a JSON: a website's palette), by
     # the datum's name, each value with the label its screens show (lazy): the assistant's card says a value by it as

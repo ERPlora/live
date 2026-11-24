@@ -1,8 +1,7 @@
-"""System check of the help window a module declares (tag ``live``).
+"""System check of the help an app declares (tag ``live``).
 
-``help = Help(...)`` makes a module's help ready; only a module (``kind = "app"``) has one. Each of its optional
-videos, the module's own and those of each flow, is a YouTube video id under a language code of
-``settings.LANGUAGES`` (E023).
+``help = Help(...)`` makes an app's help ready, a module's or a platform app's. Each of its optional videos, the app's
+own and those of each flow, is a YouTube video id under a language code of ``settings.LANGUAGES`` (E023).
 """
 
 import re
@@ -17,9 +16,8 @@ from live.meta import Help, all_live_app_configs
 #: The 11 characters after ``watch?v=``.
 VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
 HINT = (
-    "Declare help = Help(videos={'es': '<id>'}, flow_videos={'<APP>-F<nn>': {'es': ['<id>', ...]}}) on a module of "
-    "apps/: each language a code of settings.LANGUAGES, each video the 11 characters of a YouTube video id (letters, "
-    "digits, '-' and '_')."
+    "Declare help = Help(videos={'es': '<id>'}, flow_videos={'<APP>-F<nn>': {'es': ['<id>', ...]}}): each language a "
+    "code of settings.LANGUAGES, each video the 11 characters of a YouTube video id (letters, digits, '-' and '_')."
 )
 
 
@@ -38,7 +36,7 @@ def check_app_help(app_configs: Any = None, **kwargs: Any) -> list[checks.CheckM
 def _help_problems(config: Any, languages: set[str]) -> list[str]:
     if not isinstance(config.help, Help):
         return [f"declares help={config.help!r}, which is not a live.meta.Help"]
-    problems = [] if config.kind == "app" else ["declares help, which only a module (kind = 'app') has"]
+    problems = []
     for language, video in config.help.videos.items():
         if language not in languages:
             problems.append(f"has a help video for {language!r}, which is not one of settings.LANGUAGES")
