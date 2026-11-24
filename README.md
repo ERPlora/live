@@ -34,7 +34,9 @@ desde la tenencia, `use_hub`) y el SaaS el suyo (el usuario); el resto (`live.sp
   (…), "es": (…)})` (frases naturales y ambiguas, como las dice la gente: «créame un producto», «súbele el precio al
   café», «what did I sell today?»; nunca el nombre de la operación); el `dict` lo acepta en su clave `"asks"` y
   `live.assistant.asks_of(op)` lo lee de las dos formas, limpio (nada si `ai_spec()` es `INTERNAL`). La selección de herramientas las pesa y la QA del
-  asistente sale de ellas (ver «Asistente»).
+  asistente sale de ellas (ver «Asistente»). Y dice, si su nombre no lo dice, qué otras acciones hace: `AI(…,
+  does=("set", "update"))` (verbos de `live.assistant.vocabulary.VERBS`; el `dict`, en su clave `"does"`) es la regla de
+  impuestos, que no se edita: crearla es lo que pone o cambia un tipo, así que «ponle el IVA a la comida» también la pide.
   Errores: `{"error": {"code", "message", "fields"?}}`; 422 `invalid_payload` con `fields`. El 404 de
   una ruta inexistente y el 405 de método equivocado (no llegan a ninguna ruta) los convierte al mismo
   sobre `live.api_errors.ApiErrorEnvelopeMiddleware` (en `MIDDLEWARE` tras auth), bajo
