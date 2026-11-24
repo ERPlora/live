@@ -1,10 +1,10 @@
 """Minimal app used only by the test suite: a module (``kind = "app"``) with its metadata.
 
-It declares one step, one panel and one counter of the Home so that the ``live`` checks run over real
-declarations (its query ``testapp.thing.list``, its permission, its event).
+It declares one step, one panel and one counter of the Home, and one step of the charge, so that the ``live`` checks
+run over real declarations (its query ``testapp.thing.list``, its permission, its event).
 """
 
-from live.meta import BellCounter, Category, Help, LiveAppConfig, Nav, SetupCheck, SetupStep, Widget
+from live.meta import BellCounter, Category, CheckoutStep, Help, LiveAppConfig, Nav, SetupCheck, SetupStep, Widget
 
 
 class TestAppConfig(LiveAppConfig):
@@ -54,3 +54,4 @@ class TestAppConfig(LiveAppConfig):
             refresh_on=["testapp.thing.created"],
         )
     ]
+    checkout = [CheckoutStep(key="things", component="ThingsStep", permission="testapp.manage")]

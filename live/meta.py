@@ -25,6 +25,9 @@ A module declares its device notices too (``DeviceNotice``): what it tells the d
 system notice, such as a new booking or a kitchen order, without the shell knowing the module.
 Base runs its query as the person of the request (``base.notice.list``), fills in its texts, and
 the shell tells each new row once on the device.
+
+A module declares the steps it adds to the charge of Sales too (``CheckoutStep``): the component of its own that
+Sales mounts between the amount and the tenders, without knowing the module.
 """
 
 from collections.abc import Iterable, Mapping, Sequence
@@ -196,6 +199,21 @@ class DeviceNotice:
 
 
 @dataclass(frozen=True)
+class CheckoutStep:
+    """A step a module adds to the charge of Sales, between the amount and the tenders: the tip, for one.
+
+    ``component`` names the Vue component of the module's ``frontend/components/`` (without ``.vue``) that paints the
+    step inside the charge; it reads and writes through the module's own operations, and Sales mounts the steps of the
+    modules on without knowing them. What a step adds to a payment is charged with the sale but kept apart from its
+    total: never its price, never taxed. Shown to whoever has ``permission``.
+    """
+
+    key: str
+    component: str
+    permission: str | None = None
+
+
+@dataclass(frozen=True)
 class Help:
     """Declared on an app, its help is ready.
 
@@ -230,6 +248,8 @@ class LiveAppConfig(AppConfig):
     bell: ClassVar[list[BellCounter]] = []
     # Module metadata: the device's notices, which base fills in.
     notices: ClassVar[list[DeviceNotice]] = []
+    # Module metadata: its steps of the charge of Sales, which Sales mounts.
+    checkout: ClassVar[list[CheckoutStep]] = []
     # The app's help, shown only once declared, on a module or a platform app (live.checks_help validates it).
     help: ClassVar[Help | None] = None
     # The closed lists the app keeps where no field of its models holds them (inside a JSON: a website's palette), by

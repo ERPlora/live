@@ -10,8 +10,9 @@ A module also carries what the public store shows (``summary``,
 ``description``, E007) and the verticals it belongs to (``verticals``, E008). What needs to read
 files (WORKBOOK, translations, baked icons, images) is not a check: ``register_apps`` validates it.
 
-Only a module declares the Home's hooks (``setup``, ``widgets``, ``bell``) and the device's notices (``notices``)
-(E006); what they declare is checked by ``live.checks_hooks`` (E009–E016 and E018).
+Only a module declares the Home's hooks (``setup``, ``widgets``, ``bell``), the device's notices (``notices``) and
+the steps of the charge of Sales (``checkout``) (E006); what they declare is checked by ``live.checks_hooks``
+(E009–E016, E018 and E028).
 
 ``settings.LIVE["session_events"]``, the events after which every
 live stream of the channel re-reads its context, is a list of events that some ``events.py`` declares (E019).
@@ -68,6 +69,7 @@ MODULE_ONLY_FIELDS = (
     "widgets",
     "bell",
     "notices",
+    "checkout",
 )
 # The columns of shared.app they are written to.
 SUMMARY_MAX_LENGTH = 120
