@@ -127,6 +127,7 @@ def test_a_moment_its_words_write_as_it_was_sent_is_still_in_words(written):
     hours = [{"open_time": "12:00", "close_time": "23:30"}]
     assert said(written, "intervals", hours, plain) == (hours, True)
     assert said(written, "intervals", [{"open_time": "12:00", "close_time": "mediodía"}], plain)[1] is False
+    assert (plain.moment("mediodía", "time"), plain.moment("2027-13-01", "date")) == (None, None)
     # And one its words write though JSON writes no such date: a day without its year, as a birthday is sent.
     assert said(written, "special_days", [{"date": "--12-25", "name": "Christmas", "intervals": []}])[1] is True
 
