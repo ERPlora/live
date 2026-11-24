@@ -89,14 +89,16 @@ MAX_ASK_CHARS = 120
 class AI:
     """An assistant tool: what it does, told to the model in English (``description``); its ``risk`` (``RISKS``); for a
     dangerous write, the read of its own app that shows what it will do on its card (``preview``:
-    ``{"operation": <a query>, "fields": [<data of its answer>]}``); and what a person would type to the chat to ask
+    ``{"operation": <a query>, "fields": [<data of its answer>]}``); what a person would type to the chat to ask
     for it, by language (``asks``: ``{"es": ("créame un producto", …), "en": (…)}``), natural and ambiguous as people
-    say it, never its name."""
+    say it, never its name; and the actions it does that its name does not say (``does``, of
+    ``live.assistant.vocabulary.VERBS``: a tax rule is never changed, so creating it is what sets a rate)."""
 
     description: str
     risk: Literal["normal", "high"] = "normal"
     preview: dict | None = None
     asks: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    does: tuple[str, ...] = ()
 
 
 class Internal:
@@ -147,8 +149,8 @@ class Operation:
         """What ``ai=`` declares, typed: ``AI`` or ``INTERNAL`` as declared; a ``dict`` read as the rules of the Hub's
         assistant before ``AI`` existed — one without a description, one that says it is no tool (``NOT_A_TOOL``) and
         one on what only the platform runs (no permission, or one no app declares: its reactions and scheduled tasks)
-        are ``INTERNAL``, any other the tool it describes, with its ``asks`` —; ``None`` when it declares nothing
-        (``live.E017``)."""
+        are ``INTERNAL``, any other the tool it describes, with its ``asks`` and what it ``does`` —; ``None`` when it
+        declares nothing (``live.E017``)."""
         declared = self.ai
         if declared is None or isinstance(declared, AI | Internal):
             return declared
@@ -162,7 +164,8 @@ class Operation:
         if self.permission is None or self.permission not in declared_permissions():
             return INTERNAL
         risk = "high" if declared.get("risk") == "high" else "normal"
-        return AI(description, risk, declared.get("preview"), declared.get("asks") or {})
+        does = tuple(declared.get("does") or ())
+        return AI(description, risk, declared.get("preview"), declared.get("asks") or {}, does)
 
     def __call__(self, ctx: OperationContext, data: Schema) -> Schema:
         self._authorize(ctx, data)

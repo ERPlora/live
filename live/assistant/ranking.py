@@ -38,7 +38,7 @@ from live.assistant.vocabulary import (
     SWITCHES,
     VERBS,
 )
-from live.operations import Operation
+from live.operations import AI, Operation
 
 
 # ── By relevance ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -79,12 +79,15 @@ _QUALIFIERS = frozenset({"for", "by", "from", "to", "of", "in", "with"})
 @lru_cache(maxsize=4_096)
 def _acts(op: Operation) -> frozenset[str]:
     """The words of ``op``'s action (``create_folder`` → «create», «folder») and what they do said another way: the
-    state it sets turns a thing on and off (``_SET_STATES``: ``set_enabled``), emptying takes away (``_emptied``) and a
-    change that takes a name renames («renombra Bienvenida»: ``flow.flow.update``; ERPlora/live#53)."""
+    state it sets turns a thing on and off (``_SET_STATES``: ``set_enabled``), emptying takes away (``_emptied``), a
+    change that takes a name renames («renombra Bienvenida»: ``flow.flow.update``; ERPlora/live#53) and what its ``ai=``
+    says it does («ponle el IVA a la comida»: creating a tax rule sets the rate; ``AI.does``)."""
     words = frozenset(op.name.split(".")[2].split("_"))
     does = {verb for word in words for verb in _SET_STATES.get(word, ())} | _emptied(op)
     if "update" in words and "name" in getattr(op.input, "model_fields", {}):
         does.add("rename")
+    if isinstance(spec := op.ai_spec(), AI):
+        does.update(spec.does)
     return words | does
 
 
