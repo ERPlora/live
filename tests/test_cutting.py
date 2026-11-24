@@ -143,11 +143,11 @@ def test_a_list_the_tool_cannot_page_says_to_narrow_the_request():
     assert page["cut"] == f"Only the first {kept} of the 50 actions fit here: narrow the request to read the others."
 
 
-def test_the_longest_list_is_the_one_shortened():
-    answer = {"apps": [f"app {i}" for i in range(30)], "actions": rows(40)}
+def test_the_list_that_takes_the_most_room_is_the_one_shortened_though_another_has_more_items():
+    answer = {"apps": [f"app {i}" for i in range(60)], "actions": rows(20)}
     page = json.loads(told(Catalogue, answer, input=FilterIn))
     assert page["apps"] == answer["apps"]
-    assert len(page["actions"]) < 40
+    assert 1 <= len(page["actions"]) < 20
 
 
 def test_a_result_with_no_list_to_shorten_is_cut_and_says_how_much_was_seen():
