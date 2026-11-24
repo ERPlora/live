@@ -31,6 +31,7 @@ def test_a_cancel_is_the_persons_no_on_a_card_that_is_closed():
     assert "The person said no on the card" in said
     assert "the card is closed" in said
     assert "nothing was done" in said
+    assert "Say it was not done because they said no" in said
     assert "do not tell them to confirm it" in said
     assert not said.startswith("Not confirmed")
 

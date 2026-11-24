@@ -8,8 +8,8 @@ from live.assistant.running import ToolOutcome, error_content
 #: A «Cancel», or the word of a dangerous card typed wrong. Said as «not confirmed», the model told it as a yes that
 #: never arrived («the confirmation did not reach the system») or asked to confirm on a card no longer on the screen.
 NOT_CONFIRMED = (
-    "The person said no on the card and the card is closed: nothing was done. Say it was not done, and do not tell them "
-    "to confirm it."
+    "The person said no on the card and the card is closed: nothing was done. Say it was not done because they said no, "
+    "and do not tell them to confirm it."
 )
 STOPPED = "The person stopped this request: nothing more was done."
 NOT_FROM_THE_CHAT = "This cannot be done from the chat (it names no record): nothing was done. Say where it is done."
