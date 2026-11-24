@@ -1,7 +1,7 @@
-"""``live.E023``: the help window a module declares (``help = Help(...)``).
+"""``live.E023``: the help an app declares (``help = Help(...)``).
 
-A module's help is ready once it declares ``help``; its video is optional. Each video is a YouTube video id by
-language code, and only a module (``kind = "app"``) has a help window.
+An app's help, a module's or a platform app's, is ready once it declares ``help``; its video is optional. Each video is
+a YouTube video id by language code.
 """
 
 from types import SimpleNamespace
@@ -46,22 +46,9 @@ def test_django_setup_registers_the_check_without_anyone_importing_it():
     "declared",
     [None, Help(), Help(videos={"es": VIDEO}), Help(videos={"es": VIDEO, "en": "aqz-KE-bpKQ"}), Help({"en": "A1_-b2c3D4e"})],
 )
-def test_a_module_without_help_or_with_a_well_declared_one_passes(run, declared):
-    assert run(app(help=declared)) == []
-
-
-def test_a_platform_app_without_help_passes(run):
-    assert run(app("base", kind="platform")) == []
-
-
-@pytest.mark.parametrize("kind", ["platform", "plugin"])
-def test_help_on_an_app_that_is_no_module_is_e023(run, kind):
-    config = app("base", kind=kind, help=Help())
-
-    [message] = run(config)
-
-    assert (message.id, message.obj, message.level) == ("live.E023", config, checks.ERROR)
-    assert message.msg == "App 'base' declares help, which only a module (kind = 'app') has."
+@pytest.mark.parametrize("kind", ["app", "platform"])
+def test_a_module_or_a_platform_app_without_help_or_with_a_well_declared_one_passes(run, kind, declared):
+    assert run(app(kind=kind, help=declared)) == []
 
 
 @pytest.mark.parametrize("language", ["fr", "ES", "es-es", ""])
@@ -70,7 +57,7 @@ def test_a_video_for_a_language_of_no_settings_language_is_e023(run, language):
 
     [message] = run(config)
 
-    assert (message.id, message.obj) == ("live.E023", config)
+    assert (message.id, message.obj, message.level) == ("live.E023", config, checks.ERROR)
     assert message.msg == f"App 'stock' has a help video for {language!r}, which is not one of settings.LANGUAGES."
 
 
@@ -183,7 +170,6 @@ def test_each_problem_is_its_own_message_on_its_app(run):
     messages = run(platform, module)
 
     assert [(message.id, message.obj) for message in messages] == [
-        ("live.E023", platform),
         ("live.E023", platform),
         ("live.E023", platform),
         ("live.E023", module),
