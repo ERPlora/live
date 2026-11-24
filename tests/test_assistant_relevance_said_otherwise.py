@@ -1,6 +1,9 @@
 """The action asked reaches a tool whose name says it another way: «activa» turns on what ``set_enabled`` switches,
 «renombra» is a change that takes a name, and «permite a…», «dale permiso» and «concede» grant (ERPlora/live#53: an
-automation named by its own name was offered none of the three)."""
+automation named by its own name was offered none of the three). What no name says, the tool says itself
+(``AI.does``): a tax rule is never changed, so creating it is what sets a rate."""
+
+from dataclasses import replace
 
 import pytest
 from ninja import Schema
@@ -249,3 +252,58 @@ def test_what_an_automation_and_a_recipe_both_switch_by_their_asks_is_the_thing_
     (ERPlora/live#89) and the write that takes them comes first; the automation's ``set_enabled`` counts as a switch."""
     names = ranked(SWITCHED_REMINDERS, "desactiva los recordatorios", "es")
     assert names[0] == "appointment.settings.update", names[:4]
+
+
+#: The Hub's tools of a tax rule, which is never changed: a rate is set, or changed, by creating the next rule.
+RULE_CREATE = tool(
+    "tax.rule.create", "Create a tax rule: the rate in % of a tax category in a country (or one of its regions) between "
+    "two dates.", input=takes("country_code", "tax_category_key", "rate_pct", "valid_from"),
+    asks={"en": ("create a 21 % VAT rule for books in Spain",), "es": ("crea una regla de IVA del 10 % para la comida",)},
+)
+RULE_CREATE_SETS = replace(RULE_CREATE, ai=replace(RULE_CREATE.ai, does=("set", "update")))
+#: What outran it: the changes of other things that take their tax category, and the reads of the rules.
+TAXED = [
+    tool("combo.combo.update", "Change a menu: its name, its price, its tax category, how it is sold.",
+         input=takes("name", "price", "tax_category_key")),
+    tool("inventory.category.update", "Change a category of products: its name, its tax category.",
+         input=takes("category", "name", "tax_category_key")),
+    *(tool(f"sale.thing{i:02}.update", "Change a thing of a sale and its tax category.", input=takes("tax_category_key"))
+      for i in range(25)),
+    tool("tax.rule.list", "List the tax rules: their category, country, rate and dates.", "query"),
+    tool("tax.rule.deactivate", "Deactivate a tax rule, so it applies to no new sale.", input=takes("id")),
+    *NOISE,
+]
+SETS_A_RATE = [
+    ("ponle el IVA a la comida para llevar", "es"),
+    ("poner el IVA de una categoría", "es"),
+    ("sube el IVA de los libros al 10 %", "es"),
+    ("set the VAT rate of a tax category", "en"),
+]
+
+
+@pytest.mark.parametrize(("asked", "language"), SETS_A_RATE)
+def test_a_tool_is_asked_by_what_its_declaration_says_its_action_does(asked, language):
+    said = ranked([RULE_CREATE_SETS, *TAXED], asked, language)
+    assert "tax.rule.create" in said[:10], said[:10]
+    # Its name alone does not say it, so without the declaration it is left out (positive control).
+    silent = ranked([RULE_CREATE, *TAXED], asked, language)
+    assert "tax.rule.create" not in silent[:10], silent[:10]
+
+
+def test_what_a_tool_says_it_does_is_still_asked_by_its_name():
+    for create in (RULE_CREATE, RULE_CREATE_SETS):
+        assert ranked([create, *TAXED], "crea una regla de IVA", "es")[0] == "tax.rule.create"
+
+
+def test_turning_a_rule_off_still_offers_its_switch_first():
+    names = ranked([RULE_CREATE_SETS, *TAXED], "desactiva la regla del IVA de los libros", "es")
+    assert names[0] == "tax.rule.deactivate", names[:5]
+
+
+def test_a_dict_says_what_its_action_does_as_an_ai_declares_it(monkeypatch):
+    declared = {"description": RULE_CREATE.ai.description, "asks": RULE_CREATE.ai.asks}
+    monkeypatch.setattr("live.meta.declared_permissions", lambda: {"tax.manage"})
+    saying = replace(RULE_CREATE, ai={**declared, "does": ["set", "update"]})
+    assert saying.ai_spec() == RULE_CREATE_SETS.ai_spec()
+    assert "tax.rule.create" in ranked([saying, *TAXED], "ponle el IVA a la comida para llevar", "es")[:10]
+    assert replace(RULE_CREATE, ai=declared).ai_spec().does == ()
