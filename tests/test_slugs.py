@@ -17,10 +17,10 @@ from live.slugs import (
 )
 
 # Written out apart from live.slugs, so that changing the list is a deliberate act: `hubs` is ERPlora's own
-# platform host, `pre` the team's pre-production environment (`pre.erplora.com`), `hub` stays reserved and the
-# rest are blocked names.
+# platform host, `erp` ERPlora's own business, `pre` the team's pre-production environment (`pre.erplora.com`),
+# `hub` stays reserved and the rest are blocked names.
 RESERVED_LIST = (
-    "hub, hubs, erplora, saas, platform, system, sys, internal, www, mail, webmail, smtp, imap, pop, mx, ns1, "
+    "hub, hubs, erp, erplora, saas, platform, system, sys, internal, www, mail, webmail, smtp, imap, pop, mx, ns1, "
     "ns2, ftp, cdn, static, assets, api, ws, dev, test, staging, pre, demo, localhost, admin, administrator, "
     "root, superuser, staff, support, help, status, security, abuse, postmaster, hostmaster, webmaster, "
     "noreply, no-reply, app, apps, login, auth, account, accounts, billing, pay, payments, invoice, shop, "
@@ -52,6 +52,19 @@ def test_hubs_is_reserved_because_it_is_the_platform_host(slug):
     assert is_reserved_hub_slug(slug)
     with pytest.raises(ValueError, match="^reserved$"):
         validate_hub_slug(slug)
+
+
+# `erp.erplora.com` is ERPlora's own business: no customer takes its name, nor the one it had before (`erplora`).
+@pytest.mark.parametrize("slug", ["erp", "ERP", "Erp", "erplora"])
+def test_the_names_of_erploras_own_business_are_reserved(slug):
+    assert is_reserved_hub_slug(slug)
+    with pytest.raises(ValueError, match="^reserved$"):
+        validate_hub_slug(slug)
+
+
+@pytest.mark.parametrize("slug", ["erp-demo", "erps", "my-erp"])
+def test_only_the_exact_name_of_erploras_own_business_is_reserved(slug):
+    assert validate_hub_slug(slug) == slug
 
 
 # `pre.erplora.com` is the pre-production environment's SaaS and `<slug>.pre.erplora.com` its hubs: a hub

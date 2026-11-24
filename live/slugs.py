@@ -3,7 +3,8 @@
 A slug is one DNS label (``HUB_SLUG_RE``): lowercase letters, digits and hyphens, never a hyphen at
 the start or the end, 3–63 characters, never punycode (``xn--``) and never one of the reserved
 system names (``RESERVED_HUB_SLUGS``). Of those, ``hubs`` is ERPlora's own platform host (the Hub's
-admin for the staff), ``pre`` is the team's pre-production environment
+admin for the staff), ``erp`` is ERPlora's own business, the only reserved name the Hub serves as a hub,
+``pre`` is the team's pre-production environment
 (``pre.erplora.com``, whose hubs live under ``*.pre.erplora.com``), ``hub`` stays reserved and the rest
 are blocked so no customer takes them.
 Hubs are served under the wildcard certificate ``*.erplora.com``: there is no limit to their number.
@@ -37,6 +38,8 @@ RESERVED_HUB_SLUGS: frozenset[str] = frozenset(
     {
         # ERPlora's own platform host (`hubs`, the Hub's admin for the staff) and `hub`.
         "hub", "hubs",
+        # ERPlora's own business.
+        "erp",
         # The platform and its parts.
         "erplora", "saas", "platform", "system", "sys", "internal",
         # Web, mail and DNS.
