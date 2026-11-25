@@ -8,11 +8,10 @@ touches no database have none.
 
 import pytest
 from django.db import OperationalError, connections
-from live import operations
 from live.context import OperationContext, Scope
 from live.database_cut import DatabaseCut
 from live.errors import Conflict, LiveMisuse
-from live.operations import current_operation, operation, pending_events, registry
+from live.operations import current_operation, operation, pending_events
 from live.outbox import record_event
 from ninja import Schema
 
@@ -41,21 +40,10 @@ class Counted(Schema):
 
 
 @pytest.fixture(autouse=True)
-def isolated(settings):
-    saved = dict(registry)
+def hooked(settings, isolated_registry):
     ran.clear()
     doing.clear()
     settings.LIVE = {**settings.LIVE, "after_command": HOOK}
-    yield
-    registry.clear()
-    registry.update(saved)
-
-
-@pytest.fixture
-def notified(monkeypatch):
-    calls = []
-    monkeypatch.setattr(operations, "notify_hook", lambda scope, names: calls.append((scope, names)))
-    return calls
 
 
 def declare(name: str, fn, *, kind: str = "command", **declaration):
