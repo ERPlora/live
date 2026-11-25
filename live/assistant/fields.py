@@ -271,6 +271,10 @@ OWN_WORDS = "own_words"
 #: record the card leaves out beside what it says.
 NAMED = "named"
 
+#: The mark of a datum of a card that is a value of a closed list (its schema's ``enum``), by its label or as sent:
+#: «Light» or «50 m» says which option was chosen, never which datum it is, so the screen names it even first.
+CHOICE = "choice"
+
 
 #: The type of a value each JSON Schema type names.
 _TYPES = {"object": dict, "array": list, "string": str, "integer": int, "number": int | float, "boolean": bool}

@@ -8,6 +8,7 @@ from typing import Any, Protocol
 from django.utils import formats, translation
 
 from live.assistant.fields import (
+    CHOICE,
     CHOICES_OF,
     LEFT_OUT,
     MOMENTS,
@@ -303,6 +304,13 @@ def field(  # noqa: C901, PLR0913, PLR0917
     return shown
 
 
+def _marked_choice(shown: dict, value: Any, prop: dict, defs: dict) -> dict:
+    """``shown`` marked ``CHOICE`` when it says a value of the closed list its schema ``prop`` declares (``enum``)."""
+    if shown["kind"] != "text" or "enum" not in fitting(value, prop, defs):
+        return shown
+    return {**shown, CHOICE: True}
+
+
 def _over_records(op: Operation) -> bool:
     """Whether ``op`` is a dangerous write over the records its ``ids`` name."""
     schema = input_schema(op)
@@ -320,8 +328,9 @@ def blocked(op: Operation, arguments: dict) -> bool:
 def card(op: Operation, arguments: dict, language: str, words: Words | None = None) -> dict:
     """What the person sees before ``op`` runs with ``arguments``: where it happens (``Words.app_name``), its action,
     each datum it sends by its name in ``language`` (``label``) and in ``words`` (``said``; ``PlainWords`` without
-    them), its risk and, for a dangerous one, what to type (``confirm_word``) — how many records when it names them
-    by ``ids``, and ``blocked`` when it names none (not from the chat)."""
+    them), a value of a closed list marked so (``CHOICE``), its risk and, for a dangerous one, what to type
+    (``confirm_word``) — how many records when it names them by ``ids``, and ``blocked`` when it names none (not from
+    the chat)."""
     schema = input_schema(op)
     defs = schema.get("$defs", {})
     props = schema.get("properties", {})
@@ -336,7 +345,7 @@ def card(op: Operation, arguments: dict, language: str, words: Words | None = No
             for name, prop in props.items()
             if name in arguments
         ]
-        fields = [one for one in shown if one is not None]
+        fields = [_marked_choice(one, arguments[one["name"]], props[one["name"]], defs) for one in shown if one is not None]
         word = str(count) if count else str(CONFIRM_WORD)
         app = words.app_name()
     return {
