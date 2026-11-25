@@ -131,6 +131,8 @@ class TestSearched:
             model_asked((name, "")),
         ]
         assert assistant.searched(messages, SEARCH) == []
+        # The search the model writes well after them still counts.
+        assert assistant.searched([*messages, model_asked(search_for("list the products"))], SEARCH) == ["list the products"]
 
     def test_only_the_models_calls_count(self):
         name = assistant.tool_name(SEARCH.name)
