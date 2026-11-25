@@ -961,8 +961,19 @@ def test_the_rounds_are_the_models_tool_requests_since_the_persons_last_message(
     assert assistant.rounds([]) == 0
 
 
+def test_an_answer_that_asks_for_several_tools_at_once_is_one_round():
+    """A model may ask for several tools in one answer (several reads, say): the round is the answer, not each tool."""
+    messages = [
+        {"role": "user", "content": "how many items and tables?"},
+        {"role": "assistant", "tool_calls": [{"id": "1"}, {"id": "2"}]},
+        {"role": "tool", "tool_call_id": "1", "content": "{}"},
+        {"role": "tool", "tool_call_id": "2", "content": "{}"},
+    ]
+    assert assistant.rounds(messages) == 1
+
+
 def test_a_request_takes_as_many_rounds_as_the_market_gives_an_agent_before_it_stops():
-    """A guard against a loop, not an allowance: the gateway asks the model for one tool at a time, so a read and a
-    change per day of the week are eight rounds. 20 is where Windsurf stops its agent and the agent of Vercel's AI SDK
-    stops by default; OpenAI's Agents SDK stops at 10 and Cursor at 25."""
+    """A guard against a loop, not an allowance: a model that asks for one tool at a time takes eight rounds for a read
+    and a change per day of the week. 20 is where Windsurf stops its agent and the agent of Vercel's AI SDK stops by
+    default; OpenAI's Agents SDK stops at 10 and Cursor at 25."""
     assert assistant.MAX_ROUNDS == 20
