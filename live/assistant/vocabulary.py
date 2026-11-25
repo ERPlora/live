@@ -410,8 +410,8 @@ _WHOLE = frozenset({"personal"})
 #: stock, which keep their stem), «producción» («production») no «producto» and «comprobar» (to check) no «compra»
 #: (ERPlora/live#71), «recordatorio» (a reminder) no «record» nor «recordar» (ERPlora/live#89), «ordenador» (a
 #: computer) no «ordena», «ordenar» nor «orden» (to put in order, an order; ERPlora/live#61), «confirma» (to
-#: confirm) no «configura» (to set up, the settings; ERPlora/live#68), and «abona», «abone» (to pay) no «abono» (a
-#: credit note, a pass; ERPlora/live#72).
+#: confirm) no «configura» (to set up, the settings; ERPlora/live#68), «abona», «abone» (to pay) no «abono» (a
+#: credit note, a pass; ERPlora/live#72), and «propina» (a tip) no «propio» nor «propia» (one's own).
 _APART_WORDS = {"ficha": "ficha", "carta": "carta", "recibo": "recibo", "registro": "registro", "fiche": "fichar",
                 "ficho": "fichar", "listo": "listo", "selle": "sellar", "sellen": "sellar"}
 _APART_PREFIXES = (
@@ -422,7 +422,7 @@ _APART_PREFIXES = (
     ("sellem", "sellar"), ("sellei", "sellar"), ("existenci", "exist"), ("exist", "existir"),
     ("produccion", "produccion"), ("production", "produccion"), ("comprob", "comprobar"), ("comprue", "comprobar"),
     ("recordatori", "recordatori"), ("ordenador", "ordenador"), ("confirm", "confirm"), ("abona", "abonar"),
-    ("abone", "abonar"),
+    ("abone", "abonar"), ("propin", "propina"),
 )
 #: A noun that is a command at the start of a sentence, followed by these: «ficha la entrada de Ana» clocks in, «abre
 #: la ficha de Ana» is her card; «reserva una mesa» books, «cancela la reserva» names one.
