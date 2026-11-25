@@ -315,14 +315,17 @@ def _fields(errors: Iterable[dict]) -> dict[str, str]:
             or NON_FIELD_ERRORS
         )
         if field not in fields:
-            fields[field] = _field_message(error)
+            fields[field] = field_message(error)
     return fields
 
 
-def _field_message(error: dict) -> str:
+def field_message(error: dict) -> str:
     """The message of one pydantic ``error`` in the request's language (``FIELD_MESSAGES``)."""
     kind = error.get("type")
     ctx = error.get("ctx") or {}
+    if kind == "string_too_short" and ctx.get("min_length") == 1:
+        # A required text left empty is a missing value to whoever typed it, as Django's forms word it.
+        kind = "missing"
     if kind in _VALIDATOR_ERRORS:
         # A validator's exception is in ``ctx``; a custom error that reuses the type has only its ``msg``.
         reason = str(ctx["error"]) if "error" in ctx else error.get("msg")
