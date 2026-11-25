@@ -122,6 +122,8 @@ def test_the_words_of_one_thing_name_it_in_either_language(said, english):
         # To confirm is no setting up: «confirma» and «configura» both cut to «confi» (ERPlora/live#68).
         ("confirma", "configura"), ("confirmación", "configuración"), ("confirm", "configure"),
         ("confírmalo", "ajustes"), ("confirmation", "settings"), ("confirmed", "setup"),
+        # A tip is nothing of one's own: «propina», «propia» and «propio» all cut to «propi».
+        ("propina", "propia"), ("propinas", "propios"), ("propina", "propio"),
     ],
 )
 def test_words_of_two_things_are_never_one_stem(one, other):
@@ -135,6 +137,7 @@ def test_words_of_two_things_are_never_one_stem(one, other):
     [
         ("compartir compartido compartida", "compart"),
         ("peluquería peluquerías", "peluqueri"),
+        ("propina propinas", "propina"),
         ("contrato contratos contract contracts", "contrat"),
         ("fichar fichaje fichajes fichado", "fichar"),
         ("ficha fichas", "ficha"),
