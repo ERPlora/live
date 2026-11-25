@@ -15,6 +15,11 @@ What a ``services.py`` wraps in a savepoint goes through :func:`atomic`, never a
 alias is ``default``): it opens on :func:`current_alias`, the project's ``LIVE["current_database"]`` (the Hub: the
 active ``use_hub``'s alias, ``base.tenancy.context.current_alias``), else the running operation's, else ``default``.
 
+``LIVE["after_command"]`` names what a project does when a command has run: ``(operation, context, data)``, inside the
+command's own transaction, once its body has answered and before its COMMIT. What it writes, and the events it records,
+are applied and notified with the command; what it raises rolls it back. It opens no transaction around the command's, so
+a cut of the database means what it always did.
+
 An operation declared ``database=False`` touches no database: what waits on the network (another service's answer)
 runs with no transaction open, so the wait holds no connection. It keeps the permission, the project's hook and the
 validated output; a query to any database inside it, an event or an ``on_commit`` is a ``LiveMisuse``.
@@ -196,6 +201,7 @@ class Operation:
                             # statement_timeout would outlive a released savepoint; rolling it back undoes it.
                             transaction.set_rollback(True, using=alias)
                         else:
+                            _after_command(self, ctx, data)
                             names = list(_pending_events.get())
                             if names:
                                 transaction.on_commit(partial(_notify, ctx.scope, names), using=alias, robust=True)
@@ -447,6 +453,13 @@ def _database(op: Operation, ctx: OperationContext) -> AbstractContextManager[st
     return _load_hook(path, "operation_database")(op, ctx)
 
 
+def _after_command(op: Operation, ctx: OperationContext, data: Schema) -> None:
+    """The project's ``LIVE["after_command"]``, inside ``op``'s own transaction, before its COMMIT; nothing without one."""
+    path = getattr(settings, "LIVE", {}).get("after_command")
+    if path:
+        _load_hook(path, "after_command")(op, ctx, data)
+
+
 @contextmanager
 def _no_queries(op: Operation) -> Iterator[None]:
     """While ``op`` runs, a query to any database is refused: it was declared ``database=False``."""
@@ -462,7 +475,7 @@ def _no_queries(op: Operation) -> Iterator[None]:
 
 @cache
 def _load_hook(path: str, key: str) -> Callable[..., Any]:
-    """The callable ``settings.LIVE[key]`` names (``operation_database``, ``current_database``)."""
+    """The callable ``settings.LIVE[key]`` names (``operation_database``, ``current_database``, ``after_command``)."""
     try:
         return import_string(path)
     except ImportError as exc:
