@@ -2,6 +2,7 @@
 
 import pytest
 from django.db import connections
+from live import operations
 from live.executor import Executor
 from psycopg.conninfo import make_conninfo
 
@@ -20,6 +21,23 @@ def db_dsn(django_db_setup):
         host=params["HOST"],
         port=params["PORT"],
     )
+
+
+@pytest.fixture
+def isolated_registry():
+    """The operations a test declares leave the registry with it."""
+    saved = dict(operations.registry)
+    yield operations.registry
+    operations.registry.clear()
+    operations.registry.update(saved)
+
+
+@pytest.fixture
+def notified(monkeypatch):
+    """The scope and the event names of each notification after a COMMIT."""
+    calls = []
+    monkeypatch.setattr(operations, "notify_hook", lambda scope, names: calls.append((scope, names)))
+    return calls
 
 
 @pytest.fixture

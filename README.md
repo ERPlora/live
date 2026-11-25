@@ -61,6 +61,11 @@ desde la tenencia, `use_hub`) y el SaaS el suyo (el usuario); el resto (`live.sp
   `default` por omisión), si no el alias de la operación en curso y, fuera de una, `default` (el SaaS, sin tenencia).
   Dentro de una operación `database=False` es `LiveMisuse`. Lo lee al entrar en el bloque (un decorador, en cada
   llamada).
+- **Después de una orden** (`LIVE["after_command"]`): ruta a una función `(operación, contexto, datos)` que corre dentro
+  de la transacción de cada `command`, cuando su cuerpo ya ha contestado y antes del COMMIT. Lo que escribe y los eventos
+  que registra entran con la orden o no entran, y si falla, la orden se deshace. No abre otra transacción por fuera, así
+  que un corte de la BD significa lo mismo que sin ella (una orden `repeatable` se repite). Una consulta y una orden
+  `database=False` no la tienen. En el Hub anota las acciones aprobables; el SaaS no la usa.
 - **Eventos**: `record_event(ctx, "<app>.<entidad>.<hecho>", payload)` solo dentro de un command, en su
   transacción (`live_outboxevent`); tras el COMMIT, `pg_notify(<canal del ámbito>, {"events": […]})` en
   la BD de control. `live.py` de cada app: `live("<consulta>", on=[eventos])`. En el admin de Django
