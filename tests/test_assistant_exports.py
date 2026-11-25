@@ -12,6 +12,7 @@ READ_FROM_OUTSIDE = (
     "MONEY",
     "NAMED",
     "NAME_OF",
+    "OWN_WORDS",
     "PlainWords",
     "REFERS",
     "SEPARATOR",

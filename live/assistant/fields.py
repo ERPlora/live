@@ -216,11 +216,11 @@ def is_uuid(value: Any) -> bool:
 
 #: The mark of a text of an object that names, as a person says it, the record another datum of that object names by
 #: its id, when the id is not known (``json_schema_extra={"name_of": "<that datum>"}``: a booking's service, «Tinte»,
-#: beside ``service_id``). It is a name, never a code: a line that carries only it is said by it. Beside its
+#: beside ``service_id``). It is a name, never a code: a line that carries it is said by it. Beside its
 #: record the write takes the id and ignores the name, so the card says the record and leaves the name out. A text
-#: without it is sent as it is and never said one by one (a code nobody names), and so are blanks or an id
-#: written where the name goes (``_is_said_name``). It marks a text of an object a write sends (a line of a list); on
-#: a write's own data it does nothing: each of them shows under its own label.
+#: with neither it nor ``OWN_WORDS`` is sent as it is and never said one by one (a code nobody names), and so are
+#: blanks or an id written where the name goes (``_is_said_name``). It marks a text of an object a write sends (a
+#: line of a list); on a write's own data it does nothing: each of them shows under its own label.
 NAME_OF = "name_of"
 
 
@@ -238,8 +238,9 @@ def _name_of(prop: dict, defs: dict) -> str | None:
 
 
 def _is_said_name(text: Any) -> bool:
-    """Whether ``text``, a datum marked ``NAME_OF``, is a name a person said, judged by what it says: a text with more
-    than blanks (blanks show nothing, as an empty name does) and no id (a card never says one), even padded."""
+    """Whether ``text``, a datum marked ``NAME_OF`` or ``OWN_WORDS``, is what a person said, judged by what it says: a
+    text with more than blanks (blanks show nothing, as an empty name does) and no id (a card never says one), even
+    padded."""
     words = text.strip() if isinstance(text, str) else ""
     return words != "" and not is_uuid(words)
 
@@ -255,11 +256,19 @@ def _name_beside_its_record(key: str, value: dict, props: dict, defs: dict) -> b
 #: What a card leaves out: a record it cannot name, an attempt key.
 LEFT_OUT = object()
 
+#: The mark of a text that is the person's own words (``json_schema_extra={"own_words": True}``): an option of a select
+#: field, the value of a custom field, what an invoice line bills, the name of a special day. The card says it as it
+#: was written, so a list of them, or of lines that carry it, is said one by one (``NAMED``); blanks or an id say
+#: nothing (``_is_said_name``). It marks a text of a list or of its lines; on a write's own data it does nothing: each
+#: of them shows under its own label.
+OWN_WORDS = "own_words"
+
 #: The mark of a datum of a card that is a list whose every item ``said`` put in words — a record by its name (or left
-#: out, none), a moment, a value of a closed list by its label, an amount —, never one as sent: the screen says its items
-#: one after another (a line that carries only its record, by that record; one that carries its record and figures, by
-#: both, as «Vino tinto · 6»). A list without it (texts sent as they are, codes nobody names, any other line of more
-#: than one datum) says how many it carries.
+#: out, none), a moment, a value of a closed list by its label, an amount, the name a person said of a record, the
+#: person's own words, or a line of them and figures —, never one as sent: the screen says its items one after another,
+#: a line by its words and then its figures («Vino tinto · 6», «12:00 · 23:30»). A list without it says how many it
+#: carries: texts sent as they are (codes nobody names), a line with one of them, a yes or no or a list inside, or a
+#: record the card leaves out beside what it says.
 NAMED = "named"
 
 

@@ -451,8 +451,8 @@ def test_a_list_of_lines_that_carry_only_their_record_is_named(lines):
         {"priced": [{"label": "a", "amount": 250}]},  # a label and a price
     ],
 )
-def test_a_list_of_lines_that_carry_more_than_their_record_is_not_named(lines, arguments):
-    """Which of its data names such a line, only its app knows: the screen says how many it carries."""
+def test_a_list_of_lines_that_carry_a_text_without_a_mark_is_not_named(lines, arguments):
+    """A text its app did not mark is sent as it is, a code nobody names: the screen says how many it carries."""
     assert set(named(assistant.card(lines, arguments, "en", SpokenWords(lines, "en"))).values()) == {False}
 
 
@@ -545,10 +545,7 @@ def test_a_line_of_figures_whose_record_the_card_cannot_name_is_not_named(stock)
 @pytest.mark.parametrize(
     "line",
     [
-        {"thing_id": str(uuid.uuid4()), "other_id": str(uuid.uuid4()), "qty": "6"},  # two records: which one names it?
-        {"thing_id": str(uuid.uuid4()), "table": 4, "qty": "6"},  # nor is a record by its number one of its figures
         {"qty": "6", "cost": 450},  # figures and no record
-        {"thing": "Mesa 4", "qty": "6"},  # a name a person said, not one the server gave
         {"thing_id": str(uuid.uuid4()), "qty": "6", "note": "ventana"},  # a text of its own beside the figures
         {"thing_id": str(uuid.uuid4()), "qty": "seis"},  # a quantity that is no figure: as sent
         {"thing_id": str(uuid.uuid4()), "qty": "6e2"},  # nor a figure written as no screen writes one
@@ -556,8 +553,9 @@ def test_a_line_of_figures_whose_record_the_card_cannot_name_is_not_named(stock)
         {"thing_id": str(uuid.uuid4()), "note": "6"},  # a text whose schema takes no number, though it reads as one
     ],
 )
-def test_a_line_of_figures_and_no_single_record_is_not_named(stock, line):
-    """Which of its data names such a line, only its app knows: the screen says how many the list carries."""
+def test_a_line_of_figures_alone_or_beside_a_datum_said_as_sent_is_not_named(stock, line):
+    """A bare figure says nothing, and a text without a mark or a figure that is none is a code nobody names: the
+    screen says how many the list carries."""
     assert said_items(stock, [line], SpokenWords(stock, "en"))[1] is False
 
 
@@ -657,8 +655,8 @@ def test_a_line_whose_name_is_empty_names_nothing(said_lines, line):
     [{"thing": "Mesa 4", "note": "ventana"}, {"other": "Mesa 4", "missing": "ventana"}],
 )
 def test_a_mark_that_names_no_record_of_its_line_leaves_nothing_out(said_lines, line):
-    """A mark over a text that is no record, or over a datum the line does not declare: both data are said as sent and,
-    which one names the line, only its app knows — the screen says how many it carries."""
+    """A mark over a text that is no record, or over a datum the line does not declare: both data are said as sent,
+    one of them a text without a mark or a datum its schema does not take — the screen says how many it carries."""
     shown = fields(assistant.card(said_lines, {"misnamed": [line]}, "en", SpokenWords(said_lines, "en")))["misnamed"]
     assert (shown["value"], shown.get(assistant.NAMED, False)) == ([line], False)
 
