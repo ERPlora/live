@@ -28,6 +28,8 @@ from tests.testapp.services import create_thing
 
 SCOPE = Scope("hub", "a")
 
+pytestmark = pytest.mark.usefixtures("isolated_registry")
+
 
 class Empty(Schema):
     pass
@@ -36,21 +38,6 @@ class Empty(Schema):
 class SessionOut(Schema):
     statement_timeout: str
     read_only: str
-
-
-@pytest.fixture(autouse=True)
-def isolated_registry():
-    saved = dict(registry)
-    yield registry
-    registry.clear()
-    registry.update(saved)
-
-
-@pytest.fixture
-def notified(monkeypatch):
-    calls = []
-    monkeypatch.setattr(operations, "notify_hook", lambda scope, names: calls.append((scope, names)))
-    return calls
 
 
 def make_ctx(*permissions):

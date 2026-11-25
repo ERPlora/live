@@ -61,6 +61,11 @@ desde la tenencia, `use_hub`) y el SaaS el suyo (el usuario); el resto (`live.sp
   `default` por omisión), si no el alias de la operación en curso y, fuera de una, `default` (el SaaS, sin tenencia).
   Dentro de una operación `database=False` es `LiveMisuse`. Lo lee al entrar en el bloque (un decorador, en cada
   llamada).
+- **Después de una orden** (`LIVE["after_command"]`): ruta a una función `(operación, contexto, datos)` que corre dentro
+  de la transacción de cada `command`, cuando su cuerpo ya ha contestado y antes del COMMIT. Lo que escribe y los eventos
+  que registra entran con la orden o no entran, y si falla, la orden se deshace. No abre otra transacción por fuera, así
+  que un corte de la BD significa lo mismo que sin ella (una orden `repeatable` se repite). Una consulta y una orden
+  `database=False` no la tienen. En el Hub anota las acciones aprobables; el SaaS no la usa.
 - **Eventos**: `record_event(ctx, "<app>.<entidad>.<hecho>", payload)` solo dentro de un command, en su
   transacción (`live_outboxevent`); tras el COMMIT, `pg_notify(<canal del ámbito>, {"events": […]})` en
   la BD de control. `live.py` de cada app: `live("<consulta>", on=[eventos])`. En el admin de Django
@@ -277,7 +282,7 @@ howto=…)` (solo las que nombran sus palabras y como mucho `MAX_TOOLS`, 20; sin
 cada herramienta; pesa más la acción pedida, `VERBS`, sobre la cosa que se nombra; live#16; detalle abajo), `tool_spec` (la herramienta como la toma la pasarela, con su esquema de entrada sin los `title` que escribe pydantic, que repiten el nombre de cada dato y pesan en cada llamada; la tarjeta los sigue leyendo de `input_schema`), `card(op, arguments, language,
 words)` (la tarjeta de una escritura) con `confirmed` y `CONFIRM_WORD`, `invalid_arguments` (los datos que la operación
 rechazaría vuelven al modelo antes de dibujar la tarjeta, salvo la escritura peligrosa que no nombra registros,
-`blocked`; live#17), `declined` (lo que oye el modelo de una tarjeta respondida sin un sí: que la persona dijo que no y la tarjeta está cerrada, «Cancelar todo» con `stopped`, o una escritura que no se hace desde el chat, en el sobre de un error de operación, `refusal`), `run_tool` (ejecuta como la persona, resultado cortado en `MAX_RESULT_CHARS`; con `zone`, sus instantes en ese reloj, y con `money`, cada importe marcado `money` en su moneda como lo escriben las pantallas, «3.60 EUR», porque el modelo no ve el esquema de la respuesta y repite la cifra tal como la lee), `preview` (la
+`blocked`; live#17), `declined` (lo que oye el modelo de una tarjeta respondida sin un sí: que la persona dijo que no y la tarjeta está cerrada, «Cancelar todo» con `stopped`, o una escritura que no se hace desde el chat, en el sobre de un error de operación, `refusal`), `run_tool` (ejecuta como la persona; un resultado de más de `MAX_RESULT_CHARS`, 16.000 caracteres, porque viaja de nuevo en cada llamada siguiente, guarda las filas enteras que caben de su lista más larga y añade `cut`, que dice cuántas de cuántas y cómo leer el resto: el `offset` siguiente si la herramienta pagina, o que acote la petición; sin lista que acortar, o si ni una fila cabe, cada texto más largo de lo que cabe guarda sus primeros caracteres y dice cuántos de cuántos, y el resto de la respuesta llega entero; si ni así cabe, llegan sus primeros caracteres dentro de un texto, con `cut`: el modelo siempre recibe JSON válido; con `zone`, sus instantes en ese reloj, y con `money`, cada importe marcado `money` en su moneda como lo escriben las pantallas, «3.60 EUR», porque el modelo no ve el esquema de la respuesta y repite la cifra tal como la lee), `preview` (la
 lectura que nombra `AI.preview`) y `rounds`/`MAX_ROUNDS`. Cada proyecto dice los datos con sus palabras (`Words`: momento,
 registro, importe, nombre de la app); `PlainWords` no lee nada (euros con 2 decimales, UTC con los formatos de
 Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda del negocio, `refers`) viven en su
@@ -286,7 +291,7 @@ Django del idioma, el registro fuera de la tarjeta). Las del Hub (zona y moneda 
 `live.assistant` es un paquete, un módulo por responsabilidad (live#141): `tools` (qué operación es herramienta, su
 nombre, su descripción y su esquema), `vocabulary` (los verbos y las palabras con que se lee una frase), `stemming`
 (raíces y frases), `reading` (`asked`), `ranking` (`relevant`), `fields` (qué es cada dato de una escritura), `cards` (la
-tarjeta, `Words`), `declining` (`declined`) y `running` (`run_tool`, `preview`, `rounds`). Todo se importa de `live.assistant`, que reexporta lo
+tarjeta, `Words`), `declining` (`declined`), `cutting` (`within`: un resultado largo, a lo que cabe) y `running` (`run_tool`, `preview`, `rounds`). Todo se importa de `live.assistant`, que reexporta lo
 que leen el Hub, el SaaS y el resto de live (`tests/test_assistant_exports.py`); un test que sustituye una función
 la parchea en el módulo que la llama (`assistant.ranking.asks_of`, `assistant.cards.choice_label`), no en el paquete.
 

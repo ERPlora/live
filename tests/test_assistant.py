@@ -70,10 +70,6 @@ class SummaryOut(Schema):
     empty: str = ""
 
 
-class LongOut(Schema):
-    text: str
-
-
 def op(name, *, ai=None, kind="command", permission="testapp.manage", input=NoIn, output=Done, fn=None):
     return Operation(
         name=name,
@@ -899,14 +895,6 @@ def test_what_the_person_may_not_do_is_refused_and_what_the_operation_refuses_is
     assert json.loads(failed.content) == {"error": {"code": "testapp.thing_rejected", "message": "The thing was rejected."}}
 
 
-def test_a_result_too_long_for_the_model_is_cut():
-    long = op("testapp.probe.long", output=LongOut, fn=lambda ctx, data: {"text": "x" * assistant.MAX_RESULT_CHARS})
-    outcome = assistant.run_tool(ctx("testapp.manage"), long, "")
-    assert outcome.outcome == "ok"
-    assert outcome.content.endswith(" …(cut)")
-    assert len(outcome.content) == assistant.MAX_RESULT_CHARS + len(" …(cut)")
-
-
 def test_an_error_is_told_back_as_one_json_object():
     assert json.loads(assistant.error_content("x.y", "No.", {"name": "Required."})) == {
         "error": {"code": "x.y", "message": "No.", "fields": {"name": "Required."}}
@@ -971,8 +959,19 @@ def test_the_rounds_are_the_models_tool_requests_since_the_persons_last_message(
     assert assistant.rounds([]) == 0
 
 
+def test_an_answer_that_asks_for_several_tools_at_once_is_one_round():
+    """A model may ask for several tools in one answer (several reads, say): the round is the answer, not each tool."""
+    messages = [
+        {"role": "user", "content": "how many items and tables?"},
+        {"role": "assistant", "tool_calls": [{"id": "1"}, {"id": "2"}]},
+        {"role": "tool", "tool_call_id": "1", "content": "{}"},
+        {"role": "tool", "tool_call_id": "2", "content": "{}"},
+    ]
+    assert assistant.rounds(messages) == 1
+
+
 def test_a_request_takes_as_many_rounds_as_the_market_gives_an_agent_before_it_stops():
-    """A guard against a loop, not an allowance: the gateway asks the model for one tool at a time, so a read and a
-    change per day of the week are eight rounds. 20 is where Windsurf stops its agent and the agent of Vercel's AI SDK
-    stops by default; OpenAI's Agents SDK stops at 10 and Cursor at 25."""
+    """A guard against a loop, not an allowance: a model that asks for one tool at a time takes eight rounds for a read
+    and a change per day of the week. 20 is where Windsurf stops its agent and the agent of Vercel's AI SDK stops by
+    default; OpenAI's Agents SDK stops at 10 and Cursor at 25."""
     assert assistant.MAX_ROUNDS == 20

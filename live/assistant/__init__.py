@@ -4,8 +4,9 @@ the Hub's assistant and the SaaS's panel use the same ones, each with its own to
 - **Its tools** (``catalog``) are the operations of the apps on (``active_labels``) that this person may run (the
   operation's own permission), told to the model by their ``ai=`` (``is_tool``: an ``AI``, never ``INTERNAL``) and
   never what the project keeps out of the chat (``not_from_chat``). A turn offers only the few of what was asked
-  (``relevant``, at most ``MAX_TOOLS``), never the whole catalogue. A tool runs as the person, by its own operation
-  (``run_tool``): the same permission, transaction and refusals as the button on the screen.
+  (``relevant``, at most ``MAX_TOOLS``), never the whole catalogue; last, the project's own search of the rest, and
+  what the model searched for (``searched``) the next round offers (``offered``, ``found``). A tool runs as the person,
+  by its own operation (``run_tool``): the same permission, transaction and refusals as the button on the screen.
 - **A write never runs without the person's yes**: its card (``card``) says what it will send, each datum by its name
   in the person's language (the title its schema gives it, else the name its app's models give that field: their
   metadata, no query) and in words (``Words``: a moment, a record, an amount, as the project says them; a value of a
@@ -84,6 +85,13 @@ from live.assistant.running import (
     rounds,
     run,
     run_tool,
+)
+from live.assistant.searching import (
+    FOUND,
+    ToolSearch,
+    found,
+    offered,
+    searched,
 )
 from live.assistant.stemming import (
     _concept,
