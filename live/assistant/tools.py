@@ -14,8 +14,8 @@ from live.operations import AI, Operation, registry
 #: The tools a turn offers at most: the gateway takes 256, but the model providers advise fewer than twenty at a time,
 #: and each one offered travels whole with every call.
 MAX_TOOLS = 20
-#: Rounds of tools of one request of the person: a guard against a loop, not an allowance. One tool per round, so a
-#: read and a change per day of the week take eight.
+#: Rounds of tools of one request of the person: a guard against a loop, not an allowance. A model may ask for several
+#: tools in one round; asking for one at a time, a read and a change per day of the week take eight.
 MAX_ROUNDS = 20
 #: A tool's result told back to the model at once: it travels again with every later call, so a longer one keeps the
 #: rows that fit and says how to read the rest (``cutting.within``). A default page of fifty short rows fits.
