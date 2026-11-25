@@ -90,6 +90,7 @@ class StrictIn(Schema):
     at: time | None = None
     cap: int = 0
     nif: str = ""
+    pin: str = Field("0000", min_length=4)
     start: int = 0
     end: int = 0
 
@@ -421,11 +422,12 @@ LOCALE_MIDDLEWARE = "django.middleware.locale.LocaleMiddleware"
     ("payload", "field", "english", "spanish"),
     [
         ({}, "name", "This field is required.", "Este campo es obligatorio."),
+        ({"name": ""}, "name", "This field is required.", "Este campo es obligatorio."),
         (
-            {"name": ""},
-            "name",
-            "Ensure this value has at least 1 character.",
-            "Debe tener al menos 1 carácter.",
+            {"name": "a", "pin": "12"},
+            "pin",
+            "Ensure this value has at least 4 characters.",
+            "Debe tener al menos 4 caracteres.",
         ),
         (
             {"name": "abcd"},
@@ -506,9 +508,7 @@ def test_invalid_payload_follows_the_language_cookie(client, settings):
 
     assert response.status_code == 422
     assert response.json()["error"]["message"] == "Revisa los datos marcados."
-    assert response.json()["error"]["fields"] == {
-        "name": "Debe tener al menos 1 carácter."
-    }
+    assert response.json()["error"]["fields"] == {"name": "Este campo es obligatorio."}
 
 
 def test_a_validator_message_reaches_the_client_without_pydantic_prefix(client):
