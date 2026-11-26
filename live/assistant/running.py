@@ -23,6 +23,7 @@ from live.assistant.fields import (
     is_money,
     label,
 )
+from live.assistant.screen_names import SCREEN_NAMES, screen_names
 from live.assistant.tools import (
     MAX_RESULT_CHARS,
     output_schema,
@@ -114,20 +115,35 @@ def run_tool(
     failure, result = run(ctx, op, data)
     if failure is not None:
         return failure
-    return ToolOutcome("ok", "", within(op, data, _told_to_the_model(op, result, zone, money), MAX_RESULT_CHARS))
+    told = _told_to_the_model(op, result, Telling(zone, money, ctx.language))
+    return ToolOutcome("ok", "", within(op, data, told, MAX_RESULT_CHARS))
 
 
-def _told_to_the_model(op: Operation, result: pydantic.BaseModel, zone: dt.tzinfo | None, money: Money | None) -> str:
-    """``result`` as ``model_dump_json`` writes it, with every moment that knows its zone told on ``zone``'s clock and
-    every amount in its currency (``_in_currency``)."""
-    if zone is None and money is None:
-        return result.model_dump_json()
+@dataclass(frozen=True)
+class Telling:
+    """How a result is told to the model: its moments on ``zone``'s clock, its amounts as the project writes them
+    (``money``) and the values its screens name by their names in ``language`` (``screen_names``)."""
+
+    zone: dt.tzinfo | None
+    money: Money | None
+    language: str
+
+
+def _told_to_the_model(op: Operation, result: pydantic.BaseModel, telling: Telling) -> str:
+    """``result`` as ``model_dump_json`` writes it, with every moment that knows its zone told on ``zone``'s clock,
+    every amount in its currency (``_in_currency``) and, under ``SCREEN_NAMES``, the name of each value its screens
+    name."""
     written = result.model_dump(mode="json")
-    if zone is not None:
-        written = _told(result.model_dump(), written, zone)
-    if money is not None:
+    names = screen_names(op, written, telling.language)
+    if telling.zone is None and telling.money is None and not names:
+        return result.model_dump_json()
+    if telling.zone is not None:
+        written = _told(result.model_dump(), written, telling.zone)
+    if telling.money is not None:
         schema = output_schema(op)
-        written = _in_currency(written, schema, schema.get("$defs", {}), money, None)
+        written = _in_currency(written, schema, schema.get("$defs", {}), telling.money, None)
+    if names:
+        written = {**written, SCREEN_NAMES: names}
     return pydantic_core.to_json(written).decode()
 
 
