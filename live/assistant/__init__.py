@@ -6,7 +6,9 @@ the Hub's assistant and the SaaS's panel use the same ones, each with its own to
   never what the project keeps out of the chat (``not_from_chat``). A turn offers only the few of what was asked
   (``relevant``, at most ``MAX_TOOLS``), never the whole catalogue; last, the project's own search of the rest, and
   what the model searched for (``searched``) the next round offers (``offered``, ``found``). A tool runs as the person,
-  by its own operation (``run_tool``): the same permission, transaction and refusals as the button on the screen.
+  by its own operation (``run_tool``): the same permission, transaction and refusals as the button on the screen. Its
+  result names each value of a closed list it holds as the screens do (``SCREEN_NAMES``, ``screen_name``), beside its
+  code, since the model repeats a code as it reads it.
 - **A write never runs without the person's yes**: its card (``card``) says what it will send, each datum by its name
   in the person's language (the title its schema gives it, else the name its app's models give that field: their
   metadata, no query) and in words (``Words``: a moment, a record, an amount, as the project says them; a value of a
@@ -86,6 +88,10 @@ from live.assistant.running import (
     rounds,
     run,
     run_tool,
+)
+from live.assistant.screen_names import (
+    SCREEN_NAMES,
+    screen_name,
 )
 from live.assistant.searching import (
     FOUND,
