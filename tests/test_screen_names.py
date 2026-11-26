@@ -19,7 +19,7 @@ from ninja import Field, Schema
 from tests.test_assistant import ctx, op
 
 #: The values the app's models name, by the app and the field that name them.
-NAMED = {("testapp", "status"): {"open", "done", "vip"}, ("sale", "method"): {"card"}}
+NAMED = {("testapp", "status"): {"open", "done", "vip"}, ("sale", "method"): {"card"}, ("testapp", "weekday"): {1}}
 
 
 @pytest.fixture(autouse=True)
@@ -47,6 +47,7 @@ class FiguresOut(Schema):
     status: Status
     note: str
     total: int
+    weekday: int
     rows: list[ItemOut]
     best: ItemOut | None
     states: list[Status] = Field(json_schema_extra={"choices_of": "status"})
@@ -58,6 +59,7 @@ FIGURES = {
     "status": "open",
     "note": "open",
     "total": 3,
+    "weekday": 1,
     "rows": [{"status": "open", "note": ""}, {"status": "done", "note": "done"}, {"status": "open", "note": "x"}],
     "best": {"status": "done", "note": ""},
     "states": ["done", "vip"],
@@ -77,6 +79,7 @@ def test_each_value_its_screens_name_comes_once_with_its_name_in_the_persons_lan
     told = read()
     assert told[assistant.SCREEN_NAMES] == {
         "status": {"open": "status:open@es"},
+        "weekday": {"1": "weekday:1@es"},
         "rows.status": {"open": "status:open@es", "done": "status:done@es"},
         "best.status": {"done": "status:done@es"},
         "states": {"done": "status:done@es"},
@@ -91,7 +94,7 @@ def test_the_codes_stay_as_they_were():
 
 
 def test_with_nothing_its_screens_name_a_result_reads_as_its_operation_wrote_it():
-    unnamed = {**FIGURES, "status": "vip", "rows": [], "best": None, "states": [], "method": "cash", "methods": []}
+    unnamed = {**FIGURES, "status": "vip", "weekday": 0, "rows": [], "best": None, "states": [], "method": "cash", "methods": []}
     assert read(unnamed) == written(unnamed)
 
 
