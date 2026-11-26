@@ -6,7 +6,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from decimal import Decimal
 
 import pydantic
 import pydantic_core
@@ -93,17 +92,19 @@ def run(ctx: OperationContext, op: Operation, data: dict) -> tuple[ToolOutcome |
         return ToolOutcome("error", exc.code, error_content(exc.code, str(exc), getattr(exc, "fields", None))), None
 
 
-#: The currency an amount is told in and its decimals, given the one its object names (``None``: it names none): the
-#: project's, which knows its business's currency and the decimals of every other.
-Money = Callable[[str | None], tuple[str, int]]
+#: How the project writes an amount for the model, given in the minor unit of the currency its object names (``None``:
+#: it names none, so the business's): as its screens write it, since it knows its business's currency, the decimals
+#: of every other and the person's language.
+Money = Callable[[int, str | None], str]
 
 
 def run_tool(
     ctx: OperationContext, op: Operation, arguments: str, *, zone: dt.tzinfo | None = None, money: Money | None = None
 ) -> ToolOutcome:
     """Run ``op`` with the model's ``arguments`` (JSON text) for ``ctx``'s person, by its own operation. Its result
-    tells its moments on ``zone``'s clock, the one of whoever asks, and its amounts in their currency (``money``), since
-    the model repeats an hour or an amount as it reads it; without them, as the operation gives them."""
+    tells its moments on ``zone``'s clock, the one of whoever asks, and its amounts as the project writes them
+    (``money``), since the model repeats an hour or an amount as it reads it; without them, as the operation gives
+    them."""
     try:
         data = json.loads(arguments or "{}")
     except ValueError:
@@ -126,7 +127,7 @@ def _told_to_the_model(op: Operation, result: pydantic.BaseModel, zone: dt.tzinf
         written = _told(result.model_dump(), written, zone)
     if money is not None:
         schema = output_schema(op)
-        written = _in_currency(written, schema, schema.get("$defs", {}), money, (None, None))
+        written = _in_currency(written, schema, schema.get("$defs", {}), money, None)
     return pydantic_core.to_json(written).decode()
 
 
@@ -145,33 +146,24 @@ def _told(value: Any, written: Any, zone: dt.tzinfo) -> Any:
     return written
 
 
-def _in_currency(value: Any, prop: dict, defs: dict, money: Money, named: tuple) -> Any:
-    """``value`` (JSON) with every amount its schema ``prop`` marks (``is_money``) as the screens write it, «3.60 EUR»:
-    in the currency of the nearest object that names one (``named``: its ``currency``, with the ``currency_decimals``
-    it answers, else that currency's), else in ``money``'s, at any depth."""
+def _in_currency(value: Any, prop: dict, defs: dict, money: Money, named: str | None) -> Any:
+    """``value`` (JSON) with every amount its schema ``prop`` marks (``is_money``) as ``money`` writes it, in the
+    currency of the nearest object that names one (``named``: its ``currency``), else in the business's, at any
+    depth."""
     prop = fitting(value, prop, defs)
     if isinstance(value, int) and is_money(prop):
-        return _amount(value, named, money)
+        return money(value, named)
     if isinstance(value, dict):
         props = prop.get("properties", {})
         currency = value.get("currency")
         if isinstance(currency, str) and currency:
-            named = (currency, value.get("currency_decimals"))
+            named = currency
         return {key: _in_currency(inner, props.get(key, {}), defs, money, named) for key, inner in value.items()}
     if isinstance(value, list):
         items = prop.get("items")
         items = items if isinstance(items, dict) else {}
         return [_in_currency(item, items, defs, money, named) for item in value]
     return value
-
-
-def _amount(value: int, named: tuple, money: Money) -> str:
-    """``value``, in the minor unit of its currency, as the screens write it in that currency: 360 → «3.60 EUR»."""
-    currency, answered = named
-    code, decimals = money(currency)
-    if isinstance(answered, int):
-        decimals = answered
-    return f"{Decimal(value).scaleb(-decimals):f} {code}"
 
 
 # ── What a dangerous write will do, on its card ──────────────────────────────────────────────────────────────────

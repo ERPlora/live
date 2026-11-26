@@ -1,10 +1,11 @@
-"""The amounts of a tool's result, told in their currency (``run_tool``'s ``money``).
+"""The amounts of a tool's result, written by the project (``run_tool``'s ``money``).
 
 An amount travels in the minor unit of its currency (``json_schema_extra={"money": True}``: 360 is 3.60 €), and the
 model, which never sees the result's schema, repeated it as it read it: the assistant told a bar «360,00 €» for the
-3.60 € its customers had spent. Given ``money``, every amount the result's schema marks reaches the model as the
-screens write it, in the currency its object names (``currency``, with the ``currency_decimals`` it answers) or else the
-business's, with the decimals ``money`` gives for it; everything else reads as ``model_dump_json`` writes it.
+3.60 € its customers had spent. Given ``money``, every amount the result's schema marks reaches the model as the project
+writes it, which is as its screens write it in the person's language («3,60 €» in Spanish): the project gets the amount
+in its minor unit and the currency its object names (``currency``), or none when no object names one, which is the
+business's. Everything else reads as ``model_dump_json`` writes it.
 """
 
 import datetime as dt
@@ -17,13 +18,11 @@ from ninja import Field, Schema
 from tests.test_assistant import ctx, op
 
 MONEY = {"money": True}
-#: The decimals of each currency, as the project knows them (ISO 4217).
-DECIMALS = {"EUR": 2, "ISK": 0, "JPY": 0, "KWD": 3}
 
 
-def euros(named: str | None) -> tuple[str, int]:
-    currency = named or "EUR"
-    return currency, DECIMALS[currency]
+def written(value: int, currency: str | None) -> str:
+    """How a project writes an amount: here, the figure it gets and the currency named, «business» for none."""
+    return f"<{value} {currency or 'business'}>"
 
 
 class LineOut(Schema):
@@ -70,10 +69,8 @@ FIGURES = {
     "invoices": [
         {"currency": "JPY", "currency_decimals": 0, "total_amount": 1250, "lines": [{"label": "Té", "unit_price": 1250, "quantity": 1}]},
         {"currency": "KWD", "currency_decimals": 3, "total_amount": 1250, "lines": []},
-        # The decimals it answers, even where the currency's own say others: as its card writes it.
-        {"currency": "ISK", "currency_decimals": 2, "total_amount": 1250, "lines": []},
     ],
-    # A currency named without its decimals: the project says them.
+    # A currency named without its decimals: the project knows them.
     "price_list": {"currency": "JPY", "price": 1999},
 }
 
@@ -85,24 +82,23 @@ def read(**kwargs) -> dict:
     return json.loads(outcome.content)
 
 
-def test_an_amount_reaches_the_model_in_its_currency_never_in_its_minor_unit():
-    told = read(money=euros)
-    assert told["total_revenue"] == "3.60 EUR"
-    assert told["difference"] == "-1.50 EUR"
-    assert told["lines"][0]["unit_price"] == "1.50 EUR"
+def test_an_amount_reaches_the_model_as_the_project_writes_it_never_in_its_minor_unit():
+    told = read(money=written)
+    assert told["total_revenue"] == "<360 business>"
+    assert told["difference"] == "<-150 business>"
+    assert told["lines"][0]["unit_price"] == "<150 business>"
 
 
-def test_an_amount_inside_an_object_that_names_its_currency_is_in_that_one():
-    told = read(money=euros)
-    assert told["invoices"][0]["total_amount"] == "1250 JPY"
-    assert told["invoices"][0]["lines"][0]["unit_price"] == "1250 JPY"
-    assert told["invoices"][1]["total_amount"] == "1.250 KWD"
-    assert told["invoices"][2]["total_amount"] == "12.50 ISK"
-    assert told["price_list"]["price"] == "1999 JPY"
+def test_an_amount_inside_an_object_that_names_its_currency_is_written_in_that_one():
+    told = read(money=written)
+    assert told["invoices"][0]["total_amount"] == "<1250 JPY>"
+    assert told["invoices"][0]["lines"][0]["unit_price"] == "<1250 JPY>"
+    assert told["invoices"][1]["total_amount"] == "<1250 KWD>"
+    assert told["price_list"]["price"] == "<1999 JPY>"
 
 
 def test_only_the_amounts_change():
-    told = read(money=euros)
+    told = read(money=written)
     assert (told["total"], told["spent_cents"], told["closed"], told["refunded"]) == (4, 360, True, None)
     assert told["lines"][0]["quantity"] == 2
     assert told["invoices"][0]["currency_decimals"] == 0
@@ -110,8 +106,8 @@ def test_only_the_amounts_change():
 
 
 def test_on_a_clock_and_in_a_currency_at_once():
-    told = read(money=euros, zone=ZoneInfo("Europe/Madrid"))
-    assert (told["at"], told["total_revenue"]) == ("2026-11-22T16:18:00+01:00", "3.60 EUR")
+    told = read(money=written, zone=ZoneInfo("Europe/Madrid"))
+    assert (told["at"], told["total_revenue"]) == ("2026-11-22T16:18:00+01:00", "<360 business>")
 
 
 def test_without_a_currency_a_result_reads_as_its_operation_wrote_it():
