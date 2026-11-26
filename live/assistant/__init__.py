@@ -39,6 +39,7 @@ from live.assistant.declining import (
 )
 from live.assistant.fields import (
     ATTEMPT_KEY,
+    CHOICE,
     CHOICES_OF,
     HIDDEN,
     LEFT_OUT,
